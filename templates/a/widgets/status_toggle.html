@@ -1,0 +1,20 @@
+{% comment %}
+有効/無効 のセグメンテッドボタン (Bootstrap btn-check)
+  widget.name  = フィールド名 (例: is_active)
+  widget.value = 'True' or 'False'
+{% endcomment %}
+<div class="btn-group" role="group" aria-label="ステータス">
+  <input type="radio" class="btn-check" autocomplete="off"
+         name="{{ widget.name }}" id="id_{{ widget.name }}_yes"
+         value="True" {% if widget.value == 'True' %}checked{% endif %}>
+  <label class="btn btn-outline-success px-4" for="id_{{ widget.name }}_yes">
+    <i class="bi bi-check-circle-fill"></i> 有効
+  </label>
+
+  <input type="radio" class="btn-check" autocomplete="off"
+         name="{{ widget.name }}" id="id_{{ widget.name }}_no"
+         value="False" {% if widget.value != 'True' %}checked{% endif %}>
+  <label class="btn btn-outline-secondary px-4" for="id_{{ widget.name }}_no">
+    <i class="bi bi-slash-circle"></i> 無効
+  </label>
+</div>

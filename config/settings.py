@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.forms',  # FORM_RENDERER='TemplatesSetting' で標準ウィジェットを APP_DIRS から解決させる
 
     # WMS apps
     'accounts',
@@ -82,6 +83,9 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
+
+# カスタムフォームウィジェット (templates/a/widgets/) をプロジェクト TEMPLATES から解決させるため
+FORM_RENDERER = 'django.forms.renderers.TemplatesSetting'
 
 
 # Database

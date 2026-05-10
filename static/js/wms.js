@@ -28,7 +28,7 @@
 
   // === Enter / ↓ で次フィールド、↑ で前フィールド ===
   // textarea: Enter は改行 / 矢印は行移動なので何もしない
-  // select: ↑↓ はネイティブの選択肢循環を尊重 (Enter は移動)
+  // select: ↑↓/Enter は全て移動（誤操作で値が変わらないようマウスクリックで選択させる）
   // button[type=submit]: Enter は browser 既定 (=click → modal) / 矢印は移動
   // a.btn (キャンセル等): Enter はリンク遷移 / 矢印は移動
   document.addEventListener('keydown', function (e) {
@@ -47,8 +47,6 @@
 
     // textarea: 全キー browser 既定
     if (t.tagName === 'TEXTAREA') return;
-    // select: ↑↓ は選択肢循環、Enter のみ移動
-    if (t.tagName === 'SELECT' && e.key !== 'Enter') return;
     // button: Enter は click、矢印は移動
     if ((t.tagName === 'BUTTON' || t.type === 'submit') && e.key === 'Enter') return;
     // a.btn (キャンセルリンク等): Enter はリンク遷移、矢印は移動

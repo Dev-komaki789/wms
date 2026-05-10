@@ -41,8 +41,8 @@
         <a href="{% url 'masters:warehouse_list' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-building me-2"></i>倉庫
         </a>
-        <a href="#" class="list-group-item list-group-item-action disabled text-muted">
-          <i class="bi bi-grid-3x3 me-2"></i>エリア <span class="badge bg-secondary ms-1">準備中</span>
+        <a href="{% url 'masters:area_list' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-grid-3x3 me-2"></i>エリア
         </a>
         <a href="#" class="list-group-item list-group-item-action disabled text-muted">
           <i class="bi bi-pin-map me-2"></i>ロケーション <span class="badge bg-secondary ms-1">準備中</span>
@@ -101,7 +101,7 @@
   </main>
 
   {# ========== 確認モーダル (data-confirm 属性のあるボタンが trigger) ========== #}
-  {# justify-content-start で「はい」を左、「いいえ」を右に配置 #}
+  {# justify-content-center + gap-3 で「はい」「いいえ」を中央配置・適度な間隔 #}
   <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalTitle" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
@@ -110,9 +110,9 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
         </div>
         <div class="modal-body" id="confirmModalBody">実行しますか？</div>
-        <div class="modal-footer justify-content-start">
-          <button type="button" class="btn btn-primary" id="confirmModalYes">はい</button>
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">いいえ</button>
+        <div class="modal-footer justify-content-center gap-3">
+          <button type="button" class="btn btn-primary px-4" id="confirmModalYes">はい</button>
+          <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">いいえ</button>
         </div>
       </div>
     </div>

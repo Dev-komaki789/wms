@@ -5,7 +5,8 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from .models import Warehouse
+from .forms import AreaForm, WarehouseForm
+from .models import Area, Warehouse
 
 
 class ProtectedErrorMixin:
@@ -36,15 +37,15 @@ class WarehouseListView(LoginRequiredMixin, ListView):
 
 class WarehouseCreateView(LoginRequiredMixin, CreateView):
     model = Warehouse
+    form_class = WarehouseForm
     template_name = 'a/masters/warehouse_form.html'
-    fields = ['warehouse_code', 'warehouse_name', 'address', 'is_active']
     success_url = reverse_lazy('masters:warehouse_list')
 
 
 class WarehouseUpdateView(LoginRequiredMixin, UpdateView):
     model = Warehouse
+    form_class = WarehouseForm
     template_name = 'a/masters/warehouse_form.html'
-    fields = ['warehouse_code', 'warehouse_name', 'address', 'is_active']
     success_url = reverse_lazy('masters:warehouse_list')
 
 
@@ -52,3 +53,40 @@ class WarehouseDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
     model = Warehouse
     template_name = 'a/masters/warehouse_confirm_delete.html'
     success_url = reverse_lazy('masters:warehouse_list')
+
+
+# ---- Area ----
+
+class AreaListView(LoginRequiredMixin, ListView):
+    model = Area
+    template_name = 'a/masters/area_list.html'
+    context_object_name = 'areas'
+
+    def get_queryset(self):
+        return (
+            Area.objects.select_related('warehouse')
+            .order_by('warehouse__warehouse_code', 'area_code')
+        )
+
+
+class AreaCreateView(LoginRequiredMixin, CreateView):
+    model = Area
+    form_class = AreaForm
+    template_name = 'a/masters/area_form.html'
+    success_url = reverse_lazy('masters:area_list')
+
+
+class AreaUpdateView(LoginRequiredMixin, UpdateView):
+    model = Area
+    form_class = AreaForm
+    template_name = 'a/masters/area_form.html'
+    success_url = reverse_lazy('masters:area_list')
+
+
+class AreaDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = Area
+    template_name = 'a/masters/area_confirm_delete.html'
+    success_url = reverse_lazy('masters:area_list')
+
+    def get_queryset(self):
+        return Area.objects.select_related('warehouse')
