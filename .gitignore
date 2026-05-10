@@ -16,3 +16,9 @@ wheels/
 db.sqlite3
 db.sqlite3-journal
 *.log
+
+# 個人用メモ (備忘録)
+README.md
+
+# 設計ドキュメント (個人参照用)
+docs/
