@@ -1,0 +1,258 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{% if object %}ロケーション編集{% else %}ロケーション新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:master_inquiry' %}">エリア・ロケーション照会</a></li>
+    <li class="breadcrumb-item active">{% if object %}ロケーション編集{% else %}ロケーション新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}ロケーション編集{% else %}ロケーション新規登録{% endif %}</h2>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      {# Step1: 区分選択 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">Step 1. 区分選択</h6>
+      <div class="mb-4">
+        <label class="form-label d-block" for="{{ form.area_type.id_for_label }}">
+          {{ form.area_type.label }}<span class="text-danger">*</span>
+        </label>
+        {{ form.area_type }}
+        {% if form.area_type.errors %}<div class="invalid-feedback d-block">{{ form.area_type.errors|join:" " }}</div>{% endif %}
+      </div>
+
+      {# Step2: エリア選択 (区分で絞り込み) #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">Step 2. エリア選択</h6>
+      <div class="row mb-4">
+        <div class="col-md-8">
+          <label class="form-label d-block" for="{{ form.area.id_for_label }}">
+            {{ form.area.label }}<span class="text-danger">*</span>
+          </label>
+          {{ form.area }}
+          <div class="form-text" id="area-format-hint">区分を先に選んでください。</div>
+          {% if form.area.errors %}<div class="invalid-feedback d-block">{{ form.area.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# Step3: 棚番入力 (区分に応じてセグメントを表示) #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">Step 3. 棚番コード</h6>
+      <div class="mb-4">
+        <div id="segments-container" class="d-flex flex-wrap align-items-end gap-2">
+          {# 区分=storage の場合 #}
+          <div class="seg-storage" style="display:none">
+            <label class="form-label small text-muted">エリアコード</label>
+            <input type="text" class="form-control text-center font-monospace fs-5"
+                   id="prefix-storage" disabled style="width: 70px; background:#e9ecef" value="—">
+          </div>
+          <div class="seg-storage" style="display:none">
+            <div class="fs-3 text-muted" style="padding-bottom: 6px">-</div>
+          </div>
+          <div class="seg-storage" style="display:none">
+            <label class="form-label small" for="{{ form.aisle.id_for_label }}">通路 <span class="text-danger">*</span></label>
+            {{ form.aisle }}
+          </div>
+          <div class="seg-storage" style="display:none">
+            <div class="fs-3 text-muted" style="padding-bottom: 6px">-</div>
+          </div>
+          <div class="seg-storage" style="display:none">
+            <label class="form-label small" for="{{ form.rack.id_for_label }}">ラック <span class="text-danger">*</span></label>
+            {{ form.rack }}
+          </div>
+          <div class="seg-storage" style="display:none">
+            <div class="fs-3 text-muted" style="padding-bottom: 6px">-</div>
+          </div>
+          <div class="seg-storage" style="display:none">
+            <label class="form-label small" for="{{ form.level.id_for_label }}">段 <span class="text-danger">*</span></label>
+            {{ form.level }}
+          </div>
+
+          {# 区分=large_item の場合 #}
+          <div class="seg-large-item" style="display:none">
+            <label class="form-label small text-muted">エリアコード</label>
+            <input type="text" class="form-control text-center font-monospace fs-5"
+                   id="prefix-large-item" disabled style="width: 70px; background:#e9ecef" value="—">
+          </div>
+          <div class="seg-large-item" style="display:none">
+            <div class="fs-3 text-muted" style="padding-bottom: 6px">-</div>
+          </div>
+          <div class="seg-large-item" style="display:none">
+            <label class="form-label small" for="{{ form.seq.id_for_label }}">連番 <span class="text-danger">*</span></label>
+            {{ form.seq }}
+          </div>
+        </div>
+
+        {% if form.aisle.errors %}<div class="invalid-feedback d-block">通路: {{ form.aisle.errors|join:" " }}</div>{% endif %}
+        {% if form.rack.errors %}<div class="invalid-feedback d-block">ラック: {{ form.rack.errors|join:" " }}</div>{% endif %}
+        {% if form.level.errors %}<div class="invalid-feedback d-block">段: {{ form.level.errors|join:" " }}</div>{% endif %}
+        {% if form.seq.errors %}<div class="invalid-feedback d-block">連番: {{ form.seq.errors|join:" " }}</div>{% endif %}
+      </div>
+
+      {# プレビュー #}
+      <div class="alert alert-info d-flex align-items-center mb-4" id="loc-preview-box">
+        <i class="bi bi-barcode me-2"></i>
+        <div>
+          <div class="small text-muted">生成される棚番コード</div>
+          <div class="font-monospace fs-4" id="loc-preview-code">—</div>
+        </div>
+      </div>
+
+      {# その他 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">補足情報</h6>
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label class="form-label d-block" for="{{ form.location_name.id_for_label }}">
+            {{ form.location_name.label }}
+          </label>
+          {{ form.location_name }}
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+        {{ form.is_active }}
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
+                data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
+          保存
+        </button>
+        <a href="{% url 'masters:master_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script id="areas-by-type" type="application/json">{{ areas_by_type_json|safe }}</script>
+<script id="segments-by-type" type="application/json">{{ segments_by_type_json|safe }}</script>
+<script>
+(function () {
+  'use strict';
+  const AREAS = JSON.parse(document.getElementById('areas-by-type').textContent);
+  const SEGMENTS = JSON.parse(document.getElementById('segments-by-type').textContent);
+
+  const typeSelect = document.getElementById('{{ form.area_type.id_for_label }}');
+  const areaSelect = document.getElementById('{{ form.area.id_for_label }}');
+  const hint = document.getElementById('area-format-hint');
+  const previewBox = document.getElementById('loc-preview-code');
+
+  const inputs = {
+    aisle: document.getElementById('{{ form.aisle.id_for_label }}'),
+    rack:  document.getElementById('{{ form.rack.id_for_label }}'),
+    level: document.getElementById('{{ form.level.id_for_label }}'),
+    seq:   document.getElementById('{{ form.seq.id_for_label }}'),
+  };
+
+  function repopulateAreas(type) {
+    const prev = areaSelect.value;
+    areaSelect.innerHTML = '<option value="">— エリアを選択 —</option>';
+    if (!type || !AREAS[type]) return;
+    for (const a of AREAS[type]) {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.dataset.areaCode = a.area_code;
+      opt.dataset.locationType = a.location_type;
+      opt.textContent = `${a.warehouse_code} / ${a.area_code} — ${a.area_name || ''}`;
+      areaSelect.appendChild(opt);
+    }
+    // 前選択を保ったまま再選択を試みる
+    if (prev) {
+      areaSelect.value = prev;
+      if (!areaSelect.value) areaSelect.value = '';
+    }
+  }
+
+  function toggleSegments(type) {
+    document.querySelectorAll('.seg-storage').forEach(el => {
+      el.style.display = (type === 'storage') ? '' : 'none';
+    });
+    document.querySelectorAll('.seg-large-item').forEach(el => {
+      el.style.display = (type === 'large_item') ? '' : 'none';
+    });
+  }
+
+  function updatePrefix() {
+    const opt = areaSelect.options[areaSelect.selectedIndex];
+    const code = (opt && opt.dataset.areaCode) || '—';
+    const storPrefix = document.getElementById('prefix-storage');
+    const largePrefix = document.getElementById('prefix-large-item');
+    if (storPrefix) storPrefix.value = code;
+    if (largePrefix) largePrefix.value = code;
+  }
+
+  function updatePreview() {
+    const opt = areaSelect.options[areaSelect.selectedIndex];
+    if (!opt || !opt.value) { previewBox.textContent = '—'; return; }
+    const code = opt.dataset.areaCode || '';
+    const type = opt.dataset.locationType || '';
+    if (type === 'storage') {
+      const a = (inputs.aisle.value || '00').padStart(2, '0').slice(-2);
+      const r = (inputs.rack.value  || '00').padStart(2, '0').slice(-2);
+      const l = (inputs.level.value || '00').padStart(2, '0').slice(-2);
+      previewBox.textContent = `${code}-${a}-${r}-${l}`;
+    } else if (type === 'large_item') {
+      const s = (inputs.seq.value || '000').padStart(3, '0').slice(-3);
+      previewBox.textContent = `${code}-${s}`;
+    } else {
+      previewBox.textContent = '—';
+    }
+  }
+
+  function updateHint(type) {
+    if (type === 'storage')       hint.textContent = 'フォーマット: A-NN-NN-NN（エリアコード-通路-ラック-段）';
+    else if (type === 'large_item') hint.textContent = 'フォーマット: L-NNN（エリアコード-連番）';
+    else                           hint.textContent = '区分を先に選んでください。';
+  }
+
+  function onTypeChange() {
+    const type = typeSelect.value;
+    repopulateAreas(type);
+    toggleSegments(type);
+    updateHint(type);
+    updatePrefix();
+    updatePreview();
+  }
+
+  function onAreaChange() {
+    updatePrefix();
+    updatePreview();
+  }
+
+  // セグメント入力中: 数字のみ許可 + 必要桁数で次のフィールドに自動遷移
+  function bindSegment(input, maxDigits, nextInput) {
+    if (!input) return;
+    input.addEventListener('input', function (e) {
+      // 数字以外を除去
+      const cleaned = e.target.value.replace(/[^\d]/g, '').slice(0, maxDigits);
+      if (cleaned !== e.target.value) e.target.value = cleaned;
+      updatePreview();
+      if (cleaned.length === maxDigits && nextInput) nextInput.focus();
+    });
+  }
+  bindSegment(inputs.aisle, 2, inputs.rack);
+  bindSegment(inputs.rack,  2, inputs.level);
+  bindSegment(inputs.level, 2, null);
+  bindSegment(inputs.seq,   3, null);
+
+  typeSelect.addEventListener('change', onTypeChange);
+  areaSelect.addEventListener('change', onAreaChange);
+
+  // 初期化（編集時は既に値がある）
+  onTypeChange();
+  if (areaSelect.value) onAreaChange();
+})();
+</script>
+{% endblock %}

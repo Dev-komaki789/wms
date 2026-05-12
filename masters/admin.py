@@ -22,16 +22,16 @@ class WarehouseAdmin(admin.ModelAdmin):
 
 @admin.register(Area)
 class AreaAdmin(admin.ModelAdmin):
-    list_display = ('area_code', 'area_name', 'warehouse', 'is_active')
+    list_display = ('area_code', 'area_name', 'warehouse', 'location_type', 'is_active')
     search_fields = ('area_code', 'area_name')
-    list_filter = ('warehouse', 'is_active')
+    list_filter = ('warehouse', 'location_type', 'is_active')
 
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('location_code', 'location_name', 'warehouse', 'area', 'location_type', 'is_active')
+    list_display = ('location_code', 'location_name', 'warehouse', 'area', 'is_active')
     search_fields = ('location_code', 'location_name')
-    list_filter = ('warehouse', 'area', 'location_type', 'is_active')
+    list_filter = ('warehouse', 'area', 'is_active')
 
 
 @admin.register(Category)

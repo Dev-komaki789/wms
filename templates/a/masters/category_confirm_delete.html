@@ -1,0 +1,73 @@
+{% extends 'a/base.html' %}
+
+{% block title %}カテゴリ削除確認{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:category_list' %}">カテゴリ一覧</a></li>
+    <li class="breadcrumb-item active">カテゴリ削除確認</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4 text-danger">
+  <i class="bi bi-exclamation-triangle-fill"></i> カテゴリを削除しますか？
+</h2>
+
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="bi bi-info-circle-fill"></i> 削除前の注意事項
+  </h5>
+  <ul class="mb-0">
+    <li>削除したカテゴリは<strong>元に戻せません</strong>。</li>
+    <li>このカテゴリに紐づく <strong>子カテゴリ・商品</strong> が1件でも存在する場合、<strong>削除できません</strong>（FK PROTECT 制約）。</li>
+    <li>先に子カテゴリを削除または別の親に付け替えてください。</li>
+    <li>本番運用では、削除ではなく<strong>「無効化（is_active = false）」</strong>を推奨します。</li>
+  </ul>
+</div>
+
+<div class="card border-danger mb-4">
+  <div class="card-header bg-danger text-white">削除対象</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">カテゴリコード</dt>
+      <dd class="col-sm-9"><span class="font-monospace">{{ object.category_code }}</span></dd>
+      <dt class="col-sm-3">カテゴリ名</dt>
+      <dd class="col-sm-9">{{ object.category_name }}</dd>
+      <dt class="col-sm-3">親カテゴリ</dt>
+      <dd class="col-sm-9">
+        {% if object.parent %}
+          {{ object.parent.category_name }} <span class="text-muted small">（<span class="font-monospace">{{ object.parent.category_code }}</span>）</span>
+        {% else %}
+          —（ルート）
+        {% endif %}
+      </dd>
+      <dt class="col-sm-3">階層</dt>
+      <dd class="col-sm-9">{{ object.level_label }}（第{{ object.depth|add:1 }}階層）</dd>
+      <dt class="col-sm-3">子カテゴリ数</dt>
+      <dd class="col-sm-9">{{ object.children.count }} 件</dd>
+      <dt class="col-sm-3">ステータス</dt>
+      <dd class="col-sm-9">
+        {% if object.is_active %}
+          <span class="badge bg-success">有効</span>
+        {% else %}
+          <span class="badge bg-secondary">無効</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="d-flex gap-2 justify-content-end">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="本当にカテゴリ「{{ object.category_name }}」を削除しますか？元に戻せません。"
+            data-confirm-variant="danger"
+            data-confirm-yes="削除する">
+      <i class="bi bi-trash"></i> 削除する
+    </button>
+    <a href="{% url 'masters:category_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+{% endblock %}

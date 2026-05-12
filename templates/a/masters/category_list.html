@@ -1,0 +1,211 @@
+{% extends 'a/base.html' %}
+
+{% block title %}カテゴリ一覧{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="bi bi-diagram-3 me-2 text-primary"></i>カテゴリ一覧
+  </h2>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleAllCategories(true)">
+      <i class="bi bi-arrows-expand"></i> すべて展開
+    </button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleAllCategories(false)">
+      <i class="bi bi-arrows-collapse"></i> すべて折畳
+    </button>
+    <a href="{% url 'masters:category_create' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg"></i> 新規登録
+    </a>
+  </div>
+</div>
+
+{# ツリー #}
+<div class="card shadow-sm">
+  <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+    <span class="small text-muted fw-bold">カテゴリツリー</span>
+    <span class="small text-muted">▶ で展開 / ▼ で折畳</span>
+  </div>
+  <div class="card-body p-0">
+    {% if categories %}
+    <ul class="list-group list-group-flush" id="category-tree">
+      {% for c in categories %}
+      <li class="list-group-item category-node"
+          data-pk="{{ c.pk }}"
+          data-parent-pk="{{ c.parent_id|default:'' }}"
+          data-depth="{{ c.depth_attr }}"
+          style="padding-left: {{ c.depth_attr|add:1 }}rem; {% if c.depth_attr > 0 %}border-left: 3px solid var(--bs-info-bg-subtle, #cfe2ff);{% endif %}">
+        <div class="d-flex align-items-center gap-2">
+          {% if c.children_count > 0 %}
+            <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 category-toggle"
+                    style="min-width: 1.5rem"
+                    data-target-parent="{{ c.pk }}">
+              <i class="bi bi-chevron-right toggle-icon"></i>
+            </button>
+          {% else %}
+            <span style="display:inline-block; width:1.5rem"></span>
+          {% endif %}
+
+          {% if c.depth_attr == 0 %}
+            <i class="bi bi-folder-fill text-primary"></i>
+          {% elif c.is_leaf %}
+            <i class="bi bi-tag text-muted"></i>
+          {% else %}
+            <i class="bi bi-folder text-secondary"></i>
+          {% endif %}
+
+          <span class="font-monospace text-muted small" style="min-width: 110px">{{ c.category_code }}</span>
+
+          <span class="{% if c.depth_attr == 0 %}fw-bold{% elif c.depth_attr == 1 %}fw-semibold{% endif %} flex-grow-1">
+            {{ c.category_name }}
+          </span>
+
+          {% if c.is_leaf %}
+            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+              <i class="bi bi-box-seam"></i> 商品登録先
+            </span>
+          {% else %}
+            <span class="badge bg-light text-muted border">
+              <i class="bi bi-diagram-3"></i> 分類用
+            </span>
+          {% endif %}
+
+          {% if c.is_active %}
+            <span class="badge bg-success">有効</span>
+          {% else %}
+            <span class="badge bg-secondary">無効</span>
+          {% endif %}
+
+          <span class="text-muted small" style="min-width: 60px; text-align: right">
+            {% if c.children_count > 0 %}{{ c.children_count }} 件{% else %}—{% endif %}
+          </span>
+
+          <div class="d-flex gap-1">
+            <a href="{% url 'masters:category_update' c.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+            {% if not c.is_leaf and c.depth_attr < 3 %}
+              <a href="{% url 'masters:category_create' %}?parent={{ c.pk }}" class="btn btn-sm btn-outline-success">+ 子</a>
+            {% endif %}
+            <a href="{% url 'masters:category_delete' c.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+          </div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-diagram-3 d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      カテゴリがまだ登録されていません。「+ 新規登録」から作成してください。
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+  .category-node.highlight-flash {
+    animation: flash-bg 2.5s ease-out;
+  }
+  @keyframes flash-bg {
+    0%, 30% { background-color: rgba(13, 110, 253, 0.18); }
+    100%    { background-color: transparent; }
+  }
+</style>
+<script>
+(function () {
+  'use strict';
+  const STORAGE_KEY = 'wms.categoryTree.expanded';
+
+  // ---- 展開状態の永続化（sessionStorage） ----
+  function load() {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (raw === null) return null;  // 未訪問のシグナル
+    try { return new Set(JSON.parse(raw)); }
+    catch (e) { return new Set(); }
+  }
+  function save(set) {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+  }
+
+  let expanded = load();
+  if (expanded === null) {
+    // 初回訪問: 深さ 0 を全部展開（深さ 1 が見える状態）をデフォルトに
+    expanded = new Set();
+    document.querySelectorAll('.category-node[data-depth="0"]').forEach(n => expanded.add(n.dataset.pk));
+    save(expanded);
+  }
+
+  // ---- 可視性の適用 ----
+  function applyVisibility() {
+    document.querySelectorAll('.category-node').forEach(node => {
+      const depth = parseInt(node.dataset.depth);
+      // 深さ 0 は常時表示、それ以外は親が展開済みかどうか
+      const visible = depth === 0 || expanded.has(node.dataset.parentPk);
+      node.style.display = visible ? '' : 'none';
+    });
+    document.querySelectorAll('.category-toggle').forEach(btn => {
+      const isOpen = expanded.has(btn.dataset.targetParent);
+      btn.dataset.expanded = String(isOpen);
+      const icon = btn.querySelector('.toggle-icon');
+      if (icon) {
+        icon.classList.toggle('bi-chevron-right', !isOpen);
+        icon.classList.toggle('bi-chevron-down', isOpen);
+      }
+    });
+  }
+
+  // ---- トグルクリック ----
+  document.querySelectorAll('.category-toggle').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const pk = this.dataset.targetParent;
+      if (expanded.has(pk)) expanded.delete(pk);
+      else expanded.add(pk);
+      save(expanded);
+      applyVisibility();
+    });
+  });
+
+  applyVisibility();
+
+  // ---- ?highlight=<pk> のハイライト処理 ----
+  const params = new URLSearchParams(window.location.search);
+  const hPk = params.get('highlight');
+  if (hPk) {
+    const target = document.querySelector(`.category-node[data-pk="${hPk}"]`);
+    if (target) {
+      // 祖先を全部展開
+      let cur = target;
+      while (cur && cur.dataset.parentPk) {
+        expanded.add(cur.dataset.parentPk);
+        cur = document.querySelector(`.category-node[data-pk="${cur.dataset.parentPk}"]`);
+      }
+      save(expanded);
+      applyVisibility();
+      // スクロール + フラッシュ
+      setTimeout(() => {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('highlight-flash');
+        setTimeout(() => target.classList.remove('highlight-flash'), 2500);
+      }, 80);
+    }
+    // URL から ?highlight=... を消してリロード時に再ハイライトしないようにする
+    if (window.history && window.history.replaceState) {
+      const url = new URL(window.location);
+      url.searchParams.delete('highlight');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    }
+  }
+
+  // ---- 「すべて展開」「すべて折畳」（テンプレートのボタンから呼ばれる） ----
+  window.toggleAllCategories = function (open) {
+    if (open) {
+      document.querySelectorAll('.category-node').forEach(n => expanded.add(n.dataset.pk));
+    } else {
+      expanded.clear();
+    }
+    save(expanded);
+    applyVisibility();
+  };
+})();
+</script>
+{% endblock %}

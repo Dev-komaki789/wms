@@ -1,0 +1,71 @@
+{% extends 'a/base.html' %}
+
+{% block title %}ロケーション一覧{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:master_inquiry' %}">エリア・ロケーション照会</a></li>
+    <li class="breadcrumb-item active">ロケーション一覧</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>ロケーション一覧</h2>
+  <a href="{% url 'masters:location_create' %}" class="btn btn-primary">+ 新規登録</a>
+</div>
+
+<div class="card">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th class="text-start">倉庫</th>
+        <th class="text-start">エリア</th>
+        <th class="text-start">棚番コード</th>
+        <th class="text-start">表示名</th>
+        <th class="text-center">区分</th>
+        <th class="text-center">ステータス</th>
+        <th class="text-end">更新日時</th>
+        <th class="text-center" style="width: 160px">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in locations %}
+      <tr>
+        <td class="text-start">
+          {{ l.warehouse.warehouse_name }}
+          <span class="text-muted small">（<span class="font-monospace">{{ l.warehouse.warehouse_code }}</span>）</span>
+        </td>
+        <td class="text-start">
+          {{ l.area.area_name|default:l.area.area_code }}
+          <span class="text-muted small">（<span class="font-monospace">{{ l.area.area_code }}</span>）</span>
+        </td>
+        <td class="text-start"><span class="font-monospace">{{ l.location_code }}</span></td>
+        <td class="text-start">{{ l.location_name|default:"—" }}</td>
+        <td class="text-center">
+          {% if l.area.location_type == 'storage' %}
+            <span class="badge bg-primary">通常棚</span>
+          {% elif l.area.location_type == 'large_item' %}
+            <span class="badge bg-warning text-dark">大型・長物</span>
+          {% endif %}
+        </td>
+        <td class="text-center">
+          {% if l.is_active %}
+            <span class="badge bg-success">有効</span>
+          {% else %}
+            <span class="badge bg-secondary">無効</span>
+          {% endif %}
+        </td>
+        <td class="text-end text-muted small font-monospace">{{ l.updated_at|date:"Y/m/d H:i" }}</td>
+        <td class="text-center">
+          <a href="{% url 'masters:location_update' l.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+          <a href="{% url 'masters:location_delete' l.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="text-center text-muted py-4">ロケーションがまだ登録されていません</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

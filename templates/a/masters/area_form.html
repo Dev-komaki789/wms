@@ -6,7 +6,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="{% url 'masters:area_list' %}">エリア一覧</a></li>
-    <li class="breadcrumb-item active">{% if object %}編集{% else %}新規登録{% endif %}</li>
+    <li class="breadcrumb-item active">{% if object %}エリア編集{% else %}エリア新規登録{% endif %}</li>
   </ol>
 </nav>
 
@@ -16,9 +16,74 @@
   <div class="card-body">
     <form method="post">
       {% csrf_token %}
-      {% include 'a/masters/_form_fields.html' %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
 
-      <div class="d-flex gap-2">
+      {# 基本情報 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">基本情報</h6>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block" for="{{ form.warehouse.id_for_label }}">
+            {{ form.warehouse.label }}{% if form.warehouse.field.required %} <span class="text-danger">*</span>{% endif %}
+          </label>
+          {{ form.warehouse }}
+          {% if form.warehouse.errors %}<div class="invalid-feedback d-block">{{ form.warehouse.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-3 mb-3">
+          <label class="form-label d-block" for="{{ form.area_code.id_for_label }}">
+            {{ form.area_code.label }}{% if form.area_code.field.required %} <span class="text-danger">*</span>{% endif %}
+          </label>
+          {{ form.area_code }}
+          <div class="form-text">英字1〜2文字（棚番の先頭）</div>
+          {% if form.area_code.errors %}<div class="invalid-feedback d-block">{{ form.area_code.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-3 mb-3">
+          <label class="form-label d-block" for="{{ form.area_name.id_for_label }}">
+            {{ form.area_name.label }}{% if form.area_name.field.required %} <span class="text-danger">*</span>{% endif %}
+          </label>
+          {{ form.area_name }}
+          {% if form.area_name.errors %}<div class="invalid-feedback d-block">{{ form.area_name.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# 区分 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">
+        区分{% if form.location_type.field.required %} <span class="text-danger">*</span>{% endif %}
+      </h6>
+      <div class="d-flex gap-2 mb-2" id="area-type-radio-group">
+        {% for radio in form.location_type %}
+        <label class="flex-fill border rounded p-3 area-type-option" data-value="{{ radio.choice_value }}">
+          <div class="form-check m-0">
+            {{ radio.tag }}
+            <span class="form-check-label fw-bold">{{ radio.choice_label }}</span>
+          </div>
+          <div class="text-muted small font-monospace ms-4 mt-1" data-preview-for="{{ radio.choice_value }}">
+            {% if radio.choice_value == 'storage' %}A-01-02-03{% elif radio.choice_value == 'large_item' %}L-001{% endif %}
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+      {% if form.location_type.errors %}<div class="invalid-feedback d-block mb-3">{{ form.location_type.errors|join:" " }}</div>{% endif %}
+
+      {# 棚番プレビュー #}
+      <div class="alert alert-info d-flex align-items-center mb-3" id="area-preview-box">
+        <i class="bi bi-eye me-2"></i>
+        <div>
+          <div class="small text-muted">このエリアで生成される棚番の例</div>
+          <div class="font-monospace fs-4" id="area-preview-code">—</div>
+        </div>
+      </div>
+
+      {# ステータス（h6 は省略。フィールドの label が「ステータス」を表示するため二重になる） #}
+      <div class="mb-3 mt-3">
+        <label class="form-label d-block" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+        {{ form.is_active }}
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
         <button type="submit" class="btn btn-primary"
                 data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
                 data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
@@ -29,4 +94,42 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  const codeInput = document.getElementById('{{ form.area_code.id_for_label }}');
+  const previewBox = document.getElementById('area-preview-code');
+  const radios = document.querySelectorAll('input[name="{{ form.location_type.html_name }}"]');
+
+  function getSelectedType() {
+    for (const r of radios) if (r.checked) return r.value;
+    return '';
+  }
+
+  function buildPreview() {
+    const code = (codeInput.value || 'A').toUpperCase();
+    const type = getSelectedType();
+    if (type === 'storage')    return code + '-01-02-03';
+    if (type === 'large_item') return code + '-001';
+    return '—';
+  }
+
+  function update() {
+    previewBox.textContent = buildPreview();
+    // ラジオの見た目を更新
+    document.querySelectorAll('.area-type-option').forEach(opt => {
+      const isSelected = opt.querySelector('input[type="radio"]').checked;
+      opt.classList.toggle('border-primary', isSelected);
+      opt.classList.toggle('bg-primary-subtle', isSelected);
+    });
+  }
+
+  radios.forEach(r => r.addEventListener('change', update));
+  if (codeInput) codeInput.addEventListener('input', update);
+  update();
+})();
+</script>
 {% endblock %}

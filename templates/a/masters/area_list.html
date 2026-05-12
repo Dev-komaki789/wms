@@ -3,6 +3,13 @@
 {% block title %}エリア一覧{% endblock %}
 
 {% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:master_inquiry' %}">エリア・ロケーション照会</a></li>
+    <li class="breadcrumb-item active">エリア一覧</li>
+  </ol>
+</nav>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2>エリア一覧</h2>
   <a href="{% url 'masters:area_create' %}" class="btn btn-primary">+ 新規登録</a>
@@ -12,38 +19,48 @@
   <table class="table table-hover align-middle mb-0">
     <thead class="table-light">
       <tr>
-        <th>倉庫</th>
-        <th>エリアコード</th>
-        <th>エリア名</th>
-        <th>ステータス</th>
-        <th>更新日時</th>
-        <th style="width: 160px">操作</th>
+        <th class="text-start">倉庫</th>
+        <th class="text-start">エリアコード</th>
+        <th class="text-start">エリア名</th>
+        <th class="text-center">区分</th>
+        <th class="text-center">ステータス</th>
+        <th class="text-end">更新日時</th>
+        <th class="text-center" style="width: 160px">操作</th>
       </tr>
     </thead>
     <tbody>
       {% for a in areas %}
       <tr>
-        <td>
+        <td class="text-start">
           {{ a.warehouse.warehouse_name }}
           <span class="text-muted small">（<span class="font-monospace">{{ a.warehouse.warehouse_code }}</span>）</span>
         </td>
-        <td><span class="font-monospace">{{ a.area_code }}</span></td>
-        <td>{{ a.area_name|default:"—" }}</td>
-        <td>
+        <td class="text-start"><span class="font-monospace">{{ a.area_code }}</span></td>
+        <td class="text-start">{{ a.area_name|default:"—" }}</td>
+        <td class="text-center">
+          {% if a.location_type == 'storage' %}
+            <span class="badge bg-primary">通常棚</span>
+          {% elif a.location_type == 'large_item' %}
+            <span class="badge bg-warning text-dark">大型・長物</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ a.get_location_type_display }}</span>
+          {% endif %}
+        </td>
+        <td class="text-center">
           {% if a.is_active %}
             <span class="badge bg-success">有効</span>
           {% else %}
             <span class="badge bg-secondary">無効</span>
           {% endif %}
         </td>
-        <td class="text-muted small">{{ a.updated_at|date:"Y/m/d H:i" }}</td>
-        <td>
+        <td class="text-end text-muted small font-monospace">{{ a.updated_at|date:"Y/m/d H:i" }}</td>
+        <td class="text-center">
           <a href="{% url 'masters:area_update' a.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
           <a href="{% url 'masters:area_delete' a.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="6" class="text-center text-muted py-4">エリアがまだ登録されていません</td></tr>
+      <tr><td colspan="7" class="text-center text-muted py-4">エリアがまだ登録されていません</td></tr>
       {% endfor %}
     </tbody>
   </table>

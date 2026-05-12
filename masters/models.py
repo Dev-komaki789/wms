@@ -4,6 +4,8 @@
   id → business → is_active → created_at → updated_at
 TimestampMixin は使わず、各モデルで created_at/updated_at を末尾に明示。
 """
+import re
+
 from django.core.validators import MinValueValidator
 from django.db import models
 
@@ -26,11 +28,35 @@ class Warehouse(models.Model):
 
 
 class Area(models.Model):
+    class LocationType(models.TextChoices):
+        STORAGE = 'storage', '通常棚'
+        LARGE_ITEM = 'large_item', '大型・長物'
+
+    # 区分ごとの棚番セグメント定義: (key, label, digits)
+    # 通常棚: area_code + 通路 + ラック + 段 → 'A-01-02-03'
+    # 大型・長物: area_code + 連番 → 'L-001'
+    LOCATION_CODE_SEGMENTS = {
+        LocationType.STORAGE: [
+            ('aisle', '通路', 2),
+            ('rack', 'ラック', 2),
+            ('level', '段', 2),
+        ],
+        LocationType.LARGE_ITEM: [
+            ('seq', '連番', 3),
+        ],
+    }
+
     warehouse = models.ForeignKey(
         Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
     )
     area_code = models.CharField('エリアコード', max_length=20)
     area_name = models.CharField('エリア名', max_length=100, blank=True)
+    location_type = models.CharField(
+        '区分',
+        max_length=20,
+        choices=LocationType.choices,
+        default=LocationType.STORAGE,
+    )
     is_active = models.BooleanField('有効', default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -48,27 +74,45 @@ class Area(models.Model):
     def __str__(self):
         return f'{self.area_name or self.area_code} ({self.warehouse.warehouse_code})'
 
+    def format_location_code(self, **segments):
+        """セグメント値から完全な棚番を組み立てる。
+
+        例: area_code='A', location_type=STORAGE
+            format_location_code(aisle='01', rack='02', level='03')
+            → 'A-01-02-03'
+        """
+        if self.location_type == self.LocationType.STORAGE:
+            aisle = str(segments.get('aisle', '')).zfill(2)
+            rack = str(segments.get('rack', '')).zfill(2)
+            level = str(segments.get('level', '')).zfill(2)
+            return f'{self.area_code}-{aisle}-{rack}-{level}'
+        if self.location_type == self.LocationType.LARGE_ITEM:
+            seq = str(segments.get('seq', '')).zfill(3)
+            return f'{self.area_code}-{seq}'
+        return ''
+
+    def parse_location_code(self, code):
+        """既存の棚番コードをセグメントに分解する（編集画面で初期値を埋めるのに使う）。"""
+        prefix = f'{self.area_code}-'
+        if not code.startswith(prefix):
+            return {}
+        suffix = code[len(prefix):]
+        if self.location_type == self.LocationType.STORAGE:
+            parts = suffix.split('-')
+            if len(parts) == 3:
+                return {'aisle': parts[0], 'rack': parts[1], 'level': parts[2]}
+        elif self.location_type == self.LocationType.LARGE_ITEM:
+            return {'seq': suffix}
+        return {}
+
 
 class Location(models.Model):
-    class Type(models.TextChoices):
-        STORAGE = 'storage', '通常棚'
-        LARGE_ITEM = 'large_item', '大型・長物'
-        STAGING = 'staging', '出荷ステージング'
-        CROSSDOCK = 'crossdock', 'クロスドック'
-        RECEIVING = 'receiving', '入荷エリア'
-
     warehouse = models.ForeignKey(
         Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
     )
     area = models.ForeignKey(Area, on_delete=models.PROTECT, verbose_name='エリア')
     location_code = models.CharField('棚番コード', max_length=30)
     location_name = models.CharField('表示名', max_length=100, blank=True)
-    location_type = models.CharField(
-        '種別',
-        max_length=20,
-        choices=Type.choices,
-        default=Type.STORAGE,
-    )
     is_active = models.BooleanField('有効', default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -83,17 +127,39 @@ class Location(models.Model):
                 name='uk_locations_warehouse_code',
             ),
         ]
-        indexes = [
-            models.Index(fields=['location_type'], name='idx_locations_type'),
-        ]
 
     def __str__(self):
         return self.location_code
 
+    @property
+    def position_summary(self):
+        """一覧画面で表示する位置情報の要約。
+
+        通常棚: '通路01 / ラック03 / 2段目'
+        大型・長物: '連番管理'
+        """
+        parsed = self.area.parse_location_code(self.location_code)
+        if not parsed:
+            return ''
+        if 'aisle' in parsed:
+            return f'通路{parsed["aisle"]} / ラック{parsed["rack"]} / {int(parsed["level"])}段目'
+        if 'seq' in parsed:
+            return '連番管理'
+        return ''
+
 
 class Category(models.Model):
-    category_code = models.CharField('カテゴリコード', max_length=20, unique=True)
+    """商品カテゴリ。最大 MAX_DEPTH 階層の木構造。
+
+    例: 大カテゴリ(CAT-001) → 中カテゴリ(CAT-001-01) → 小カテゴリ(CAT-001-01-01)
+    """
+
+    MAX_DEPTH = 4  # 1=大, 2=中, 3=小, 4=詳細
+    LEVEL_LABELS = ['大カテゴリ', '中カテゴリ', '小カテゴリ', '詳細カテゴリ']
+
+    category_code = models.CharField('カテゴリコード', max_length=30, unique=True)
     category_name = models.CharField('カテゴリ名', max_length=100)
+    description = models.TextField('説明', blank=True)
     parent = models.ForeignKey(
         'self',
         on_delete=models.PROTECT,
@@ -102,6 +168,9 @@ class Category(models.Model):
         related_name='children',
         verbose_name='親カテゴリ',
     )
+    sort_order = models.IntegerField('表示順', default=10)
+    is_leaf = models.BooleanField('商品の登録先', default=False)
+    is_active = models.BooleanField('有効', default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -109,9 +178,71 @@ class Category(models.Model):
         db_table = 'categories'
         verbose_name = 'カテゴリ'
         verbose_name_plural = 'カテゴリ'
+        ordering = ['sort_order', 'category_code']
 
     def __str__(self):
         return self.category_name
+
+    @property
+    def depth(self):
+        """0=root, 1=child of root, ..."""
+        d, p = 0, self.parent
+        while p is not None:
+            d += 1
+            p = p.parent
+        return d
+
+    @property
+    def level_label(self):
+        """大/中/小/詳細カテゴリ"""
+        d = self.depth
+        if 0 <= d < len(self.LEVEL_LABELS):
+            return self.LEVEL_LABELS[d]
+        return f'第{d + 1}階層'
+
+    @property
+    def ancestors(self):
+        """自分を除いたルートまでの祖先を上から順に返す。"""
+        result = []
+        cur = self.parent
+        while cur is not None:
+            result.insert(0, cur)
+            cur = cur.parent
+        return result
+
+    def get_descendants(self):
+        """全子孫を返す（深さ優先）。"""
+        result = []
+        stack = list(self.children.all())
+        while stack:
+            cat = stack.pop(0)
+            result.append(cat)
+            stack[:0] = list(cat.children.all())
+        return result
+
+    @classmethod
+    def next_root_code(cls):
+        """次のルートカテゴリコード（CAT-NNN）を採番する。"""
+        existing = cls.objects.filter(parent__isnull=True).values_list('category_code', flat=True)
+        max_n = 0
+        for code in existing:
+            m = re.match(r'^CAT-(\d{3})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'CAT-{max_n + 1:03d}'
+
+    @classmethod
+    def next_child_code(cls, parent):
+        """親配下の次のコード（{親}-NN）を採番する。"""
+        prefix = f'{parent.category_code}-'
+        max_n = 0
+        for code in cls.objects.filter(parent=parent).values_list('category_code', flat=True):
+            if code.startswith(prefix):
+                suffix = code[len(prefix):]
+                m = re.match(r'^(\d{2})$', suffix)
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+        return f'{prefix}{max_n + 1:02d}'
 
 
 class Manufacturer(models.Model):

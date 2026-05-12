@@ -70,6 +70,22 @@
     if (next) next.focus();
   });
 
+  // === select で値を選んだら次フィールドに自動遷移 ===
+  // ユーザーがマウスで選択した瞬間に focus 移動。change イベントは値が変化した時のみ発火するので
+  // 同じ値を選び直しても何も起きない（意図通り）。
+  document.addEventListener('change', function (e) {
+    const t = e.target;
+    if (t.tagName !== 'SELECT') return;
+    const form = t.form;
+    if (!form) return;
+    const focusables = Array.from(form.querySelectorAll(
+      'input, select, textarea, button[type="submit"], a.btn'
+    )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null);
+    const idx = focusables.indexOf(t);
+    const next = focusables[idx + 1];
+    if (next) next.focus();
+  });
+
   // === 確認モーダルが開いたら「はい」ボタンに自動フォーカス（Enterで即確認可能） ===
   const confirmModalEl = document.getElementById('confirmModal');
   if (confirmModalEl) {

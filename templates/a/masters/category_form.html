@@ -1,0 +1,156 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{% if object %}カテゴリ編集{% else %}カテゴリ新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:category_list' %}">カテゴリ一覧</a></li>
+    <li class="breadcrumb-item active">{% if object %}カテゴリ編集{% else %}カテゴリ新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}カテゴリ編集{% else %}カテゴリ新規登録{% endif %}</h2>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      {# 親カテゴリ #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">親カテゴリ</h6>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.parent.id_for_label }}">
+          {{ form.parent.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+        </label>
+        {{ form.parent }}
+        <div class="form-text">選択しない場合は大カテゴリ（最上位）として登録されます</div>
+        {% if form.parent.errors %}<div class="invalid-feedback d-block">{{ form.parent.errors|join:" " }}</div>{% endif %}
+      </div>
+
+      {# breadcrumb プレビュー #}
+      <div class="alert alert-light border d-flex align-items-center gap-2 mb-3" id="bc-preview">
+        <i class="bi bi-eye text-muted"></i>
+        <span class="small text-muted">登録場所:</span>
+        <span id="bc-content" class="fw-semibold">— 大カテゴリとして登録 —</span>
+      </div>
+
+      {# 階層インジケータ #}
+      <div class="alert alert-primary d-flex align-items-center gap-2 mb-4" id="lv-indicator">
+        <span class="badge rounded-circle p-2" id="lv-dot" style="background: var(--bs-primary)"></span>
+        <span>登録される階層: <strong id="lv-text">大カテゴリ（第1階層）</strong></span>
+      </div>
+
+      {# カテゴリ情報 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">カテゴリ情報</h6>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block">
+            カテゴリコード <span class="badge bg-info-subtle text-info-emphasis">自動</span>
+          </label>
+          <input type="text" class="form-control font-monospace bg-light"
+                 value="{% if object %}{{ object.category_code }}{% else %}—（保存時に採番）—{% endif %}"
+                 disabled style="border-style: dashed">
+          <div class="form-text">親カテゴリから自動採番されます</div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block" for="{{ form.sort_order.id_for_label }}">
+            {{ form.sort_order.label }}
+          </label>
+          {{ form.sort_order }}
+          <div class="form-text">同階層内での並び順（小さい順）</div>
+          {% if form.sort_order.errors %}<div class="invalid-feedback d-block">{{ form.sort_order.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.category_name.id_for_label }}">
+          {{ form.category_name.label }} <span class="text-danger">*</span>
+        </label>
+        {{ form.category_name }}
+        {% if form.category_name.errors %}<div class="invalid-feedback d-block">{{ form.category_name.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.description.id_for_label }}">
+          {{ form.description.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+        </label>
+        {{ form.description }}
+      </div>
+
+      {# 設定 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">設定</h6>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block">
+            {{ form.is_active.label }}
+          </label>
+          {{ form.is_active }}
+          <div class="form-text text-warning-emphasis">
+            <i class="bi bi-exclamation-triangle"></i> 親を無効にしても子カテゴリは自動では無効化されません
+          </div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block">
+            {{ form.is_leaf.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          <div class="d-flex flex-column gap-1">
+            {% for radio in form.is_leaf %}
+              <label class="d-flex align-items-center gap-2">{{ radio.tag }} <span>{{ radio.choice_label }}</span></label>
+            {% endfor %}
+          </div>
+          <div class="form-text">「はい」にしたカテゴリだけが、商品マスタの「カテゴリ」選択肢に出ます</div>
+          {% if form.is_leaf.errors %}<div class="invalid-feedback d-block">{{ form.is_leaf.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
+                data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
+          保存
+        </button>
+        <a href="{% url 'masters:category_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script id="parents-info" type="application/json">{{ parents_info_json|safe }}</script>
+<script id="level-labels" type="application/json">{{ level_labels_json|safe }}</script>
+<script>
+(function () {
+  'use strict';
+  const PARENTS = JSON.parse(document.getElementById('parents-info').textContent);
+  const LABELS = JSON.parse(document.getElementById('level-labels').textContent);
+  const MAX_DEPTH = {{ max_depth }};
+  const COLORS = ['#0d6efd', '#198754', '#fd7e14', '#dc3545'];  // primary / success / warning / danger
+
+  const sel = document.getElementById('{{ form.parent.id_for_label }}');
+  const bcContent = document.getElementById('bc-content');
+  const lvText = document.getElementById('lv-text');
+  const lvDot = document.getElementById('lv-dot');
+
+  function update() {
+    const parentPk = sel.value;
+    let myDepth = 0;
+    let bc = '— 大カテゴリとして登録 —';
+    if (parentPk && PARENTS[parentPk]) {
+      const info = PARENTS[parentPk];
+      myDepth = info.depth + 1;
+      bc = info.breadcrumb + ' › （新しいカテゴリ）';
+    }
+    bcContent.textContent = bc;
+    const labelIdx = Math.min(myDepth, LABELS.length - 1);
+    lvText.textContent = `${LABELS[labelIdx]}（第${myDepth + 1}階層）`;
+    lvDot.style.background = COLORS[Math.min(labelIdx, COLORS.length - 1)];
+  }
+
+  sel.addEventListener('change', update);
+  update();
+})();
+</script>
+{% endblock %}
