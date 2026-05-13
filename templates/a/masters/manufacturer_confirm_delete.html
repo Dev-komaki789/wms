@@ -1,0 +1,68 @@
+{% extends 'a/base.html' %}
+
+{% block title %}メーカー削除確認{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:manufacturer_list' %}">メーカー一覧</a></li>
+    <li class="breadcrumb-item active">メーカー削除確認</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4 text-danger">
+  <i class="bi bi-exclamation-triangle-fill"></i> メーカーを削除しますか？
+</h2>
+
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="bi bi-info-circle-fill"></i> 削除前の注意事項
+  </h5>
+  <ul class="mb-0">
+    <li>削除したメーカーは<strong>元に戻せません</strong>。</li>
+    <li>このメーカーを参照している<strong>商品</strong>が存在する場合、商品の「メーカー」欄は <strong>NULL（未設定）</strong> に置き換わります（FK SET_NULL）。</li>
+    <li>本番運用では、削除ではなく<strong>「無効化（is_active = false）」</strong>を推奨します。商品とのトレーサビリティを保つため。</li>
+  </ul>
+</div>
+
+<div class="card border-danger mb-4">
+  <div class="card-header bg-danger text-white">削除対象</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">メーカーコード</dt>
+      <dd class="col-sm-9"><span class="font-monospace">{{ object.manufacturer_code }}</span></dd>
+      <dt class="col-sm-3">メーカー名</dt>
+      <dd class="col-sm-9">{{ object.manufacturer_name }}</dd>
+      <dt class="col-sm-3">URL</dt>
+      <dd class="col-sm-9">
+        {% if object.url %}
+          <a href="{{ object.url }}" target="_blank" rel="noopener noreferrer">{{ object.url }}</a>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+      <dt class="col-sm-3">ステータス</dt>
+      <dd class="col-sm-9">
+        {% if object.is_active %}
+          <span class="badge bg-success">有効</span>
+        {% else %}
+          <span class="badge bg-secondary">無効</span>
+        {% endif %}
+      </dd>
+      <dt class="col-sm-3">登録日時</dt>
+      <dd class="col-sm-9 text-muted small">{{ object.created_at|date:"Y/m/d H:i" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="d-flex gap-2 justify-content-end">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="本当にメーカー「{{ object.manufacturer_name }}」を削除しますか？元に戻せません。"
+            data-confirm-variant="danger"
+            data-confirm-yes="削除する">
+      <i class="bi bi-trash"></i> 削除する
+    </button>
+    <a href="{% url 'masters:manufacturer_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+{% endblock %}

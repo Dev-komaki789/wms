@@ -63,7 +63,7 @@
     e.preventDefault();
     // ナビゲーション対象: 入力フィールド + 送信ボタン + a.btn (キャンセル等)
     const focusables = Array.from(form.querySelectorAll(
-      'input, select, textarea, button[type="submit"], a.btn'
+      'input, select, textarea, button, a.btn'
     )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null);
     const idx = focusables.indexOf(t);
     const next = focusables[idx + direction];
@@ -79,7 +79,7 @@
     const form = t.form;
     if (!form) return;
     const focusables = Array.from(form.querySelectorAll(
-      'input, select, textarea, button[type="submit"], a.btn'
+      'input, select, textarea, button, a.btn'
     )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null);
     const idx = focusables.indexOf(t);
     const next = focusables[idx + 1];

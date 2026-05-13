@@ -210,6 +210,16 @@ class Category(models.Model):
             cur = cur.parent
         return result
 
+    @property
+    def breadcrumb(self):
+        """ルートから自分までのパスを ' › ' で連結（例: '工具 › 切削工具 › ドリル'）。"""
+        names = []
+        cur = self
+        while cur is not None:
+            names.insert(0, cur.category_name)
+            cur = cur.parent
+        return ' › '.join(names)
+
     def get_descendants(self):
         """全子孫を返す（深さ優先）。"""
         result = []
@@ -287,6 +297,16 @@ class Product(models.Model):
 
     def __str__(self):
         return f'{self.product_name} ({self.product_code})'
+
+    @classmethod
+    def next_product_code(cls):
+        """次の商品コード（PRD-NNNNN）を採番する。"""
+        max_n = 0
+        for code in cls.objects.values_list('product_code', flat=True):
+            m = re.match(r'^PRD-(\d{5})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'PRD-{max_n + 1:05d}'
 
 
 class Sku(models.Model):

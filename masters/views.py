@@ -7,8 +7,8 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, TemplateView
 
-from .forms import AreaForm, CategoryForm, LocationForm
-from .models import Area, Category, Location, Warehouse
+from .forms import AreaForm, CategoryForm, LocationForm, ManufacturerForm, ProductForm
+from .models import Area, Category, Location, Manufacturer, Product, Warehouse
 from .utils import get_current_warehouse
 
 
@@ -341,3 +341,131 @@ class CategoryDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
     model = Category
     template_name = 'a/masters/category_confirm_delete.html'
     success_url = reverse_lazy('masters:category_list')
+
+
+# ---- Manufacturer ----
+
+class ManufacturerListView(LoginRequiredMixin, ListView):
+    model = Manufacturer
+    template_name = 'a/masters/manufacturer_list.html'
+    context_object_name = 'manufacturers'
+
+    def get_queryset(self):
+        return Manufacturer.objects.order_by('manufacturer_code')
+
+
+class ManufacturerCreateView(LoginRequiredMixin, CreateView):
+    model = Manufacturer
+    form_class = ManufacturerForm
+    template_name = 'a/masters/manufacturer_form.html'
+    success_url = reverse_lazy('masters:manufacturer_list')
+
+
+class ManufacturerUpdateView(LoginRequiredMixin, UpdateView):
+    model = Manufacturer
+    form_class = ManufacturerForm
+    template_name = 'a/masters/manufacturer_form.html'
+    success_url = reverse_lazy('masters:manufacturer_list')
+
+
+class ManufacturerDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = Manufacturer
+    template_name = 'a/masters/manufacturer_confirm_delete.html'
+    success_url = reverse_lazy('masters:manufacturer_list')
+
+
+# ---- Product ----
+
+class ProductInquiryView(LoginRequiredMixin, TemplateView):
+    """商品の照会＋一覧。検索-first パターン（エリア・ロケーション照会と同じ規約）。
+
+    商品は単一倉庫運用のスコープに乗らない（マスタは全社共通）ため、倉庫スコープは適用しない。
+    """
+
+    template_name = 'a/masters/product_inquiry.html'
+
+    SEARCH_KEYS = ('p_q', 'p_category', 'p_manufacturer', 'p_status')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+
+        searched = any(k in g for k in self.SEARCH_KEYS)
+        ctx['searched'] = searched
+
+        p_q = g.get('p_q', '').strip()
+        p_category = g.get('p_category', '')
+        p_manufacturer = g.get('p_manufacturer', '')
+        p_status = g.get('p_status', '')
+
+        if searched:
+            qs = Product.objects.select_related('category', 'manufacturer')
+            if p_q:
+                qs = qs.filter(Q(product_code__icontains=p_q) | Q(product_name__icontains=p_q))
+            if p_category:
+                qs = qs.filter(category_id=p_category)
+            if p_manufacturer:
+                # メーカー名 or メーカーコードの部分一致（登録数が多い前提でテキスト入力）
+                qs = qs.filter(
+                    Q(manufacturer__manufacturer_name__icontains=p_manufacturer)
+                    | Q(manufacturer__manufacturer_code__icontains=p_manufacturer)
+                )
+            if p_status == 'active':
+                qs = qs.filter(is_active=True)
+            elif p_status == 'inactive':
+                qs = qs.filter(is_active=False)
+            qs = qs.order_by('product_code')
+            ctx['products'] = qs
+            ctx['p_stats'] = {
+                'total': qs.count(),
+                'active': qs.filter(is_active=True).count(),
+                'inactive': qs.filter(is_active=False).count(),
+                'no_manufacturer': qs.filter(manufacturer__isnull=True).count(),
+            }
+        else:
+            ctx['products'] = Product.objects.none()
+            ctx['p_stats'] = None
+
+        # フィルタ選択肢
+        ctx['leaf_categories'] = (
+            Category.objects.filter(is_leaf=True)
+            .select_related('parent', 'parent__parent', 'parent__parent__parent')
+            .order_by('category_code')
+        )
+        ctx['filters'] = {
+            'p_q': p_q,
+            'p_category': p_category,
+            'p_manufacturer': p_manufacturer,
+            'p_status': p_status,
+        }
+        return ctx
+
+
+class ProductCreateView(LoginRequiredMixin, CreateView):
+    model = Product
+    form_class = ProductForm
+    template_name = 'a/masters/product_form.html'
+
+    def get_success_url(self):
+        return reverse('masters:product_inquiry')
+
+
+class ProductUpdateView(LoginRequiredMixin, UpdateView):
+    model = Product
+    form_class = ProductForm
+    template_name = 'a/masters/product_form.html'
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('category', 'manufacturer')
+
+    def get_success_url(self):
+        return reverse('masters:product_inquiry')
+
+
+class ProductDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = Product
+    template_name = 'a/masters/product_confirm_delete.html'
+    success_url = reverse_lazy('masters:product_inquiry')
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('category', 'manufacturer')

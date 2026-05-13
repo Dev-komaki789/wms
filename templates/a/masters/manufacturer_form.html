@@ -1,0 +1,69 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{% if object %}メーカー編集{% else %}メーカー新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:manufacturer_list' %}">メーカー一覧</a></li>
+    <li class="breadcrumb-item active">{% if object %}メーカー編集{% else %}メーカー新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}メーカー編集{% else %}メーカー新規登録{% endif %}</h2>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">基本情報</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.manufacturer_code.id_for_label }}">
+            {{ form.manufacturer_code.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.manufacturer_code }}
+          <div class="form-text">英数字（例: MAKITA, HITACHI）</div>
+          {% if form.manufacturer_code.errors %}<div class="invalid-feedback d-block">{{ form.manufacturer_code.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-8 mb-3">
+          <label class="form-label d-block" for="{{ form.manufacturer_name.id_for_label }}">
+            {{ form.manufacturer_name.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.manufacturer_name }}
+          {% if form.manufacturer_name.errors %}<div class="invalid-feedback d-block">{{ form.manufacturer_name.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.url.id_for_label }}">
+          {{ form.url.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+        </label>
+        {{ form.url }}
+        <div class="form-text">公式サイト等</div>
+        {% if form.url.errors %}<div class="invalid-feedback d-block">{{ form.url.errors|join:" " }}</div>{% endif %}
+      </div>
+
+      <div class="mb-3 mt-3">
+        <label class="form-label d-block" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+        {{ form.is_active }}
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
+                data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
+          保存
+        </button>
+        <a href="{% url 'masters:manufacturer_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

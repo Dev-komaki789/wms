@@ -7,7 +7,7 @@ import re
 
 from django import forms
 
-from .models import Area, Category, Location, Warehouse
+from .models import Area, Category, Location, Manufacturer, Product, Warehouse
 from .utils import get_current_warehouse
 from .widgets import StatusToggleWidget
 
@@ -301,6 +301,84 @@ class CategoryForm(forms.ModelForm):
                 instance.category_code = Category.next_child_code(instance.parent)
             else:
                 instance.category_code = Category.next_root_code()
+        if commit:
+            instance.save()
+        return instance
+
+
+class ManufacturerForm(forms.ModelForm):
+    class Meta:
+        model = Manufacturer
+        fields = ['manufacturer_code', 'manufacturer_name', 'url', 'is_active']
+        labels = {'is_active': STATUS_LABEL}
+        widgets = {
+            'manufacturer_code': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: MAKITA', 'autocomplete': 'off'}
+            ),
+            'manufacturer_name': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 株式会社マキタ'}
+            ),
+            'url': forms.URLInput(attrs={**TEXT, 'placeholder': 'https://...'}),
+            'is_active': StatusToggleWidget(),
+        }
+
+
+class ProductForm(forms.ModelForm):
+    """商品登録・編集フォーム。
+
+    UI:
+      - 商品コードは保存時にサーバー側で自動採番（フォームには出さない）
+      - カテゴリは末端カテゴリ（is_leaf=True かつ is_active=True）のみ選択可、breadcrumb 付き label
+      - メーカーは任意（指定しない選択肢あり）
+    """
+
+    class Meta:
+        model = Product
+        fields = [
+            'category', 'manufacturer', 'product_name', 'description', 'is_active',
+        ]
+        labels = {'is_active': STATUS_LABEL}
+        widgets = {
+            'category': forms.Select(attrs=SELECT),
+            'manufacturer': forms.Select(attrs=SELECT),
+            'product_name': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: インパクトドライバ TD173DRGX'}
+            ),
+            'description': forms.Textarea(attrs={**TEXT, 'rows': '3'}),
+            'is_active': StatusToggleWidget(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # カテゴリ: 末端のみ。breadcrumb 付きで表示
+        cat_qs = (
+            Category.objects.filter(is_leaf=True, is_active=True)
+            .select_related('parent', 'parent__parent', 'parent__parent__parent')
+            .order_by('category_code')
+        )
+        # 編集時、現在のカテゴリが is_leaf でない/無効になっていても選択肢に残す
+        if self.instance.pk and self.instance.category_id:
+            cat_qs = Category.objects.filter(
+                pk__in=list(cat_qs.values_list('pk', flat=True)) + [self.instance.category_id]
+            ).select_related('parent', 'parent__parent', 'parent__parent__parent')
+        self.fields['category'].queryset = cat_qs
+        self.fields['category'].label_from_instance = lambda c: c.breadcrumb
+        self.fields['category'].empty_label = '— カテゴリを選択 —'
+
+        # メーカー: 有効なものだけ、任意
+        mfr_qs = Manufacturer.objects.filter(is_active=True).order_by('manufacturer_code')
+        if self.instance.pk and self.instance.manufacturer_id:
+            mfr_qs = Manufacturer.objects.filter(
+                pk__in=list(mfr_qs.values_list('pk', flat=True)) + [self.instance.manufacturer_id]
+            )
+        self.fields['manufacturer'].queryset = mfr_qs
+        self.fields['manufacturer'].empty_label = '— メーカーを指定しない —'
+        self.fields['manufacturer'].required = False
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.pk:
+            instance.product_code = Product.next_product_code()
         if commit:
             instance.save()
         return instance

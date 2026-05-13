@@ -1,0 +1,104 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{% if object %}商品編集{% else %}商品新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:product_inquiry' %}">商品一覧</a></li>
+    <li class="breadcrumb-item active">{% if object %}商品編集{% else %}商品新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}商品編集{% else %}商品新規登録{% endif %}</h2>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      {# 識別情報 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">識別情報</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block">
+            商品コード <span class="badge bg-info-subtle text-info-emphasis">自動</span>
+          </label>
+          <input type="text" class="form-control font-monospace bg-light"
+                 value="{% if object %}{{ object.product_code }}{% else %}—（保存時に採番）—{% endif %}"
+                 disabled style="border-style: dashed">
+          <div class="form-text">PRD-NNNNN 形式で自動採番されます</div>
+        </div>
+        <div class="col-md-8 mb-3">
+          <label class="form-label d-block" for="{{ form.product_name.id_for_label }}">
+            {{ form.product_name.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.product_name }}
+          {% if form.product_name.errors %}<div class="invalid-feedback d-block">{{ form.product_name.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# 分類 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">分類</h6>
+      <div class="row">
+        <div class="col-md-7 mb-3">
+          <label class="form-label d-block" for="{{ form.category.id_for_label }}">
+            {{ form.category.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.category }}
+          <div class="form-text">
+            末端カテゴリ（商品の登録先に指定されたもの）のみ選択できます。
+            <a href="{% url 'masters:category_list' %}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+              <i class="bi bi-box-arrow-up-right"></i> カテゴリを管理
+            </a>
+          </div>
+          {% if form.category.errors %}<div class="invalid-feedback d-block">{{ form.category.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-5 mb-3">
+          <label class="form-label d-block" for="{{ form.manufacturer.id_for_label }}">
+            {{ form.manufacturer.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          {{ form.manufacturer }}
+          <div class="form-text">
+            メーカーは省略可能です。
+            <a href="{% url 'masters:manufacturer_list' %}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+              <i class="bi bi-box-arrow-up-right"></i> メーカーを管理
+            </a>
+          </div>
+          {% if form.manufacturer.errors %}<div class="invalid-feedback d-block">{{ form.manufacturer.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# 詳細 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">詳細</h6>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.description.id_for_label }}">
+          {{ form.description.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+        </label>
+        {{ form.description }}
+      </div>
+
+      {# 設定 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">設定</h6>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+        {{ form.is_active }}
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
+                data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
+          保存
+        </button>
+        <a href="{% url 'masters:product_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

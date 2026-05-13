@@ -1,0 +1,74 @@
+{% extends 'a/base.html' %}
+
+{% block title %}商品削除確認{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:product_inquiry' %}">商品一覧</a></li>
+    <li class="breadcrumb-item active">商品削除確認</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4 text-danger">
+  <i class="bi bi-exclamation-triangle-fill"></i> 商品を削除しますか？
+</h2>
+
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="bi bi-info-circle-fill"></i> 削除前の注意事項
+  </h5>
+  <ul class="mb-0">
+    <li>削除した商品は<strong>元に戻せません</strong>。</li>
+    <li>この商品に紐づく <strong>SKU</strong> が1件でも存在する場合、<strong>削除できません</strong>（FK PROTECT 制約）。</li>
+    <li>関連 SKU を先に削除するか、別の商品に付け替えてください。</li>
+    <li>本番運用では、削除ではなく<strong>「無効化（is_active = false）」</strong>を推奨します。出荷履歴とのトレーサビリティを保つため。</li>
+  </ul>
+</div>
+
+<div class="card border-danger mb-4">
+  <div class="card-header bg-danger text-white">削除対象</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">商品コード</dt>
+      <dd class="col-sm-9"><span class="font-monospace fw-bold">{{ object.product_code }}</span></dd>
+      <dt class="col-sm-3">商品名</dt>
+      <dd class="col-sm-9">{{ object.product_name }}</dd>
+      <dt class="col-sm-3">カテゴリ</dt>
+      <dd class="col-sm-9">{{ object.category.breadcrumb }}</dd>
+      <dt class="col-sm-3">メーカー</dt>
+      <dd class="col-sm-9">
+        {% if object.manufacturer %}
+          {{ object.manufacturer.manufacturer_name }}
+          <span class="text-muted small">（<span class="font-monospace">{{ object.manufacturer.manufacturer_code }}</span>）</span>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+      <dt class="col-sm-3">説明</dt>
+      <dd class="col-sm-9">{{ object.description|default:"—"|linebreaksbr }}</dd>
+      <dt class="col-sm-3">ステータス</dt>
+      <dd class="col-sm-9">
+        {% if object.is_active %}
+          <span class="badge bg-success">有効</span>
+        {% else %}
+          <span class="badge bg-secondary">無効</span>
+        {% endif %}
+      </dd>
+      <dt class="col-sm-3">登録日時</dt>
+      <dd class="col-sm-9 text-muted small">{{ object.created_at|date:"Y/m/d H:i" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="d-flex gap-2 justify-content-end">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="本当に商品「{{ object.product_name }}」を削除しますか？元に戻せません。"
+            data-confirm-variant="danger"
+            data-confirm-yes="削除する">
+      <i class="bi bi-trash"></i> 削除する
+    </button>
+    <a href="{% url 'masters:product_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+{% endblock %}

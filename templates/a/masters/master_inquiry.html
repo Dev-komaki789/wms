@@ -175,6 +175,13 @@ function clearInquiryForm(btn) {
   if (!form) return;
   form.querySelectorAll('input[type="text"], input[type="search"]').forEach(i => { i.value = ''; });
   form.querySelectorAll('select').forEach(s => { s.selectedIndex = 0; });
+  // クリア後は最初の入力欄にカーソルを戻す（連続検索のしやすさ）
+  const firstField = form.querySelector(
+    'input:not([type="hidden"]):not([disabled]):not([readonly]),'
+    + 'select:not([disabled]),'
+    + 'textarea:not([disabled])'
+  );
+  if (firstField) firstField.focus();
 }
 </script>
 {% endblock %}
