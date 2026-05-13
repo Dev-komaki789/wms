@@ -1,0 +1,72 @@
+{% extends 'a/base.html' %}
+
+{% block title %}仕入先削除確認{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:supplier_list' %}">仕入先一覧</a></li>
+    <li class="breadcrumb-item active">仕入先削除確認</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4 text-danger">
+  <i class="bi bi-exclamation-triangle-fill"></i> 仕入先を削除しますか？
+</h2>
+
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="bi bi-info-circle-fill"></i> 削除前の注意事項
+  </h5>
+  <ul class="mb-0">
+    <li>削除した仕入先は<strong>元に戻せません</strong>。</li>
+    <li>この仕入先を参照する<strong>入荷指示</strong>等が存在する場合、<strong>削除できません</strong>（FK PROTECT 制約）。</li>
+    <li>本番運用では、削除ではなく<strong>「無効化（is_active = false）」</strong>を推奨します。過去の取引履歴とのトレーサビリティを保つため。</li>
+  </ul>
+</div>
+
+<div class="card border-danger mb-4">
+  <div class="card-header bg-danger text-white">削除対象</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">仕入先コード</dt>
+      <dd class="col-sm-9"><span class="font-monospace fw-bold">{{ object.supplier_code }}</span></dd>
+      <dt class="col-sm-3">仕入先名</dt>
+      <dd class="col-sm-9">{{ object.supplier_name }}</dd>
+      <dt class="col-sm-3">担当者</dt>
+      <dd class="col-sm-9">{{ object.contact_person|default:"—" }}</dd>
+      <dt class="col-sm-3">電話番号</dt>
+      <dd class="col-sm-9 font-monospace">{{ object.phone_number|default:"—" }}</dd>
+      <dt class="col-sm-3">メールアドレス</dt>
+      <dd class="col-sm-9">{{ object.email|default:"—" }}</dd>
+      <dt class="col-sm-3">所在地</dt>
+      <dd class="col-sm-9">
+        {% if object.postal_code %}〒{{ object.postal_code }} {% endif %}{{ object.address|default:"—" }}
+      </dd>
+      <dt class="col-sm-3">ステータス</dt>
+      <dd class="col-sm-9">
+        {% if object.is_active %}
+          <span class="badge bg-success">有効</span>
+        {% else %}
+          <span class="badge bg-secondary">無効</span>
+        {% endif %}
+      </dd>
+      <dt class="col-sm-3">登録日時</dt>
+      <dd class="col-sm-9 text-muted small">{{ object.created_at|date:"Y/m/d H:i" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="d-flex gap-2 justify-content-end">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="本当に仕入先「{{ object.supplier_name }}」を削除しますか？元に戻せません。"
+            data-confirm-variant="danger"
+            data-confirm-yes="削除する">
+      <i class="bi bi-trash"></i> 削除する
+    </button>
+    <a href="{% url 'masters:supplier_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+{% endblock %}

@@ -7,7 +7,7 @@ import re
 
 from django import forms
 
-from .models import Area, Category, Location, Manufacturer, Product, Sku, Warehouse
+from .models import Area, Category, Customer, Location, Manufacturer, Product, Sku, Supplier, Warehouse
 from .utils import get_current_warehouse
 from .widgets import StatusToggleWidget
 
@@ -446,3 +446,72 @@ class SkuForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class SupplierForm(forms.ModelForm):
+    class Meta:
+        model = Supplier
+        fields = [
+            'supplier_code', 'supplier_name',
+            'contact_person', 'phone_number', 'email',
+            'postal_code', 'address',
+            'is_active',
+        ]
+        labels = {'is_active': STATUS_LABEL}
+        widgets = {
+            'supplier_code': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: ASKUL', 'autocomplete': 'off'}
+            ),
+            'supplier_name': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: アスクル株式会社'}
+            ),
+            'contact_person': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 山田太郎'}
+            ),
+            'phone_number': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 03-1234-5678', 'inputmode': 'tel'}
+            ),
+            'email': forms.EmailInput(
+                attrs={**TEXT, 'placeholder': 'example@supplier.co.jp'}
+            ),
+            'postal_code': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 100-0001',
+                       'inputmode': 'numeric', 'autocomplete': 'postal-code'}
+            ),
+            'address': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}
+            ),
+            'is_active': StatusToggleWidget(),
+        }
+
+
+class CustomerForm(forms.ModelForm):
+    class Meta:
+        model = Customer
+        fields = [
+            'customer_code', 'customer_name',
+            'customer_type', 'industry_type',
+            'postal_code', 'address',
+            'is_active',
+        ]
+        labels = {'is_active': STATUS_LABEL}
+        widgets = {
+            'customer_code': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: CUST-0001', 'autocomplete': 'off'}
+            ),
+            'customer_name': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 株式会社サンプル商事'}
+            ),
+            'customer_type': forms.Select(attrs=SELECT),
+            'industry_type': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 製造業 / 小売業 / 建設業'}
+            ),
+            'postal_code': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 100-0001',
+                       'inputmode': 'numeric', 'autocomplete': 'postal-code'}
+            ),
+            'address': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}
+            ),
+            'is_active': StatusToggleWidget(),
+        }

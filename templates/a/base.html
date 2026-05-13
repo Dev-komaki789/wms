@@ -66,11 +66,11 @@
         <a href="{% url 'masters:sku_inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-upc-scan me-2"></i>SKU
         </a>
-        <a href="#" class="list-group-item list-group-item-action disabled text-muted">
-          <i class="bi bi-truck me-2"></i>仕入先 <span class="badge bg-secondary ms-1">準備中</span>
+        <a href="{% url 'masters:supplier_list' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-truck me-2"></i>仕入先
         </a>
-        <a href="#" class="list-group-item list-group-item-action disabled text-muted">
-          <i class="bi bi-people me-2"></i>顧客 <span class="badge bg-secondary ms-1">準備中</span>
+        <a href="{% url 'masters:customer_list' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-people me-2"></i>顧客
         </a>
 
         <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">在庫・入出庫</div>

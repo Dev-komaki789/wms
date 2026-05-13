@@ -7,8 +7,13 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, TemplateView
 
-from .forms import AreaForm, CategoryForm, LocationForm, ManufacturerForm, ProductForm, SkuForm
-from .models import Area, Category, Location, Manufacturer, Product, Sku, Warehouse
+from .forms import (
+    AreaForm, CategoryForm, CustomerForm, LocationForm,
+    ManufacturerForm, ProductForm, SkuForm, SupplierForm,
+)
+from .models import (
+    Area, Category, Customer, Location, Manufacturer, Product, Sku, Supplier, Warehouse,
+)
 from .utils import get_current_warehouse
 
 
@@ -556,3 +561,65 @@ class SkuDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
     def get_queryset(self):
         return super().get_queryset().select_related('product')
+
+
+# ---- Supplier ----
+
+class SupplierListView(LoginRequiredMixin, ListView):
+    model = Supplier
+    template_name = 'a/masters/supplier_list.html'
+    context_object_name = 'suppliers'
+
+    def get_queryset(self):
+        return Supplier.objects.order_by('supplier_code')
+
+
+class SupplierCreateView(LoginRequiredMixin, CreateView):
+    model = Supplier
+    form_class = SupplierForm
+    template_name = 'a/masters/supplier_form.html'
+    success_url = reverse_lazy('masters:supplier_list')
+
+
+class SupplierUpdateView(LoginRequiredMixin, UpdateView):
+    model = Supplier
+    form_class = SupplierForm
+    template_name = 'a/masters/supplier_form.html'
+    success_url = reverse_lazy('masters:supplier_list')
+
+
+class SupplierDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = Supplier
+    template_name = 'a/masters/supplier_confirm_delete.html'
+    success_url = reverse_lazy('masters:supplier_list')
+
+
+# ---- Customer ----
+
+class CustomerListView(LoginRequiredMixin, ListView):
+    model = Customer
+    template_name = 'a/masters/customer_list.html'
+    context_object_name = 'customers'
+
+    def get_queryset(self):
+        return Customer.objects.order_by('customer_code')
+
+
+class CustomerCreateView(LoginRequiredMixin, CreateView):
+    model = Customer
+    form_class = CustomerForm
+    template_name = 'a/masters/customer_form.html'
+    success_url = reverse_lazy('masters:customer_list')
+
+
+class CustomerUpdateView(LoginRequiredMixin, UpdateView):
+    model = Customer
+    form_class = CustomerForm
+    template_name = 'a/masters/customer_form.html'
+    success_url = reverse_lazy('masters:customer_list')
+
+
+class CustomerDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = Customer
+    template_name = 'a/masters/customer_confirm_delete.html'
+    success_url = reverse_lazy('masters:customer_list')
