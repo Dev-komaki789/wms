@@ -1,0 +1,149 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{% if object %}SKU編集{% else %}SKU新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:sku_inquiry' %}">SKU一覧</a></li>
+    <li class="breadcrumb-item active">{% if object %}SKU編集{% else %}SKU新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}SKU編集{% else %}SKU新規登録{% endif %}</h2>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      {# 識別情報 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">識別情報</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block">
+            SKUコード <span class="badge bg-info-subtle text-info-emphasis">自動</span>
+          </label>
+          <input type="text" class="form-control font-monospace bg-light"
+                 value="{% if object %}{{ object.sku_code }}{% else %}—（保存時に採番）—{% endif %}"
+                 disabled style="border-style: dashed">
+          <div class="form-text">SKU-NNNNNN 形式で自動採番されます</div>
+        </div>
+        <div class="col-md-8 mb-3">
+          <label class="form-label d-block" for="{{ form.product.id_for_label }}">
+            {{ form.product.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.product }}
+          <div class="form-text">
+            有効な商品のみ選択できます。
+            <a href="{% url 'masters:product_inquiry' %}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+              <i class="bi bi-box-arrow-up-right"></i> 商品を管理
+            </a>
+          </div>
+          {% if form.product.errors %}<div class="invalid-feedback d-block">{{ form.product.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# バリエーション #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">バリエーション</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.jan_code.id_for_label }}">
+            {{ form.jan_code.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          {{ form.jan_code }}
+          <div class="form-text">バーコード / メーカー型番</div>
+          {% if form.jan_code.errors %}<div class="invalid-feedback d-block">{{ form.jan_code.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.size_info.id_for_label }}">
+            {{ form.size_info.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          {{ form.size_info }}
+          {% if form.size_info.errors %}<div class="invalid-feedback d-block">{{ form.size_info.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.color_info.id_for_label }}">
+            {{ form.color_info.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          {{ form.color_info }}
+          {% if form.color_info.errors %}<div class="invalid-feedback d-block">{{ form.color_info.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# 数量 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">数量</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.quantity_per_unit.id_for_label }}">
+            {{ form.quantity_per_unit.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.quantity_per_unit }}
+          <div class="form-text">1 ケースあたりの個数（1 以上）</div>
+          {% if form.quantity_per_unit.errors %}<div class="invalid-feedback d-block">{{ form.quantity_per_unit.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# ピッキング種別 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">
+        {{ form.picking_type.label }}{% if form.picking_type.field.required %} <span class="text-danger">*</span>{% endif %}
+      </h6>
+      <div class="d-flex gap-2 mb-2" id="picking-type-radio-group">
+        {% for radio in form.picking_type %}
+        <label class="flex-fill border rounded p-3 picking-type-option" data-value="{{ radio.choice_value }}">
+          <div class="form-check m-0">
+            {{ radio.tag }}
+            <span class="form-check-label fw-bold">{{ radio.choice_label }}</span>
+          </div>
+          <div class="text-muted small ms-4 mt-1">
+            {% if radio.choice_value == 'total' %}通常棚に格納。AGV/GTP で集中（種まき）ピッキング{% elif radio.choice_value == 'order' %}大型・長物エリアに格納。1 オーダーずつ巡回ピッキング{% endif %}
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+      {% if form.picking_type.errors %}<div class="invalid-feedback d-block mb-3">{{ form.picking_type.errors|join:" " }}</div>{% endif %}
+
+      {# 設定 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">設定</h6>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+        {{ form.is_active }}
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
+                data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
+          保存
+        </button>
+        <a href="{% url 'masters:sku_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  // ピッキング種別カードの選択視覚化（エリアフォームと同じパターン）
+  const radios = document.querySelectorAll('input[name="{{ form.picking_type.html_name }}"]');
+  function update() {
+    document.querySelectorAll('.picking-type-option').forEach(opt => {
+      const r = opt.querySelector('input[type="radio"]');
+      const isSelected = r && r.checked;
+      opt.classList.toggle('border-primary', isSelected);
+      opt.classList.toggle('bg-primary-subtle', isSelected);
+    });
+  }
+  radios.forEach(r => r.addEventListener('change', update));
+  update();
+})();
+</script>
+{% endblock %}

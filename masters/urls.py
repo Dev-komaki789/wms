@@ -33,4 +33,9 @@ urlpatterns = [
     path('products/new/', views.ProductCreateView.as_view(), name='product_create'),
     path('products/<int:pk>/edit/', views.ProductUpdateView.as_view(), name='product_update'),
     path('products/<int:pk>/delete/', views.ProductDeleteView.as_view(), name='product_delete'),
+
+    path('skus/', views.SkuInquiryView.as_view(), name='sku_inquiry'),
+    path('skus/new/', views.SkuCreateView.as_view(), name='sku_create'),
+    path('skus/<int:pk>/edit/', views.SkuUpdateView.as_view(), name='sku_update'),
+    path('skus/<int:pk>/delete/', views.SkuDeleteView.as_view(), name='sku_delete'),
 ]

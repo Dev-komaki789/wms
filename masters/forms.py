@@ -7,7 +7,7 @@ import re
 
 from django import forms
 
-from .models import Area, Category, Location, Manufacturer, Product, Warehouse
+from .models import Area, Category, Location, Manufacturer, Product, Sku, Warehouse
 from .utils import get_current_warehouse
 from .widgets import StatusToggleWidget
 
@@ -379,6 +379,70 @@ class ProductForm(forms.ModelForm):
         instance = super().save(commit=False)
         if not instance.pk:
             instance.product_code = Product.next_product_code()
+        if commit:
+            instance.save()
+        return instance
+
+
+class SkuForm(forms.ModelForm):
+    """SKU 登録・編集フォーム。
+
+    UI:
+      - SKU コードは保存時にサーバー側で自動採番（フォームには出さない）
+      - 商品は有効なものだけ選択可（編集時は現在の商品も残す）
+      - JAN / サイズ / カラーは任意
+      - ピッキング種別は card 風 RadioSelect（種まき / オーダー）
+    """
+
+    class Meta:
+        model = Sku
+        fields = [
+            'product', 'jan_code', 'size_info', 'color_info',
+            'quantity_per_unit', 'picking_type', 'is_active',
+        ]
+        labels = {'is_active': STATUS_LABEL}
+        widgets = {
+            'product': forms.Select(attrs=SELECT),
+            'jan_code': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: 4901234567890',
+                       'maxlength': '20', 'autocomplete': 'off',
+                       'inputmode': 'numeric'}
+            ),
+            'size_info': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: M / 100mm / 1.5L'}
+            ),
+            'color_info': forms.TextInput(
+                attrs={**TEXT, 'placeholder': '例: ブラック / 赤'}
+            ),
+            'quantity_per_unit': forms.NumberInput(attrs={**TEXT, 'min': '1'}),
+            'picking_type': forms.RadioSelect,
+            'is_active': StatusToggleWidget(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 商品: 有効なものだけ。編集時は現在の商品が無効化されていても残す
+        product_qs = (
+            Product.objects.filter(is_active=True)
+            .select_related('category', 'manufacturer')
+            .order_by('product_code')
+        )
+        if self.instance.pk and self.instance.product_id:
+            product_qs = (
+                Product.objects.filter(
+                    pk__in=list(product_qs.values_list('pk', flat=True))
+                    + [self.instance.product_id]
+                )
+                .select_related('category', 'manufacturer')
+                .order_by('product_code')
+            )
+        self.fields['product'].queryset = product_qs
+        self.fields['product'].empty_label = '— 商品を選択 —'
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.pk:
+            instance.sku_code = Sku.next_sku_code()
         if commit:
             instance.save()
         return instance

@@ -342,6 +342,16 @@ class Sku(models.Model):
     def __str__(self):
         return f'{self.sku_code} ({self.product.product_name})'
 
+    @classmethod
+    def next_sku_code(cls):
+        """次の SKU コード（SKU-NNNNNN）を採番する。"""
+        max_n = 0
+        for code in cls.objects.values_list('sku_code', flat=True):
+            m = re.match(r'^SKU-(\d{6})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'SKU-{max_n + 1:06d}'
+
 
 class Supplier(models.Model):
     supplier_code = models.CharField('仕入先コード', max_length=20, unique=True)

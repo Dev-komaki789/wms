@@ -1,0 +1,85 @@
+{% extends 'a/base.html' %}
+
+{% block title %}SKU削除確認{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:sku_inquiry' %}">SKU一覧</a></li>
+    <li class="breadcrumb-item active">SKU削除確認</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4 text-danger">
+  <i class="bi bi-exclamation-triangle-fill"></i> SKUを削除しますか？
+</h2>
+
+<div class="alert alert-warning">
+  <h5 class="alert-heading">
+    <i class="bi bi-info-circle-fill"></i> 削除前の注意事項
+  </h5>
+  <ul class="mb-0">
+    <li>削除した SKU は<strong>元に戻せません</strong>。</li>
+    <li>この SKU を参照する<strong>在庫残高 / 入出庫明細 / 引き当て情報</strong>等が存在する場合、<strong>削除できません</strong>（FK PROTECT 制約）。</li>
+    <li>本番運用では、削除ではなく<strong>「無効化（is_active = false）」</strong>を推奨します。出荷履歴とのトレーサビリティを保つため。</li>
+  </ul>
+</div>
+
+<div class="card border-danger mb-4">
+  <div class="card-header bg-danger text-white">削除対象</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">SKUコード</dt>
+      <dd class="col-sm-9"><span class="font-monospace fw-bold">{{ object.sku_code }}</span></dd>
+      <dt class="col-sm-3">商品</dt>
+      <dd class="col-sm-9">
+        {{ object.product.product_name }}
+        <span class="text-muted small">（<span class="font-monospace">{{ object.product.product_code }}</span>）</span>
+      </dd>
+      <dt class="col-sm-3">JANコード</dt>
+      <dd class="col-sm-9">
+        {% if object.jan_code %}<span class="font-monospace">{{ object.jan_code }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+      <dt class="col-sm-3">サイズ / カラー</dt>
+      <dd class="col-sm-9">
+        {% if object.size_info or object.color_info %}
+          {{ object.size_info|default:"—" }} / {{ object.color_info|default:"—" }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+      <dt class="col-sm-3">入数</dt>
+      <dd class="col-sm-9"><span class="font-monospace">{{ object.quantity_per_unit }}</span></dd>
+      <dt class="col-sm-3">ピッキング種別</dt>
+      <dd class="col-sm-9">
+        {% if object.picking_type == 'total' %}
+          <span class="badge bg-primary">種まき</span>
+        {% elif object.picking_type == 'order' %}
+          <span class="badge bg-warning text-dark">オーダー</span>
+        {% endif %}
+      </dd>
+      <dt class="col-sm-3">ステータス</dt>
+      <dd class="col-sm-9">
+        {% if object.is_active %}
+          <span class="badge bg-success">有効</span>
+        {% else %}
+          <span class="badge bg-secondary">無効</span>
+        {% endif %}
+      </dd>
+      <dt class="col-sm-3">登録日時</dt>
+      <dd class="col-sm-9 text-muted small">{{ object.created_at|date:"Y/m/d H:i" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="d-flex gap-2 justify-content-end">
+    <button type="submit" class="btn btn-danger"
+            data-confirm="本当に SKU「{{ object.sku_code }}」を削除しますか？元に戻せません。"
+            data-confirm-variant="danger"
+            data-confirm-yes="削除する">
+      <i class="bi bi-trash"></i> 削除する
+    </button>
+    <a href="{% url 'masters:sku_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+</form>
+{% endblock %}

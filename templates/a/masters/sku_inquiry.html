@@ -1,0 +1,175 @@
+{% extends 'a/base.html' %}
+
+{% block title %}SKU一覧{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-upc-scan me-2 text-primary"></i>SKU一覧
+  </h2>
+  <a href="{% url 'masters:sku_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> SKU新規登録
+  </a>
+</div>
+
+<div class="card shadow-sm">
+  {# 検索バー #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" id="inquiry-search-form" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">SKUコード / JANコード</label>
+        <input type="text" name="s_q" class="form-control form-control-sm"
+               placeholder="例: SKU-000001 / 4901..." value="{{ filters.s_q }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">商品</label>
+        <input type="text" name="s_product" class="form-control form-control-sm"
+               placeholder="例: インパクト / PRD-00001" value="{{ filters.s_product }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">ピッキング種別</label>
+        <select name="s_picking" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in picking_types %}
+            <option value="{{ val }}" {% if filters.s_picking == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="s_status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          <option value="active" {% if filters.s_status == 'active' %}selected{% endif %}>有効</option>
+          <option value="inactive" {% if filters.s_status == 'inactive' %}selected{% endif %}>無効</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search"></i> 検索
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="clearInquiryForm(this)">クリア</button>
+      </div>
+    </form>
+  </div>
+
+  {% if searched %}
+    {# サマリー #}
+    <div class="row g-0 text-center border-bottom bg-white">
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold">{{ s_stats.total }}</div>
+        <div class="small text-muted">検索結果SKU数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-primary">{{ s_stats.total_pick }}</div>
+        <div class="small text-muted">種まき方式</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-warning">{{ s_stats.order_pick }}</div>
+        <div class="small text-muted">オーダーピッキング</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-success">{{ s_stats.active }}</div>
+        <div class="small text-muted">有効</div>
+      </div>
+      <div class="col py-2">
+        <div class="fs-5 fw-bold text-secondary">{{ s_stats.inactive }}</div>
+        <div class="small text-muted">無効</div>
+      </div>
+    </div>
+
+    <div class="px-3 py-2 border-bottom bg-white small text-muted">
+      検索結果: <strong class="text-dark">{{ skus|length }}</strong> 件
+    </div>
+
+    {# 検索結果テーブル #}
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-start">SKUコード</th>
+          <th class="text-start">商品</th>
+          <th class="text-start">JANコード</th>
+          <th class="text-start">サイズ / カラー</th>
+          <th class="text-end">入数</th>
+          <th class="text-center">ピッキング種別</th>
+          <th class="text-center">ステータス</th>
+          <th class="text-end">更新日時</th>
+          <th class="text-center" style="width: 160px">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in skus %}
+        <tr>
+          <td class="text-start"><span class="font-monospace fw-bold text-primary">{{ s.sku_code }}</span></td>
+          <td class="text-start">
+            {{ s.product.product_name }}
+            <span class="text-muted small">（<span class="font-monospace">{{ s.product.product_code }}</span>）</span>
+          </td>
+          <td class="text-start">
+            {% if s.jan_code %}
+              <span class="font-monospace small">{{ s.jan_code }}</span>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td class="text-start small">
+            {% if s.size_info or s.color_info %}
+              {% if s.size_info %}<span>{{ s.size_info }}</span>{% endif %}
+              {% if s.size_info and s.color_info %}<span class="text-muted"> / </span>{% endif %}
+              {% if s.color_info %}<span>{{ s.color_info }}</span>{% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end font-monospace small">{{ s.quantity_per_unit }}</td>
+          <td class="text-center">
+            {% if s.picking_type == 'total' %}
+              <span class="badge bg-primary">種まき</span>
+            {% elif s.picking_type == 'order' %}
+              <span class="badge bg-warning text-dark">オーダー</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if s.is_active %}
+              <span class="badge bg-success">有効</span>
+            {% else %}
+              <span class="badge bg-secondary">無効</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-muted small font-monospace">{{ s.updated_at|date:"Y/m/d H:i" }}</td>
+          <td class="text-center">
+            <a href="{% url 'masters:sku_update' s.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+            <a href="{% url 'masters:sku_delete' s.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">条件に一致するSKUが見つかりませんでした</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      条件を指定して「検索」を押してください
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clearInquiryForm(btn) {
+  const form = btn.closest('form');
+  if (!form) return;
+  form.querySelectorAll('input[type="text"], input[type="search"]').forEach(i => { i.value = ''; });
+  form.querySelectorAll('select').forEach(s => { s.selectedIndex = 0; });
+  // クリア後は最初の入力欄にカーソルを戻す（連続検索のしやすさ）
+  const firstField = form.querySelector(
+    'input:not([type="hidden"]):not([disabled]):not([readonly]),'
+    + 'select:not([disabled]),'
+    + 'textarea:not([disabled])'
+  );
+  if (firstField) firstField.focus();
+}
+</script>
+{% endblock %}

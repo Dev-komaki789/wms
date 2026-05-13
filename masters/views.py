@@ -7,8 +7,8 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, TemplateView
 
-from .forms import AreaForm, CategoryForm, LocationForm, ManufacturerForm, ProductForm
-from .models import Area, Category, Location, Manufacturer, Product, Warehouse
+from .forms import AreaForm, CategoryForm, LocationForm, ManufacturerForm, ProductForm, SkuForm
+from .models import Area, Category, Location, Manufacturer, Product, Sku, Warehouse
 from .utils import get_current_warehouse
 
 
@@ -469,3 +469,90 @@ class ProductDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
     def get_queryset(self):
         return super().get_queryset().select_related('category', 'manufacturer')
+
+
+# ---- SKU ----
+
+class SkuInquiryView(LoginRequiredMixin, TemplateView):
+    """SKU の照会＋一覧。検索-first パターン（商品照会と同じ規約）。"""
+
+    template_name = 'a/masters/sku_inquiry.html'
+
+    SEARCH_KEYS = ('s_q', 's_product', 's_picking', 's_status')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+
+        searched = any(k in g for k in self.SEARCH_KEYS)
+        ctx['searched'] = searched
+
+        s_q = g.get('s_q', '').strip()
+        s_product = g.get('s_product', '').strip()
+        s_picking = g.get('s_picking', '')
+        s_status = g.get('s_status', '')
+
+        if searched:
+            qs = Sku.objects.select_related(
+                'product', 'product__category', 'product__manufacturer'
+            )
+            if s_q:
+                qs = qs.filter(Q(sku_code__icontains=s_q) | Q(jan_code__icontains=s_q))
+            if s_product:
+                qs = qs.filter(
+                    Q(product__product_name__icontains=s_product)
+                    | Q(product__product_code__icontains=s_product)
+                )
+            if s_picking:
+                qs = qs.filter(picking_type=s_picking)
+            if s_status == 'active':
+                qs = qs.filter(is_active=True)
+            elif s_status == 'inactive':
+                qs = qs.filter(is_active=False)
+            qs = qs.order_by('sku_code')
+            ctx['skus'] = qs
+            ctx['s_stats'] = {
+                'total': qs.count(),
+                'active': qs.filter(is_active=True).count(),
+                'inactive': qs.filter(is_active=False).count(),
+                'total_pick': qs.filter(picking_type=Sku.PickingType.TOTAL).count(),
+                'order_pick': qs.filter(picking_type=Sku.PickingType.ORDER).count(),
+            }
+        else:
+            ctx['skus'] = Sku.objects.none()
+            ctx['s_stats'] = None
+
+        ctx['picking_types'] = Sku.PickingType.choices
+        ctx['filters'] = {
+            's_q': s_q,
+            's_product': s_product,
+            's_picking': s_picking,
+            's_status': s_status,
+        }
+        return ctx
+
+
+class SkuCreateView(LoginRequiredMixin, CreateView):
+    model = Sku
+    form_class = SkuForm
+    template_name = 'a/masters/sku_form.html'
+    success_url = reverse_lazy('masters:sku_inquiry')
+
+
+class SkuUpdateView(LoginRequiredMixin, UpdateView):
+    model = Sku
+    form_class = SkuForm
+    template_name = 'a/masters/sku_form.html'
+    success_url = reverse_lazy('masters:sku_inquiry')
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('product')
+
+
+class SkuDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = Sku
+    template_name = 'a/masters/sku_confirm_delete.html'
+    success_url = reverse_lazy('masters:sku_inquiry')
+
+    def get_queryset(self):
+        return super().get_queryset().select_related('product')
