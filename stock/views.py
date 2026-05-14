@@ -1,10 +1,15 @@
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.db.models import Q, Sum
+from django.urls import reverse_lazy
 from django.views.generic import TemplateView
+from django.views.generic.edit import FormView
 
 from masters.models import Area
 
-from .models import StockBalance
+from .forms import UnplannedStockInForm
+from .models import StockBalance, StockMovement
 
 
 class StockInquiryView(LoginRequiredMixin, TemplateView):
@@ -73,3 +78,56 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
         ctx['area_types'] = Area.LocationType.choices
         ctx['filters'] = f
         return ctx
+
+
+class UnplannedStockInView(LoginRequiredMixin, FormView):
+    """計画外入庫画面（handheld 端末用）。
+
+    InboundOrder を介さず StockMovement.IN を直接発行し、StockBalance を加算する。
+    入庫成功後は同じ URL に redirect → メッセージ表示 + フォーム初期化で連続入庫に対応。
+    """
+
+    template_name = 'a/handheld/stock_in.html'
+    form_class = UnplannedStockInForm
+    success_url = reverse_lazy('stock:handheld_in')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['request'] = self.request  # form 側で現在倉庫スコープを判定するため
+        return kwargs
+
+    def form_valid(self, form):
+        location = form._location
+        sku = form._sku
+        quantity = form.cleaned_data['quantity']
+        note = form.cleaned_data.get('note', '')
+
+        with transaction.atomic():
+            balance, _ = StockBalance.objects.get_or_create(
+                location=location, sku=sku,
+                defaults={'quantity': 0},
+            )
+            quantity_before = balance.quantity
+            quantity_after = quantity_before + quantity
+
+            StockMovement.objects.create(
+                movement_type=StockMovement.MovementType.IN,
+                location=location,
+                sku=sku,
+                quantity=quantity,  # IN なので正の値
+                quantity_before=quantity_before,
+                quantity_after=quantity_after,
+                reference_type=StockMovement.ReferenceType.MANUAL_IN,
+                reference_id=None,
+                note=note,
+                created_by=self.request.user,
+            )
+            balance.quantity = quantity_after
+            balance.save()
+
+        messages.success(
+            self.request,
+            f'入庫完了: {sku.sku_code} を {location.location_code} に {quantity} 個 '
+            f'(在庫 {quantity_before} → {quantity_after})',
+        )
+        return super().form_valid(form)

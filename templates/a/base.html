@@ -96,6 +96,10 @@
         <a href="{% url 'inbound:order_inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-arrow-down-square me-2"></i>入荷指示
         </a>
+        <a href="{% url 'stock:handheld_in' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-box-arrow-in-down me-2"></i>計画外入庫
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
         <a href="#" class="list-group-item list-group-item-action disabled text-muted">
           <i class="bi bi-arrow-up-square me-2"></i>出荷指示 <span class="badge bg-secondary ms-1">準備中</span>
         </a>

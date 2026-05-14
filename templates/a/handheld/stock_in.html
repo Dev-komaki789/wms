@@ -1,0 +1,94 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}計画外入庫{% endblock %}
+{% block page_title %}<i class="bi bi-box-arrow-in-down me-1"></i>計画外入庫{% endblock %}
+
+{% block content %}
+<form method="post" autocomplete="off" id="stock-in-form">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label" for="{{ form.location_code.id_for_label }}">
+      <i class="bi bi-geo-alt-fill text-primary me-1"></i>{{ form.location_code.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.location_code }}
+    {% if form.location_code.errors %}<div class="invalid-feedback d-block">{{ form.location_code.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="{{ form.sku_code.id_for_label }}">
+      <i class="bi bi-upc-scan text-primary me-1"></i>{{ form.sku_code.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.sku_code }}
+    {% if form.sku_code.errors %}<div class="invalid-feedback d-block">{{ form.sku_code.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="{{ form.quantity.id_for_label }}">
+      <i class="bi bi-123 text-primary me-1"></i>{{ form.quantity.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.quantity }}
+    {% if form.quantity.errors %}<div class="invalid-feedback d-block">{{ form.quantity.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="mb-4">
+    <label class="form-label" for="{{ form.note.id_for_label }}">
+      {{ form.note.label }} <span class="text-muted small">(任意)</span>
+    </label>
+    {{ form.note }}
+  </div>
+
+  <button type="submit" class="btn btn-primary btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 入庫登録
+  </button>
+</form>
+
+<div class="text-muted small text-center mt-4">
+  <i class="bi bi-info-circle me-1"></i>
+  Enter（バーコードスキャナーの送信）で次の入力へ進めます
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  // ハンディスキャン用のフィールド遷移: location → sku → quantity → submit
+  // バーコードスキャナーは通常 CR/LF を末尾に付けて送信するので、Enter で次へ進めるとスキャンが繋がる
+  const chain = ['id_location_code', 'id_sku_code', 'id_quantity'];
+  const form = document.getElementById('stock-in-form');
+  chain.forEach((id, idx) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const nextId = chain[idx + 1];
+      if (nextId) {
+        const next = document.getElementById(nextId);
+        if (next) next.focus();
+      } else {
+        // 最後のフィールド（quantity）で Enter → submit
+        if (form.checkValidity()) {
+          form.submit();
+        } else {
+          form.reportValidity();
+        }
+      }
+    });
+  });
+
+  // 数量フィールドは内容を全選択した状態でフォーカスを受ける（タイプし直しが楽）
+  const qty = document.getElementById('id_quantity');
+  if (qty) {
+    qty.addEventListener('focus', function () { this.select(); });
+  }
+})();
+</script>
+{% endblock %}
