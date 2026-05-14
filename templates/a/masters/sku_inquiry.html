@@ -1,11 +1,11 @@
 {% extends 'a/base.html' %}
 
-{% block title %}SKU一覧{% endblock %}
+{% block title %}SKUマスタ照会{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2 class="mb-0">
-    <i class="bi bi-upc-scan me-2 text-primary"></i>SKU一覧
+    <i class="bi bi-upc-scan me-2 text-primary"></i>SKUマスタ照会
   </h2>
   <a href="{% url 'masters:sku_create' %}" class="btn btn-primary btn-sm">
     <i class="bi bi-plus-lg"></i> SKU新規登録

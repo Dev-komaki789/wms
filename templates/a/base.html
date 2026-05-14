@@ -14,6 +14,16 @@
       color: #c5cad0;
       opacity: 1;  /* Firefox は既定で 0.54 が掛かるので 1 に上書き */
     }
+    /* メニュー画面のカードボタンのホバー演出 */
+    .menu-card {
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    }
+    a.menu-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--bs-primary) !important;
+      box-shadow: 0 .25rem .75rem rgba(0,0,0,.08) !important;
+    }
+    .menu-card-disabled { opacity: .55; cursor: not-allowed; }
   </style>
 </head>
 <body class="bg-light">
@@ -25,7 +35,10 @@
               aria-controls="sidebar">
         <i class="bi bi-list"></i>
       </button>
-      <a class="navbar-brand" href="/">WMS</a>
+      <a class="navbar-brand" href="{% url 'home' %}">WMS</a>
+      <a class="btn btn-outline-light btn-sm me-3" href="{% url 'home' %}" title="メニュー画面に戻る">
+        <i class="bi bi-grid-3x3-gap-fill me-1"></i>メニュー
+      </a>
       {% if current_warehouse %}
       <span class="badge bg-light text-primary fs-6 fw-normal me-3">
         <i class="bi bi-building me-1"></i>{{ current_warehouse.warehouse_code }}：{{ current_warehouse.warehouse_name }}
@@ -50,6 +63,9 @@
     </div>
     <div class="offcanvas-body p-0">
       <div class="list-group list-group-flush">
+        <a href="{% url 'home' %}" class="list-group-item list-group-item-action fw-semibold">
+          <i class="bi bi-grid-3x3-gap-fill me-2"></i>メニュー画面
+        </a>
         <div class="list-group-item bg-light fw-bold text-uppercase small text-muted">マスタ管理</div>
         <a href="{% url 'masters:master_inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-pin-map-fill me-2"></i>エリア・ロケーション照会
@@ -74,8 +90,8 @@
         </a>
 
         <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">在庫・入出庫</div>
-        <a href="#" class="list-group-item list-group-item-action disabled text-muted">
-          <i class="bi bi-clipboard-data me-2"></i>在庫一覧 <span class="badge bg-secondary ms-1">準備中</span>
+        <a href="{% url 'stock:inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-clipboard-data me-2"></i>在庫照会
         </a>
         <a href="#" class="list-group-item list-group-item-action disabled text-muted">
           <i class="bi bi-arrow-down-square me-2"></i>入荷指示 <span class="badge bg-secondary ms-1">準備中</span>

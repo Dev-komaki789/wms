@@ -1,17 +1,17 @@
 {% extends 'a/base.html' %}
 
-{% block title %}エリア一覧{% endblock %}
+{% block title %}エリアマスタ照会{% endblock %}
 
 {% block content %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="{% url 'masters:master_inquiry' %}">エリア・ロケーション照会</a></li>
-    <li class="breadcrumb-item active">エリア一覧</li>
+    <li class="breadcrumb-item active">エリアマスタ照会</li>
   </ol>
 </nav>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>エリア一覧</h2>
+  <h2>エリアマスタ照会</h2>
   <a href="{% url 'masters:area_create' %}" class="btn btn-primary">+ 新規登録</a>
 </div>
 

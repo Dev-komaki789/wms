@@ -1,10 +1,12 @@
 from django.contrib import admin
 from django.urls import include, path
-from django.views.generic import RedirectView
+
+from masters.views import HomeView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('masters/', include('masters.urls')),
-    # ルートはロケーション照会へリダイレクト（将来的にダッシュボードに変更予定）
-    path('', RedirectView.as_view(pattern_name='masters:master_inquiry', permanent=False), name='home'),
+    path('stock/', include('stock.urls')),
+    # メニュー画面（KPI サマリー + 機能カテゴリ別カードグリッド）。全画面のハブ
+    path('', HomeView.as_view(), name='home'),
 ]

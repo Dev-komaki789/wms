@@ -1,0 +1,113 @@
+{% extends 'a/base.html' %}
+
+{% block title %}メニュー{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h2 class="mb-1">
+    <i class="bi bi-grid-3x3-gap-fill me-2 text-primary"></i>メニュー
+  </h2>
+  <div class="text-muted small">業務メニューを選択してください</div>
+</div>
+
+{# ========== KPI サマリー ========== #}
+<h6 class="text-muted text-uppercase small fw-bold mb-2">
+  <i class="bi bi-bar-chart-fill me-1"></i>サマリー
+</h6>
+<div class="row g-3 mb-4">
+  <div class="col-md-3 col-6">
+    <div class="card shadow-sm h-100 border-0 bg-primary bg-opacity-10">
+      <div class="card-body py-3 text-center">
+        <div class="text-muted small mb-1">商品</div>
+        <div class="fs-2 fw-bold text-primary lh-1">{{ kpi.product_count }}</div>
+        <div class="text-muted small mt-1">件</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="card shadow-sm h-100 border-0 bg-info bg-opacity-10">
+      <div class="card-body py-3 text-center">
+        <div class="text-muted small mb-1">SKU</div>
+        <div class="fs-2 fw-bold text-info lh-1">{{ kpi.sku_count }}</div>
+        <div class="text-muted small mt-1">件</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="card shadow-sm h-100 border-0 bg-success bg-opacity-10">
+      <div class="card-body py-3 text-center">
+        <div class="text-muted small mb-1">メーカー</div>
+        <div class="fs-2 fw-bold text-success lh-1">{{ kpi.manufacturer_count }}</div>
+        <div class="text-muted small mt-1">社</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="card shadow-sm h-100 border-0 bg-warning bg-opacity-10">
+      <div class="card-body py-3 text-center">
+        <div class="text-muted small mb-1">顧客</div>
+        <div class="fs-2 fw-bold text-warning lh-1">{{ kpi.customer_count }}</div>
+        <div class="text-muted small mt-1">社</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ========== マスタ管理 ========== #}
+<h6 class="text-muted text-uppercase small fw-bold mb-2">
+  <i class="bi bi-archive me-1"></i>マスタ管理
+</h6>
+<div class="row g-3 mb-4">
+  {% include 'a/_menu_card.html' with url='masters:master_inquiry' icon='bi-pin-map-fill' label='エリア・ロケーション照会' %}
+  {% include 'a/_menu_card.html' with url='masters:category_list' icon='bi-diagram-3' label='カテゴリ' %}
+  {% include 'a/_menu_card.html' with url='masters:manufacturer_list' icon='bi-gear' label='メーカー' %}
+  {% include 'a/_menu_card.html' with url='masters:product_inquiry' icon='bi-box' label='商品' %}
+  {% include 'a/_menu_card.html' with url='masters:sku_inquiry' icon='bi-upc-scan' label='SKU' %}
+  {% include 'a/_menu_card.html' with url='masters:supplier_list' icon='bi-truck' label='仕入先' %}
+  {% include 'a/_menu_card.html' with url='masters:customer_list' icon='bi-people' label='顧客' %}
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    {# ========== 入荷 ========== #}
+    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+      <i class="bi bi-arrow-down-square me-1"></i>入荷
+    </h6>
+    <div class="row g-3">
+      {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-plus' label='入荷指示' %}
+      {% include 'a/_menu_card.html' with disabled=True icon='bi-check2-square' label='入荷検品' %}
+      {% include 'a/_menu_card.html' with disabled=True icon='bi-box-seam' label='格納' %}
+    </div>
+  </div>
+  <div class="col-md-6">
+    {# ========== 出荷 ========== #}
+    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+      <i class="bi bi-arrow-up-square me-1"></i>出荷
+    </h6>
+    <div class="row g-3">
+      {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-minus' label='出荷指示' %}
+      {% include 'a/_menu_card.html' with disabled=True icon='bi-hand-index-thumb' label='ピッキング' %}
+      {% include 'a/_menu_card.html' with disabled=True icon='bi-shield-check' label='出荷検品' %}
+    </div>
+  </div>
+</div>
+
+{# ========== 在庫管理 ========== #}
+<h6 class="text-muted text-uppercase small fw-bold mb-2">
+  <i class="bi bi-clipboard-data me-1"></i>在庫管理
+</h6>
+<div class="row g-3 mb-4">
+  {% include 'a/_menu_card.html' with url='stock:inquiry' icon='bi-list-stars' label='在庫照会' %}
+  {% include 'a/_menu_card.html' with disabled=True icon='bi-box-arrow-in-down' label='計画外入庫' %}
+  {% include 'a/_menu_card.html' with disabled=True icon='bi-box-arrow-up' label='計画外出庫' %}
+  {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-check' label='棚卸' %}
+</div>
+
+{# ========== システム ========== #}
+<h6 class="text-muted text-uppercase small fw-bold mb-2">
+  <i class="bi bi-gear-wide-connected me-1"></i>システム
+</h6>
+<div class="row g-3 mb-4">
+  {% include 'a/_menu_card.html' with href='/admin/' icon='bi-shield-lock' label='Django Admin' %}
+</div>
+{% endblock %}

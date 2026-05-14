@@ -17,6 +17,25 @@ from .models import (
 from .utils import get_current_warehouse
 
 
+class HomeView(LoginRequiredMixin, TemplateView):
+    """メニュー画面（ホーム）。
+
+    全画面のハブ。KPI サマリー + 機能カテゴリ別のカードグリッドで構成する。
+    """
+
+    template_name = 'a/home.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['kpi'] = {
+            'product_count': Product.objects.count(),
+            'sku_count': Sku.objects.count(),
+            'manufacturer_count': Manufacturer.objects.count(),
+            'customer_count': Customer.objects.count(),
+        }
+        return ctx
+
+
 class CurrentWarehouseScopedMixin:
     """List/Update/Delete ビューで「現在ログイン中の倉庫のレコードのみ」に絞り込む。
 
