@@ -3,9 +3,9 @@ import json
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import ProtectedError, Q
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse, reverse_lazy
-from django.views.generic import CreateView, DeleteView, ListView, UpdateView, TemplateView
+from django.views.generic import CreateView, DeleteView, ListView, UpdateView, TemplateView, View
 
 from .forms import (
     AreaForm, CategoryForm, CustomerForm, LocationForm,
@@ -642,3 +642,47 @@ class CustomerDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
     model = Customer
     template_name = 'a/masters/customer_confirm_delete.html'
     success_url = reverse_lazy('masters:customer_list')
+
+
+# ---- API (AJAX) ----
+
+class SkuSearchAPIView(LoginRequiredMixin, View):
+    """SKU 検索 API（AJAX 用）。
+
+    入荷指示画面などで SKU マスタからピッキング選択するためのエンドポイント。
+    SKU コード / JAN / 商品名 / 商品コードの部分一致で検索し最大 LIMIT 件返す。
+    """
+
+    LIMIT = 30
+
+    def get(self, request):
+        q = (request.GET.get('q') or '').strip()
+        qs = (
+            Sku.objects.filter(is_active=True)
+            .select_related('product', 'product__manufacturer')
+        )
+        if q:
+            qs = qs.filter(
+                Q(sku_code__icontains=q)
+                | Q(jan_code__icontains=q)
+                | Q(product__product_name__icontains=q)
+                | Q(product__product_code__icontains=q)
+            )
+        qs = qs.order_by('sku_code')[: self.LIMIT]
+        return JsonResponse({
+            'results': [
+                {
+                    'sku_code': sku.sku_code,
+                    'jan_code': sku.jan_code,
+                    'product_name': sku.product.product_name,
+                    'product_code': sku.product.product_code,
+                    'size_info': sku.size_info,
+                    'color_info': sku.color_info,
+                    'manufacturer_name': (
+                        sku.product.manufacturer.manufacturer_name
+                        if sku.product.manufacturer_id else ''
+                    ),
+                }
+                for sku in qs
+            ]
+        })

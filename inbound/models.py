@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -74,6 +76,37 @@ class InboundOrder(models.Model):
 
     def __str__(self):
         return self.inbound_order_code
+
+    # 画面登録の入荷指示番号は種別ごとに prefix を変えて一目で識別できるようにする
+    # （ASN・発注アラートは上位システムの番号をそのまま使うので採番対象外）
+    CODE_PREFIX_BY_SOURCE_TYPE = {
+        'manual': 'IO',
+        'return': 'RT',
+    }
+
+    @classmethod
+    def next_code(cls, date, source_type):
+        """date × source_type 別に次の入荷指示番号を生成（{prefix}-YYYYMMDD-NNN）。
+
+        - 通常入荷 (manual): IO-YYYYMMDD-NNN
+        - 返品入荷 (return): RT-YYYYMMDD-NNN
+        連番は種別ごとに独立してカウントする。
+        """
+        try:
+            code_prefix = cls.CODE_PREFIX_BY_SOURCE_TYPE[source_type]
+        except KeyError as e:
+            raise ValueError(
+                f'next_code は manual / return のみサポートします (got: {source_type})'
+            ) from e
+        prefix = f'{code_prefix}-{date.strftime("%Y%m%d")}-'
+        max_n = 0
+        for code in cls.objects.filter(
+            inbound_order_code__startswith=prefix
+        ).values_list('inbound_order_code', flat=True):
+            m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'{prefix}{max_n + 1:03d}'
 
 
 class InboundOrderItem(models.Model):

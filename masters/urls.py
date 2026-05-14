@@ -48,4 +48,7 @@ urlpatterns = [
     path('customers/new/', views.CustomerCreateView.as_view(), name='customer_create'),
     path('customers/<int:pk>/edit/', views.CustomerUpdateView.as_view(), name='customer_update'),
     path('customers/<int:pk>/delete/', views.CustomerDeleteView.as_view(), name='customer_delete'),
+
+    # AJAX API
+    path('api/skus/search/', views.SkuSearchAPIView.as_view(), name='api_sku_search'),
 ]

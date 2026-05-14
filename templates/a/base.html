@@ -93,8 +93,8 @@
         <a href="{% url 'stock:inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-clipboard-data me-2"></i>在庫照会
         </a>
-        <a href="#" class="list-group-item list-group-item-action disabled text-muted">
-          <i class="bi bi-arrow-down-square me-2"></i>入荷指示 <span class="badge bg-secondary ms-1">準備中</span>
+        <a href="{% url 'inbound:order_inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-down-square me-2"></i>入荷指示
         </a>
         <a href="#" class="list-group-item list-group-item-action disabled text-muted">
           <i class="bi bi-arrow-up-square me-2"></i>出荷指示 <span class="badge bg-secondary ms-1">準備中</span>

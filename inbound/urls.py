@@ -1,0 +1,12 @@
+from django.urls import path
+
+from . import views
+
+app_name = 'inbound'
+
+urlpatterns = [
+    path('orders/', views.InboundOrderInquiryView.as_view(), name='order_inquiry'),
+    path('orders/new/', views.InboundOrderCreateView.as_view(), name='order_create'),
+    path('orders/<int:pk>/edit/', views.InboundOrderUpdateView.as_view(), name='order_update'),
+    path('orders/<int:pk>/delete/', views.InboundOrderDeleteView.as_view(), name='order_delete'),
+]

@@ -1,0 +1,182 @@
+{% extends 'a/base.html' %}
+
+{% block title %}入荷指示照会{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-clipboard-plus me-2 text-primary"></i>入荷指示照会
+  </h2>
+  <a href="{% url 'inbound:order_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> 入荷指示新規登録
+  </a>
+</div>
+
+<div class="card shadow-sm">
+  {# 検索バー (2 行構成: 1 行目=テキスト/select 系、2 行目=日付範囲 + 検索/クリア) #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" id="inquiry-search-form" class="row g-2 align-items-end">
+      {# Row 1 #}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">指示番号 / 発注番号 / 納品書番号</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="例: IO-20260514-001 / PO-..." value="{{ filters.q }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">仕入先</label>
+        <input type="text" name="supplier" class="form-control form-control-sm"
+               placeholder="例: アスクル / ASKUL" value="{{ filters.supplier }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">入荷元種別</label>
+        <select name="source_type" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in source_type_choices %}
+            <option value="{{ val }}" {% if filters.source_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Row 2 (col-md 合計 12 で自動的に折り返し) #}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">予定日 (から)</label>
+        <input type="date" name="expected_from" class="form-control form-control-sm"
+               min="2000-01-01" max="2099-12-31"
+               value="{{ filters.expected_from }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">予定日 (まで)</label>
+        <input type="date" name="expected_to" class="form-control form-control-sm"
+               min="2000-01-01" max="2099-12-31"
+               value="{{ filters.expected_to }}">
+      </div>
+      <div class="col-md-6 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search"></i> 検索
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="clearInquiryForm(this)">クリア</button>
+      </div>
+    </form>
+  </div>
+
+  {% if searched %}
+    {# サマリー #}
+    <div class="row g-0 text-center border-bottom bg-white">
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold">{{ stats.total }}</div>
+        <div class="small text-muted">該当件数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-secondary">{{ stats.pending }}</div>
+        <div class="small text-muted">入荷待ち</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-info">{{ stats.arrived }}</div>
+        <div class="small text-muted">到着済み</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-warning">{{ stats.receiving }}</div>
+        <div class="small text-muted">入荷中</div>
+      </div>
+      <div class="col py-2">
+        <div class="fs-5 fw-bold text-success">{{ stats.completed }}</div>
+        <div class="small text-muted">完了</div>
+      </div>
+    </div>
+
+    <div class="px-3 py-2 border-bottom bg-white small text-muted">
+      検索結果: <strong class="text-dark">{{ orders|length }}</strong> 件
+    </div>
+
+    {# 検索結果テーブル（横スクロール保険つき。コード/日付/バッジ列は text-nowrap で固定幅化、可変は仕入先のみ折り返し可） #}
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-start text-nowrap">指示番号</th>
+          <th class="text-start">仕入先</th>
+          <th class="text-center text-nowrap">入荷元</th>
+          <th class="text-center text-nowrap">予定日</th>
+          <th class="text-center text-nowrap">ステータス</th>
+          <th class="text-end text-nowrap">明細</th>
+          <th class="text-end text-nowrap">予定数量</th>
+          <th class="text-end text-nowrap">登録日時</th>
+          <th class="text-center text-nowrap" style="width: 160px">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td class="text-start text-nowrap"><span class="font-monospace fw-bold text-primary">{{ o.inbound_order_code }}</span></td>
+          <td class="text-start">
+            {% if o.supplier %}
+              {{ o.supplier.supplier_name }}
+              <span class="text-muted small">（<span class="font-monospace">{{ o.supplier.supplier_code }}</span>）</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-center text-nowrap small">
+            {% if o.source_type == 'asn' %}<span class="badge bg-info text-dark">ASN</span>
+            {% elif o.source_type == 'manual' %}<span class="badge bg-secondary">手動</span>
+            {% elif o.source_type == 'reorder_alert' %}<span class="badge bg-warning text-dark">発注</span>
+            {% elif o.source_type == 'return' %}<span class="badge bg-danger">返品</span>
+            {% endif %}
+          </td>
+          <td class="text-center text-nowrap small font-monospace">{{ o.expected_date|date:"Y/m/d"|default:"—" }}</td>
+          <td class="text-center text-nowrap">
+            {% if o.status == 'pending' %}<span class="badge bg-secondary">入荷待ち</span>
+            {% elif o.status == 'arrived' %}<span class="badge bg-info text-dark">到着済み</span>
+            {% elif o.status == 'receiving' %}<span class="badge bg-warning text-dark">入荷中</span>
+            {% elif o.status == 'putaway' %}<span class="badge bg-primary">格納待ち</span>
+            {% elif o.status == 'completed' %}<span class="badge bg-success">完了</span>
+            {% elif o.status == 'cancelled' %}<span class="badge bg-dark">取消</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.item_count|default:0 }}</td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.total_expected|default:0 }}</td>
+          <td class="text-end text-nowrap text-muted small font-monospace">{{ o.created_at|date:"Y/m/d H:i" }}</td>
+          <td class="text-center text-nowrap">
+            <a href="{% url 'inbound:order_update' o.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+            <a href="{% url 'inbound:order_delete' o.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">条件に一致する入荷指示が見つかりませんでした</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      条件を指定して「検索」を押してください
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clearInquiryForm(btn) {
+  const form = btn.closest('form');
+  if (!form) return;
+  form.querySelectorAll('input[type="text"], input[type="search"], input[type="date"]').forEach(i => { i.value = ''; });
+  form.querySelectorAll('select').forEach(s => { s.selectedIndex = 0; });
+  const firstField = form.querySelector(
+    'input:not([type="hidden"]):not([disabled]):not([readonly]),'
+    + 'select:not([disabled]),'
+    + 'textarea:not([disabled])'
+  );
+  if (firstField) firstField.focus();
+}
+</script>
+{% endblock %}

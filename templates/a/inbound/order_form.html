@@ -1,0 +1,398 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{% if object %}入荷指示編集{% else %}入荷指示新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'inbound:order_inquiry' %}">入荷指示照会</a></li>
+    <li class="breadcrumb-item active">{% if object %}入荷指示編集{% else %}入荷指示新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}入荷指示編集{% else %}入荷指示新規登録{% endif %}</h2>
+
+<form method="post" id="inbound-order-form">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+  {% endif %}
+
+  {# ヘッダー情報 #}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">基本情報</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.source_type.id_for_label }}">
+            {{ form.source_type.label }}
+            {% if object %}<span class="badge bg-info-subtle text-info-emphasis">変更不可</span>
+            {% else %}<span class="text-danger">*</span>{% endif %}
+          </label>
+          {{ form.source_type }}
+          <div class="form-text">
+            {% if object %}入荷元種別は登録時に確定する項目です（変更不可）。
+            {% else %}最初にここを選ぶと入荷指示番号が自動採番されます。ASN/発注アラートは画面登録できません（API/バッチ経由のみ）。
+            {% endif %}
+          </div>
+          {% if form.source_type.errors %}<div class="invalid-feedback d-block">{{ form.source_type.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.inbound_order_code.id_for_label }}">
+            {{ form.inbound_order_code.label }}
+            {% if object %}<span class="badge bg-info-subtle text-info-emphasis">変更不可</span>
+            {% else %}<span class="text-danger">*</span>{% endif %}
+          </label>
+          {{ form.inbound_order_code }}
+          <div class="form-text">
+            {% if object %}発番済みの伝票番号は変更できません。
+            {% else %}「IO-YYYYMMDD-NNN」(通常) / 「RT-YYYYMMDD-NNN」(返品) 形式のみ。外部システムの番号は「発注番号」「納品書番号」欄へ。
+            {% endif %}
+          </div>
+          {% if form.inbound_order_code.errors %}<div class="invalid-feedback d-block">{{ form.inbound_order_code.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block">
+            ステータス <span class="badge bg-info-subtle text-info-emphasis">自動</span>
+          </label>
+          {% if object %}
+            <div class="form-control bg-light" style="border-style: dashed">
+              {% if object.status == 'pending' %}<span class="badge bg-secondary">入荷待ち</span>
+              {% elif object.status == 'arrived' %}<span class="badge bg-info text-dark">到着済み</span>
+              {% elif object.status == 'receiving' %}<span class="badge bg-warning text-dark">入荷中</span>
+              {% elif object.status == 'putaway' %}<span class="badge bg-primary">格納待ち</span>
+              {% elif object.status == 'completed' %}<span class="badge bg-success">完了</span>
+              {% elif object.status == 'cancelled' %}<span class="badge bg-dark">取消</span>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="form-control bg-light" style="border-style: dashed">
+              <span class="badge bg-secondary">入荷待ち</span>
+              <span class="text-muted small ms-2">（新規登録時の初期ステータス）</span>
+            </div>
+          {% endif %}
+          <div class="form-text">ステータスは到着確認・検品・棚入れ等の業務アクションで変化します</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.supplier.id_for_label }}">
+            {{ form.supplier.label }}
+            <span class="badge bg-warning-subtle text-warning-emphasis">通常入荷では必須</span>
+          </label>
+          {{ form.supplier }}
+          <div class="form-text">返品入荷（顧客返品）の場合は空欄可</div>
+          {% if form.supplier.errors %}<div class="invalid-feedback d-block">{{ form.supplier.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.expected_date.id_for_label }}">
+            {{ form.expected_date.label }}
+            <span class="badge bg-warning-subtle text-warning-emphasis">通常入荷では必須</span>
+          </label>
+          {{ form.expected_date }}
+          <div class="form-text">返品入荷で日付未確定の場合は空欄可</div>
+          {% if form.expected_date.errors %}<div class="invalid-feedback d-block">{{ form.expected_date.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">関連伝票</h6>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block" for="{{ form.purchase_order_code.id_for_label }}">
+            {{ form.purchase_order_code.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          {{ form.purchase_order_code }}
+          <div class="form-text">SCMラベル等の発注番号</div>
+          {% if form.purchase_order_code.errors %}<div class="invalid-feedback d-block">{{ form.purchase_order_code.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block" for="{{ form.supplier_delivery_note_code.id_for_label }}">
+            {{ form.supplier_delivery_note_code.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+          </label>
+          {{ form.supplier_delivery_note_code }}
+          {% if form.supplier_delivery_note_code.errors %}<div class="invalid-feedback d-block">{{ form.supplier_delivery_note_code.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.note.id_for_label }}">
+          {{ form.note.label }} <span class="badge bg-secondary-subtle text-secondary-emphasis">任意</span>
+        </label>
+        {{ form.note }}
+      </div>
+    </div>
+  </div>
+
+  {# 明細（inline formset） #}
+  <div class="card mb-3">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+      <h6 class="text-muted text-uppercase small fw-bold mb-0">明細（SKU 別）</h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-row">
+        <i class="bi bi-plus-lg"></i> 明細行を追加
+      </button>
+    </div>
+    <div class="card-body p-0">
+      {{ items.management_form }}
+      {% if items.non_form_errors %}
+        <div class="alert alert-danger m-3">{{ items.non_form_errors|join:" " }}</div>
+      {% endif %}
+      <table class="table align-middle mb-0" id="items-table">
+        <thead class="table-light">
+          <tr>
+            <th class="text-start" style="width: 45%">SKU <span class="text-danger">*</span></th>
+            <th class="text-end" style="width: 15%">予定数量 <span class="text-danger">*</span></th>
+            <th class="text-center" style="width: 15%">クロスドック</th>
+            <th class="text-center" style="width: 10%">削除</th>
+          </tr>
+        </thead>
+        <tbody id="items-tbody">
+          {% for item_form in items %}
+          <tr class="item-row">
+            <td class="text-start">
+              {{ item_form.id }}
+              <div class="input-group input-group-sm">
+                {{ item_form.sku_code }}
+                <button type="button" class="btn btn-outline-secondary sku-pick-btn"
+                        data-bs-toggle="modal" data-bs-target="#skuPickModal"
+                        data-target-input="{{ item_form.sku_code.id_for_label }}"
+                        title="SKU マスタから検索">
+                  <i class="bi bi-search"></i>
+                </button>
+              </div>
+              {% if item_form.sku_code.errors %}<div class="invalid-feedback d-block small">{{ item_form.sku_code.errors|join:" " }}</div>{% endif %}
+            </td>
+            <td class="text-end">
+              {{ item_form.quantity_expected }}
+              {% if item_form.quantity_expected.errors %}<div class="invalid-feedback d-block small">{{ item_form.quantity_expected.errors|join:" " }}</div>{% endif %}
+            </td>
+            <td class="text-center">
+              <div class="form-check d-inline-block">{{ item_form.is_crossdock }}</div>
+            </td>
+            <td class="text-center">
+              {% if item_form.instance.pk %}
+                <label class="text-danger small">
+                  {{ item_form.DELETE }} 削除
+                </label>
+              {% else %}
+                <button type="button" class="btn btn-sm btn-outline-danger remove-empty-row" title="この行を取り除く">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-4 justify-content-end">
+    <button type="submit" class="btn btn-primary"
+            data-confirm="{% if object %}この内容で更新しますか？{% else %}この内容で新規登録しますか？{% endif %}"
+            data-confirm-yes="{% if object %}更新する{% else %}登録する{% endif %}">
+      保存
+    </button>
+    <a href="{% url 'inbound:order_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+  </div>
+
+  {# 空のテンプレート行（JS で複製して新規明細を追加するため） #}
+  <template id="empty-form-template">
+    {% with items.empty_form as ef %}
+    <tr class="item-row">
+      <td class="text-start">
+        <div class="input-group input-group-sm">
+          {{ ef.sku_code }}
+          <button type="button" class="btn btn-outline-secondary sku-pick-btn"
+                  data-bs-toggle="modal" data-bs-target="#skuPickModal"
+                  data-target-input="{{ ef.sku_code.id_for_label }}"
+                  title="SKU マスタから検索">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </td>
+      <td class="text-end">{{ ef.quantity_expected }}</td>
+      <td class="text-center"><div class="form-check d-inline-block">{{ ef.is_crossdock }}</div></td>
+      <td class="text-center">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-empty-row" title="この行を取り除く">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </td>
+    </tr>
+    {% endwith %}
+  </template>
+</form>
+
+{# ========== SKU 選択モーダル（明細行の 🔍 ボタンから開く） ========== #}
+<div class="modal fade" id="skuPickModal" tabindex="-1" aria-labelledby="skuPickModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="skuPickModalTitle">
+          <i class="bi bi-upc-scan me-1"></i>SKU マスタから選択
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="skuSearchInput" class="form-control mb-3"
+               placeholder="SKUコード / JAN / 商品名 / 商品コードで検索（部分一致）" autocomplete="off">
+        <div class="small text-muted mb-2" id="skuSearchHint">検索ボックスに入力すると候補が出ます（最大 30 件）</div>
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="text-start">SKUコード</th>
+              <th class="text-start">商品</th>
+              <th class="text-start">JAN</th>
+              <th class="text-start">サイズ / カラー</th>
+            </tr>
+          </thead>
+          <tbody id="skuPickResults">
+            <tr><td colspan="4" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  // ===== inline formset の動的行追加 =====
+  // Django の formset は management form の TOTAL_FORMS を増やしながら、prefix が __prefix__ の空テンプレを
+  // 新しい index に置換して追加する仕組み。
+  const totalInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+  const tbody = document.getElementById('items-tbody');
+  const tmpl = document.getElementById('empty-form-template');
+
+  document.getElementById('add-item-row').addEventListener('click', function () {
+    const index = parseInt(totalInput.value, 10);
+    const html = tmpl.innerHTML.replace(/__prefix__/g, index);
+    const wrap = document.createElement('tbody');
+    wrap.innerHTML = html;
+    const newRow = wrap.querySelector('tr');
+    tbody.appendChild(newRow);
+    totalInput.value = index + 1;
+    // 追加した行の最初のフィールドにフォーカス
+    const firstField = newRow.querySelector('select, input:not([type=hidden]):not([type=checkbox])');
+    if (firstField) firstField.focus();
+  });
+
+  // ===== 入荷元種別と入荷指示番号の連動（新規登録時のみ） =====
+  // 種別を切り替えると prefix (IO-/RT-) が連動して変わる。
+  // ただしユーザーが手動編集した値は尊重する（手動編集 = 最後の自動値と現在値が一致しなくなる）。
+  {% if next_codes_json %}
+  const NEXT_CODES = {{ next_codes_json|safe }};
+  const codeInput = document.querySelector('input[name="inbound_order_code"]');
+  const sourceSelect = document.querySelector('select[name="source_type"]');
+  let lastAutoCode = codeInput ? codeInput.value : null;
+  if (codeInput && sourceSelect) {
+    sourceSelect.addEventListener('change', function () {
+      const newCode = NEXT_CODES[this.value];
+      if (newCode && codeInput.value === lastAutoCode) {
+        codeInput.value = newCode;
+        lastAutoCode = newCode;
+      }
+    });
+  }
+  {% endif %}
+
+  // 既存行ではなく、未保存の追加行を消したいときは行ごと削除
+  tbody.addEventListener('click', function (e) {
+    const btn = e.target.closest('.remove-empty-row');
+    if (!btn) return;
+    const row = btn.closest('.item-row');
+    if (row) row.remove();
+    // TOTAL_FORMS は減らさない（Django 側で余剰行は無視される）
+  });
+
+  // ===== SKU マスタ検索モーダル =====
+  // 🔍 ボタンで modal を開き、SKU 検索 API を叩いて結果から選択 → 元の input に値を流し込む
+  const skuModal = document.getElementById('skuPickModal');
+  const skuSearchInput = document.getElementById('skuSearchInput');
+  const skuResultsBody = document.getElementById('skuPickResults');
+  const skuSearchUrl = '{% url "masters:api_sku_search" %}';
+  let skuTargetInputId = null;
+  let skuSearchTimer = null;
+
+  // どの 🔍 ボタンが押されたかを覚える（data-target-input でターゲット input ID を保持）
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.sku-pick-btn');
+    if (!btn) return;
+    skuTargetInputId = btn.dataset.targetInput;
+  });
+
+  // モーダルが開いたら検索欄を初期化してフォーカス
+  if (skuModal) {
+    skuModal.addEventListener('shown.bs.modal', function () {
+      skuSearchInput.value = '';
+      skuResultsBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      skuSearchInput.focus();
+    });
+  }
+
+  // 検索ボックス入力 → debounce → fetch
+  if (skuSearchInput) {
+    skuSearchInput.addEventListener('input', function () {
+      clearTimeout(skuSearchTimer);
+      const q = this.value.trim();
+      skuSearchTimer = setTimeout(function () { skuFetchAndRender(q); }, 200);
+    });
+  }
+
+  function skuFetchAndRender(q) {
+    if (!q) {
+      skuResultsBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      return;
+    }
+    fetch(skuSearchUrl + '?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const results = data.results || [];
+        if (results.length === 0) {
+          skuResultsBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">該当する SKU はありません</td></tr>';
+          return;
+        }
+        skuResultsBody.innerHTML = results.map(function (s) {
+          const size = s.size_info || '';
+          const color = s.color_info || '';
+          const sizeColor = (size || color) ? (size + (size && color ? ' / ' : '') + color) : '—';
+          return '<tr style="cursor: pointer" class="sku-pick-row" data-code="' + esc(s.sku_code) + '">'
+            + '<td class="text-start"><span class="font-monospace">' + esc(s.sku_code) + '</span></td>'
+            + '<td class="text-start">' + esc(s.product_name) + ' <span class="text-muted small">(' + esc(s.product_code) + ')</span></td>'
+            + '<td class="text-start small">' + (s.jan_code ? '<span class="font-monospace">' + esc(s.jan_code) + '</span>' : '<span class="text-muted">—</span>') + '</td>'
+            + '<td class="text-start small">' + esc(sizeColor) + '</td>'
+            + '</tr>';
+        }).join('');
+      });
+  }
+
+  // 結果行クリック → ターゲット input に SKU コードを書き込んでモーダルを閉じる
+  if (skuResultsBody) {
+    skuResultsBody.addEventListener('click', function (e) {
+      const row = e.target.closest('.sku-pick-row');
+      if (!row) return;
+      const code = row.dataset.code;
+      if (skuTargetInputId) {
+        const target = document.getElementById(skuTargetInputId);
+        if (target) {
+          target.value = code;
+          // value 変更の change イベントを発火（他の listener が拾えるように）
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+      bootstrap.Modal.getInstance(skuModal).hide();
+    });
+  }
+
+  function esc(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+})();
+</script>
+{% endblock %}
