@@ -57,17 +57,11 @@
           </label>
           {% if object %}
             <div class="form-control bg-light" style="border-style: dashed">
-              {% if object.status == 'pending' %}<span class="badge bg-secondary">入荷待ち</span>
-              {% elif object.status == 'arrived' %}<span class="badge bg-info text-dark">到着済み</span>
-              {% elif object.status == 'receiving' %}<span class="badge bg-warning text-dark">入荷中</span>
-              {% elif object.status == 'putaway' %}<span class="badge bg-primary">格納待ち</span>
-              {% elif object.status == 'completed' %}<span class="badge bg-success">完了</span>
-              {% elif object.status == 'cancelled' %}<span class="badge bg-dark">取消</span>
-              {% endif %}
+              {% include 'a/inbound/_status_badge.html' with status=object.status %}
             </div>
           {% else %}
             <div class="form-control bg-light" style="border-style: dashed">
-              <span class="badge bg-secondary">入荷待ち</span>
+              {% include 'a/inbound/_status_badge.html' with status='receiving_wait' %}
               <span class="text-muted small ms-2">（新規登録時の初期ステータス）</span>
             </div>
           {% endif %}

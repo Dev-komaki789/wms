@@ -12,11 +12,11 @@ class InboundOrder(models.Model):
     """入荷指示（ASN・手動登録・発注アラート起点・返品など）。"""
 
     class Status(models.TextChoices):
-        PENDING = 'pending', '入荷待ち'
-        ARRIVED = 'arrived', '到着済み'
-        RECEIVING = 'receiving', '入荷中'
-        PUTAWAY = 'putaway', '格納待ち'
-        COMPLETED = 'completed', '完了'
+        # ステータス = 「次にやる作業」で統一（受け入れ→検品→棚入れ→完了）
+        RECEIVING_WAIT = 'receiving_wait', '受入れ作業待ち'
+        INSPECTION_WAIT = 'inspection_wait', '検品作業待ち'
+        PUTAWAY_WAIT = 'putaway_wait', '棚入れ作業待ち'
+        COMPLETED = 'completed', '入荷完了'
         CANCELLED = 'cancelled', '取消'
 
     class SourceType(models.TextChoices):
@@ -37,7 +37,8 @@ class InboundOrder(models.Model):
         verbose_name='仕入先',
     )
     status = models.CharField(
-        'ステータス', max_length=20, choices=Status.choices, default=Status.PENDING
+        'ステータス', max_length=20, choices=Status.choices,
+        default=Status.RECEIVING_WAIT
     )
     expected_date = models.DateField('入荷予定日', null=True, blank=True)
     arrived_at = models.DateTimeField('到着確認日時', null=True, blank=True)
@@ -48,6 +49,16 @@ class InboundOrder(models.Model):
         '仕入先納品書番号', max_length=50, blank=True
     )
     received_at = models.DateTimeField('入荷完了日時', null=True, blank=True)
+    in_progress_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inbound_orders_in_progress',
+        verbose_name='作業担当者',
+        help_text='受入れ・検品の作業中の担当者。NULL=作業中でない（開始で設定、完了で解除）。',
+    )
+    in_progress_at = models.DateTimeField('作業開始日時', null=True, blank=True)
     source_type = models.CharField(
         '入荷元種別',
         max_length=20,
@@ -174,7 +185,15 @@ class InboundReceipt(models.Model):
         '予定入荷数', validators=[MinValueValidator(1)]
     )
     quantity_received = models.IntegerField(
-        '実入荷数', validators=[MinValueValidator(0)]
+        '実入荷数',
+        validators=[MinValueValidator(0)],
+        help_text='検品した入荷総数（良品＋不良品）。',
+    )
+    quantity_defective = models.IntegerField(
+        '不良品数',
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='破損・汚損などで在庫対象外となる数。理由は discrepancy_note に記録。',
     )
     discrepancy_type = models.CharField(
         '差異種別',

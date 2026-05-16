@@ -77,20 +77,20 @@
         <div class="small text-muted">該当件数</div>
       </div>
       <div class="col py-2 border-end">
-        <div class="fs-5 fw-bold text-secondary">{{ stats.pending }}</div>
-        <div class="small text-muted">入荷待ち</div>
+        <div class="fs-5 fw-bold text-secondary">{{ stats.receiving_wait }}</div>
+        <div class="small text-muted">受入れ待ち</div>
       </div>
       <div class="col py-2 border-end">
-        <div class="fs-5 fw-bold text-info">{{ stats.arrived }}</div>
-        <div class="small text-muted">到着済み</div>
+        <div class="fs-5 fw-bold text-info">{{ stats.inspection_wait }}</div>
+        <div class="small text-muted">検品待ち</div>
       </div>
       <div class="col py-2 border-end">
-        <div class="fs-5 fw-bold text-warning">{{ stats.receiving }}</div>
-        <div class="small text-muted">入荷中</div>
+        <div class="fs-5 fw-bold text-primary">{{ stats.putaway_wait }}</div>
+        <div class="small text-muted">棚入れ待ち</div>
       </div>
       <div class="col py-2">
         <div class="fs-5 fw-bold text-success">{{ stats.completed }}</div>
-        <div class="small text-muted">完了</div>
+        <div class="small text-muted">入荷完了</div>
       </div>
     </div>
 
@@ -133,20 +133,27 @@
           </td>
           <td class="text-center text-nowrap small font-monospace">{{ o.expected_date|date:"Y/m/d"|default:"—" }}</td>
           <td class="text-center text-nowrap">
-            {% if o.status == 'pending' %}<span class="badge bg-secondary">入荷待ち</span>
-            {% elif o.status == 'arrived' %}<span class="badge bg-info text-dark">到着済み</span>
-            {% elif o.status == 'receiving' %}<span class="badge bg-warning text-dark">入荷中</span>
-            {% elif o.status == 'putaway' %}<span class="badge bg-primary">格納待ち</span>
-            {% elif o.status == 'completed' %}<span class="badge bg-success">完了</span>
-            {% elif o.status == 'cancelled' %}<span class="badge bg-dark">取消</span>
+            {% include 'a/inbound/_status_badge.html' with status=o.status %}
+            {% if o.in_progress_by %}
+              <div class="small text-warning-emphasis mt-1">
+                <i class="bi bi-person-fill-gear me-1"></i>作業中:
+                {{ o.in_progress_by.display_name|default:o.in_progress_by.username }}
+              </div>
             {% endif %}
           </td>
           <td class="text-end text-nowrap font-monospace small">{{ o.item_count|default:0 }}</td>
           <td class="text-end text-nowrap font-monospace small">{{ o.total_expected|default:0 }}</td>
           <td class="text-end text-nowrap text-muted small font-monospace">{{ o.created_at|date:"Y/m/d H:i" }}</td>
           <td class="text-center text-nowrap">
-            <a href="{% url 'inbound:order_update' o.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
-            <a href="{% url 'inbound:order_delete' o.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+            {% if o.status == 'receiving_wait' and not o.in_progress_by %}
+              {# 受入れ作業待ち & 未着手の指示のみ編集・削除可。作業開始後は不可 #}
+              <a href="{% url 'inbound:order_update' o.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+              <a href="{% url 'inbound:order_delete' o.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+            {% else %}
+              <span class="text-muted" title="作業開始後は編集・削除できません">
+                <i class="bi bi-lock-fill"></i>
+              </span>
+            {% endif %}
           </td>
         </tr>
         {% empty %}

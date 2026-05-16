@@ -1,0 +1,337 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}受入れ作業{% endblock %}
+{% block page_title %}<i class="bi bi-card-checklist me-1"></i>受入れ作業{% endblock %}
+{% block back_url %}{% url 'inbound:handheld_arrival' %}{% endblock %}
+
+{% block hh_content %}
+{{ items|json_script:"items-data" }}
+
+{# 対象の入荷指示 #}
+<div class="card mb-2">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ order.inbound_order_code }}</span>
+    {% include 'a/inbound/_status_badge.html' with status=order.status %}
+  </div>
+  <div class="px-3 py-2 small">
+    <div class="row g-1">
+      <div class="col-5 text-muted">仕入先</div>
+      <div class="col-7">
+        {% if order.supplier %}{{ order.supplier.supplier_name }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">入荷予定日</div>
+      <div class="col-7 font-monospace">{{ order.expected_date|date:"Y/m/d"|default:"—" }}</div>
+    </div>
+  </div>
+</div>
+
+{# 進捗: 何個目 / 全部 #}
+<div class="d-flex align-items-center justify-content-between mb-3 px-1">
+  <span class="fw-bold">
+    <i class="bi bi-box-seam me-1 text-primary"></i>商品
+    <span class="fs-4 mx-1" id="cur-num">1</span>
+    <span class="text-muted">/ {{ items|length }}</span>
+  </span>
+  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">確認済み 0</span>
+</div>
+
+{# ===== STATE: スキャン ===== #}
+<div id="state-scan">
+  <label class="form-label" for="jan-scan">
+    <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャン
+  </label>
+  <input type="text" id="jan-scan" class="form-control hh-key"
+         placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
+  <div class="form-text" id="scan-msg">商品のバーコードを読み取ってください</div>
+
+  <div class="mt-3">
+    <div class="text-muted small mb-1">残りの商品（タップでも選択できます）</div>
+    <div class="list-group" id="remain-list"></div>
+  </div>
+
+  {# 確認済み: タップで再編集（打ち間違いの修正用） #}
+  <div class="mt-3 d-none" id="done-section">
+    <div class="text-muted small mb-1">確認済み（タップで修正できます）</div>
+    <div class="list-group" id="done-list"></div>
+  </div>
+</div>
+
+{# ===== STATE: 数量入力 ===== #}
+<div id="state-qty" class="d-none">
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="text-muted small">スキャンした商品</div>
+      <div class="hh-key" id="qty-sku"></div>
+      <div class="text-muted small mb-3" id="qty-name"></div>
+
+      <div class="d-flex align-items-center justify-content-between">
+        <span class="text-muted">予定数</span>
+        <span class="hh-key" id="qty-expected"></span>
+      </div>
+      <hr class="my-2">
+      <label class="form-label fw-bold" for="qty-value">実数を入力</label>
+      <div class="input-group input-group-lg">
+        <button class="btn btn-outline-secondary px-3" type="button" id="qty-minus" aria-label="減らす">
+          <i class="bi bi-dash-lg"></i>
+        </button>
+        <input type="text" id="qty-value" inputmode="numeric" maxlength="6"
+               class="form-control hh-key text-center">
+        <button class="btn btn-outline-secondary px-3" type="button" id="qty-plus" aria-label="増やす">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+      <div class="mt-2 text-center">
+        <span class="badge bg-danger d-none" id="qty-diff"></span>
+      </div>
+      <div class="text-danger small text-center mt-1 d-none" id="qty-error"></div>
+    </div>
+  </div>
+  <button type="button" id="qty-exec" class="btn btn-primary btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 実行
+  </button>
+  <button type="button" id="qty-back" class="btn btn-link w-100 mt-1">
+    スキャンに戻る
+  </button>
+</div>
+
+{# ===== STATE: 完了（このフォームを送信して確定） ===== #}
+<form method="post" id="state-done" class="d-none">
+  {% csrf_token %}
+  {% for it in items %}
+    <input type="hidden" name="qty_{{ it.id }}" id="hq-{{ it.id }}">
+  {% endfor %}
+  <div class="alert alert-success py-2">
+    <i class="bi bi-check-circle-fill me-1"></i>全 {{ items|length }} 商品の確認が完了しました
+  </div>
+  <div class="list-group mb-3" id="done-summary"></div>
+  <button type="submit" class="btn btn-success btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 受け入れ完了
+  </button>
+  <div class="text-muted small text-center mt-2">
+    <i class="bi bi-info-circle me-1"></i>在庫計上は次工程「棚入れ」で行います
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  const items = JSON.parse(document.getElementById('items-data').textContent);
+  const total = items.length;
+  const done = {};          // id -> 確定した実数
+  let current = null;       // 数量入力中の商品
+
+  const curNum  = document.getElementById('cur-num');
+  const doneBadge = document.getElementById('done-badge');
+  const sScan = document.getElementById('state-scan');
+  const sQty  = document.getElementById('state-qty');
+  const sDone = document.getElementById('state-done');
+  const scanInput = document.getElementById('jan-scan');
+  const scanMsg   = document.getElementById('scan-msg');
+  const remainList = document.getElementById('remain-list');
+  const doneList = document.getElementById('done-list');
+  const doneSection = document.getElementById('done-section');
+  const qSku  = document.getElementById('qty-sku');
+  const qName = document.getElementById('qty-name');
+  const qExp  = document.getElementById('qty-expected');
+  const qVal  = document.getElementById('qty-value');
+  const qDiff = document.getElementById('qty-diff');
+  const qtyError = document.getElementById('qty-error');
+  const execBtn = document.getElementById('qty-exec');
+  const doneSummary = document.getElementById('done-summary');
+
+  function doneCount() { return Object.keys(done).length; }
+
+  function show(state) {
+    sScan.classList.toggle('d-none', state !== 'scan');
+    sQty.classList.toggle('d-none',  state !== 'qty');
+    sDone.classList.toggle('d-none', state !== 'done');
+  }
+
+  function updateProgress() {
+    curNum.textContent = doneCount() >= total
+      ? total : Math.min(doneCount() + 1, total);
+    doneBadge.textContent = '確認済み ' + doneCount();
+  }
+
+  // スキャン画面: 残りの商品リストを描画
+  function renderRemain() {
+    remainList.innerHTML = '';
+    items.filter(it => done[it.id] === undefined).forEach(it => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action py-2';
+      b.innerHTML = '<span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div>';
+      b.addEventListener('click', () => goQty(it));
+      remainList.appendChild(b);
+    });
+  }
+
+  // スキャン画面: 確認済みの商品リストを描画（タップで再編集 = 打ち間違いの修正）
+  function renderDone() {
+    doneList.innerHTML = '';
+    const doneItems = items.filter(it => done[it.id] !== undefined);
+    doneSection.classList.toggle('d-none', doneItems.length === 0);
+    doneItems.forEach(it => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action list-group-item-success py-2';
+      b.innerHTML =
+        '<div class="d-flex justify-content-between align-items-center">'
+        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
+        + '<span class="small text-nowrap"><i class="bi bi-check-circle-fill text-success me-1"></i>'
+        + '<span class="text-muted">実数</span> '
+        + '<span class="font-monospace fw-bold">' + done[it.id] + '</span></span>'
+        + '</div>';
+      b.addEventListener('click', () => goQty(it));
+      doneList.appendChild(b);
+    });
+  }
+
+  function goScan() {
+    current = null;
+    if (doneCount() >= total) { goDone(); return; }
+    updateProgress();
+    renderRemain();
+    renderDone();
+    show('scan');
+    scanInput.value = '';
+    scanMsg.textContent = '商品のバーコードを読み取ってください';
+    scanMsg.className = 'form-text';
+    scanInput.focus();
+  }
+
+  function goQty(it) {
+    current = it;
+    qSku.textContent = it.sku;
+    qName.textContent = it.name;
+    qExp.textContent = it.expected;
+    // 実数欄は予定数で初期表示（再編集時は確定済みの値）
+    qVal.value = (done[it.id] !== undefined) ? done[it.id] : it.expected;
+    checkDiff();
+    // この商品を確定すると全件完了になるかでボタン文言を変える
+    const willComplete =
+      doneCount() + (done[it.id] === undefined ? 1 : 0) >= total;
+    execBtn.innerHTML = willComplete
+      ? '<i class="bi bi-check-lg me-1"></i> 実行（確認へ進む）'
+      : '<i class="bi bi-check-lg me-1"></i> 実行（次の商品へ）';
+    updateProgress();
+    show('qty');
+    qVal.focus();
+    qVal.select();
+  }
+
+  function goDone() {
+    updateProgress();
+    doneSummary.innerHTML = '';
+    items.forEach(it => {
+      const q = done[it.id];
+      const diff = q - it.expected;
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'list-group-item list-group-item-action '
+        + 'd-flex justify-content-between align-items-center py-2';
+      let right = '<span class="font-monospace">' + q + '</span>';
+      if (diff !== 0) {
+        right += ' <span class="badge bg-danger ms-1">'
+          + (diff > 0 ? '+' : '') + diff + '</span>';
+      }
+      row.innerHTML =
+        '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.7rem">' + it.name + '</div></span>'
+        + '<span class="text-end small"><span class="text-muted">実数 </span>'
+        + right + '</span>';
+      row.addEventListener('click', () => goQty(it));   // タップで再編集
+      doneSummary.appendChild(row);
+    });
+    show('done');
+  }
+
+  function checkDiff() {
+    const v = parseInt(qVal.value, 10);
+    if (qVal.value !== '' && !isNaN(v) && v !== current.expected) {
+      const d = v - current.expected;
+      qDiff.textContent = '予定との差異 ' + (d > 0 ? '+' : '') + d;
+      qDiff.classList.remove('d-none');
+    } else {
+      qDiff.classList.add('d-none');
+    }
+  }
+
+  function execCurrent() {
+    const raw = qVal.value.trim();
+    const v = parseInt(raw, 10);
+    // 数字以外が含まれる等の不正値はエラー表示して止める（無反応にしない）
+    if (raw !== '' && (isNaN(v) || v < 0)) {
+      qtyError.textContent = '実数は 0 以上の数字で入力してください。';
+      qtyError.classList.remove('d-none');
+      qVal.focus();
+      return;
+    }
+    qtyError.classList.add('d-none');
+    const qty = isNaN(v) ? 0 : v;   // 空欄は 0 とみなす
+    qVal.value = qty;
+    done[current.id] = qty;
+    document.getElementById('hq-' + current.id).value = qty;  // 送信用 hidden
+    goScan();   // 次の商品 or 完了
+  }
+
+  // 商品スキャン。wms.js のグローバル Enter 移動には渡さない
+  scanInput.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const code = scanInput.value.trim();
+    scanInput.value = '';
+    if (!code) return;
+    const it = items.find(x => x.jan === code || x.sku === code);
+    if (!it) {
+      scanMsg.textContent = '指示に無い商品です: ' + code;
+      scanMsg.className = 'form-text text-danger';
+      return;
+    }
+    goQty(it);
+  });
+
+  // 数量欄: 数字以外（- 等）は入力時に除去する
+  qVal.addEventListener('input', function () {
+    const cleaned = qVal.value.replace(/[^0-9]/g, '');
+    if (cleaned !== qVal.value) qVal.value = cleaned;
+    qtyError.classList.add('d-none');
+    checkDiff();
+  });
+  // 空欄のままフォーカスを外したら 0 を補完する
+  qVal.addEventListener('blur', function () {
+    if (qVal.value.trim() === '') { qVal.value = '0'; checkDiff(); }
+  });
+  qVal.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    execCurrent();
+  });
+  // 数量ステッパー（− / ＋ ボタンで増減）
+  document.getElementById('qty-minus').addEventListener('click', function () {
+    qVal.value = Math.max(0, (parseInt(qVal.value, 10) || 0) - 1);
+    checkDiff();
+  });
+  document.getElementById('qty-plus').addEventListener('click', function () {
+    qVal.value = Math.max(0, (parseInt(qVal.value, 10) || 0) + 1);
+    checkDiff();
+  });
+  execBtn.addEventListener('click', execCurrent);
+  document.getElementById('qty-back').addEventListener('click', goScan);
+
+  // 初期化
+  if (total === 0) { goDone(); } else { goScan(); }
+  // wms.js の先頭フィールドフォーカスを上書きしてスキャン欄にフォーカス
+  window.addEventListener('DOMContentLoaded', function () {
+    if (!sScan.classList.contains('d-none')) scanInput.focus();
+  });
+})();
+</script>
+{% endblock %}

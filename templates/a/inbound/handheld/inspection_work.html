@@ -1,0 +1,433 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}検品作業{% endblock %}
+{% block page_title %}<i class="bi bi-check2-square me-1"></i>検品作業{% endblock %}
+{% block back_url %}{% url 'inbound:handheld_inspection' %}{% endblock %}
+
+{% block hh_content %}
+{{ items|json_script:"items-data" }}
+
+{# 対象の入荷指示 #}
+<div class="card mb-2">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ order.inbound_order_code }}</span>
+    {% include 'a/inbound/_status_badge.html' with status=order.status %}
+  </div>
+  <div class="px-3 py-2 small">
+    <div class="row g-1">
+      <div class="col-5 text-muted">仕入先</div>
+      <div class="col-7">
+        {% if order.supplier %}{{ order.supplier.supplier_name }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">入荷予定日</div>
+      <div class="col-7 font-monospace">{{ order.expected_date|date:"Y/m/d"|default:"—" }}</div>
+    </div>
+  </div>
+</div>
+
+{# 進捗: 何個目 / 全部 #}
+<div class="d-flex align-items-center justify-content-between mb-3 px-1">
+  <span class="fw-bold">
+    <i class="bi bi-box-seam me-1 text-primary"></i>商品
+    <span class="fs-4 mx-1" id="cur-num">1</span>
+    <span class="text-muted">/ {{ items|length }}</span>
+  </span>
+  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">検品済み 0</span>
+</div>
+
+{# ===== STATE: スキャン ===== #}
+<div id="state-scan">
+  <label class="form-label" for="jan-scan">
+    <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャン
+  </label>
+  <input type="text" id="jan-scan" class="form-control hh-key"
+         placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
+  <div class="form-text" id="scan-msg">商品のバーコードを読み取ってください</div>
+
+  <div class="mt-3">
+    <div class="text-muted small mb-1">残りの商品（タップでも選択できます）</div>
+    <div class="list-group" id="remain-list"></div>
+  </div>
+
+  {# 検品済み: タップで再検品（打ち間違いの修正用） #}
+  <div class="mt-3 d-none" id="done-section">
+    <div class="text-muted small mb-1">検品済み（タップで修正できます）</div>
+    <div class="list-group" id="done-list"></div>
+  </div>
+</div>
+
+{# ===== STATE: 検品入力 ===== #}
+<div id="state-inspect" class="d-none">
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="text-muted small">検品する商品</div>
+      <div class="hh-key" id="ins-sku"></div>
+      <div class="text-muted small mb-2" id="ins-name"></div>
+
+      <div class="d-flex justify-content-between align-items-center small">
+        <span class="text-muted">予定数</span>
+        <span class="hh-key" id="ins-expected"></span>
+      </div>
+      <div class="d-flex justify-content-between align-items-center small">
+        <span class="text-muted">受け入れ数</span>
+        <span class="hh-key" id="ins-received"></span>
+      </div>
+      <hr class="my-2">
+
+      <label class="form-label fw-bold" for="ins-good">
+        <i class="bi bi-check-circle text-success me-1"></i>良品数
+      </label>
+      <div class="input-group input-group-lg">
+        <button class="btn btn-outline-secondary px-3" type="button" id="good-minus" aria-label="減らす">
+          <i class="bi bi-dash-lg"></i>
+        </button>
+        <input type="text" id="ins-good" inputmode="numeric" maxlength="6"
+               class="form-control hh-key text-center">
+        <button class="btn btn-outline-secondary px-3" type="button" id="good-plus" aria-label="増やす">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+
+      <label class="form-label fw-bold mt-3" for="ins-defective">
+        <i class="bi bi-exclamation-triangle text-danger me-1"></i>不良品数
+      </label>
+      <div class="input-group input-group-lg">
+        <button class="btn btn-outline-secondary px-3" type="button" id="def-minus" aria-label="減らす">
+          <i class="bi bi-dash-lg"></i>
+        </button>
+        <input type="text" id="ins-defective" inputmode="numeric" maxlength="6"
+               class="form-control hh-key text-center">
+        <button class="btn btn-outline-secondary px-3" type="button" id="def-plus" aria-label="増やす">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+
+      {# 不良理由: 不良品数 > 0 のとき表示 #}
+      <div id="reason-wrap" class="mt-3 d-none">
+        <label class="form-label fw-bold" for="ins-reason">不良理由</label>
+        <select id="ins-reason" class="form-select form-select-lg">
+          <option value="">— 理由を選択 —</option>
+          <option value="破損">破損</option>
+          <option value="汚損">汚損</option>
+          <option value="異品">異品（指定と違う商品）</option>
+          <option value="期限切れ">期限切れ</option>
+          <option value="その他">その他</option>
+        </select>
+        <div class="form-text text-danger d-none" id="reason-msg">
+          不良理由を選択してください
+        </div>
+      </div>
+
+      <div class="mt-2 text-center">
+        <span class="badge bg-warning text-dark d-none" id="ins-diff"></span>
+      </div>
+      <div class="text-danger small text-center mt-1 d-none" id="ins-error"></div>
+    </div>
+  </div>
+  <button type="button" id="ins-exec" class="btn btn-primary btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 実行
+  </button>
+  <button type="button" id="ins-back" class="btn btn-link w-100 mt-1">
+    スキャンに戻る
+  </button>
+</div>
+
+{# ===== STATE: 完了（このフォームを送信して確定） ===== #}
+<form method="post" id="state-done" class="d-none">
+  {% csrf_token %}
+  {% for it in items %}
+    <input type="hidden" name="good_{{ it.id }}" id="hg-{{ it.id }}">
+    <input type="hidden" name="defective_{{ it.id }}" id="hd-{{ it.id }}">
+    <input type="hidden" name="reason_{{ it.id }}" id="hr-{{ it.id }}">
+  {% endfor %}
+  <div class="alert alert-success py-2">
+    <i class="bi bi-check-circle-fill me-1"></i>全 {{ items|length }} 商品の検品が完了しました
+  </div>
+  <div class="list-group mb-3" id="done-summary"></div>
+  <button type="submit" class="btn btn-success btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 検品完了
+  </button>
+  <div class="text-muted small text-center mt-2">
+    <i class="bi bi-info-circle me-1"></i>在庫計上・格納先は次工程「棚入れ」で行います
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  const items = JSON.parse(document.getElementById('items-data').textContent);
+  const total = items.length;
+  const done = {};          // id -> {good, defective, reason}
+  let current = null;       // 検品入力中の商品
+
+  const curNum  = document.getElementById('cur-num');
+  const doneBadge = document.getElementById('done-badge');
+  const sScan = document.getElementById('state-scan');
+  const sInspect = document.getElementById('state-inspect');
+  const sDone = document.getElementById('state-done');
+  const scanInput = document.getElementById('jan-scan');
+  const scanMsg   = document.getElementById('scan-msg');
+  const remainList = document.getElementById('remain-list');
+  const doneList = document.getElementById('done-list');
+  const doneSection = document.getElementById('done-section');
+  const iSku  = document.getElementById('ins-sku');
+  const iName = document.getElementById('ins-name');
+  const iExp  = document.getElementById('ins-expected');
+  const iRec  = document.getElementById('ins-received');
+  const iGood = document.getElementById('ins-good');
+  const iDef  = document.getElementById('ins-defective');
+  const iReason = document.getElementById('ins-reason');
+  const reasonWrap = document.getElementById('reason-wrap');
+  const reasonMsg  = document.getElementById('reason-msg');
+  const iDiff = document.getElementById('ins-diff');
+  const iError = document.getElementById('ins-error');
+  const execBtn = document.getElementById('ins-exec');
+  const doneSummary = document.getElementById('done-summary');
+
+  function doneCount() { return Object.keys(done).length; }
+
+  function show(state) {
+    sScan.classList.toggle('d-none', state !== 'scan');
+    sInspect.classList.toggle('d-none', state !== 'inspect');
+    sDone.classList.toggle('d-none', state !== 'done');
+  }
+
+  function updateProgress() {
+    curNum.textContent = doneCount() >= total
+      ? total : Math.min(doneCount() + 1, total);
+    doneBadge.textContent = '検品済み ' + doneCount();
+  }
+
+  // スキャン画面: 残りの商品リストを描画
+  function renderRemain() {
+    remainList.innerHTML = '';
+    items.filter(it => done[it.id] === undefined).forEach(it => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action py-2';
+      b.innerHTML = '<span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div>';
+      b.addEventListener('click', () => goInspect(it));
+      remainList.appendChild(b);
+    });
+  }
+
+  // スキャン画面: 検品済みの商品リストを描画（タップで再検品 = 打ち間違いの修正）
+  function renderDone() {
+    doneList.innerHTML = '';
+    const doneItems = items.filter(it => done[it.id] !== undefined);
+    doneSection.classList.toggle('d-none', doneItems.length === 0);
+    doneItems.forEach(it => {
+      const d = done[it.id];
+      let result = '良品 <span class="font-monospace fw-bold">' + d.good + '</span>';
+      if (d.defective > 0) {
+        result += ' / <span class="text-danger">不良 ' + d.defective + '</span>';
+      }
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action list-group-item-success py-2';
+      b.innerHTML =
+        '<div class="d-flex justify-content-between align-items-center">'
+        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
+        + '<span class="small text-nowrap"><i class="bi bi-check-circle-fill text-success me-1"></i>'
+        + result + '</span>'
+        + '</div>';
+      b.addEventListener('click', () => goInspect(it));
+      doneList.appendChild(b);
+    });
+  }
+
+  // 不良品数 > 0 のとき不良理由を表示
+  function updateReason() {
+    const d = parseInt(iDef.value, 10);
+    if (!isNaN(d) && d > 0) {
+      reasonWrap.classList.remove('d-none');
+    } else {
+      reasonWrap.classList.add('d-none');
+      reasonMsg.classList.add('d-none');
+    }
+  }
+
+  // 良品＋不良 と予定数の差異を表示
+  function checkDiff() {
+    const g = parseInt(iGood.value, 10);
+    const d = parseInt(iDef.value, 10);
+    if (isNaN(g) || isNaN(d)) { iDiff.classList.add('d-none'); return; }
+    const t = g + d;
+    if (t !== current.expected) {
+      const diff = t - current.expected;
+      iDiff.textContent = '入荷総数 ' + t + '（予定との差異 ' + (diff > 0 ? '+' : '') + diff + '）';
+      iDiff.classList.remove('d-none');
+    } else {
+      iDiff.classList.add('d-none');
+    }
+  }
+
+  function goScan() {
+    current = null;
+    if (doneCount() >= total) { goDone(); return; }
+    updateProgress();
+    renderRemain();
+    renderDone();
+    show('scan');
+    scanInput.value = '';
+    scanMsg.textContent = '商品のバーコードを読み取ってください';
+    scanMsg.className = 'form-text';
+    scanInput.focus();
+  }
+
+  function goInspect(it) {
+    current = it;
+    iSku.textContent = it.sku;
+    iName.textContent = it.name;
+    iExp.textContent = it.expected;
+    iRec.textContent = it.received;
+    const prev = done[it.id];
+    // 良品数は受け入れ数で初期表示、不良品数は 0（再検品時は確定済みの値）
+    iGood.value = prev ? prev.good : it.received;
+    iDef.value = prev ? prev.defective : 0;
+    iReason.value = prev ? prev.reason : '';
+    updateReason();
+    reasonMsg.classList.add('d-none');
+    checkDiff();
+    const willComplete = doneCount() + (prev === undefined ? 1 : 0) >= total;
+    execBtn.innerHTML = willComplete
+      ? '<i class="bi bi-check-lg me-1"></i> 実行（検品完了へ）'
+      : '<i class="bi bi-check-lg me-1"></i> 実行（次の商品へ）';
+    updateProgress();
+    show('inspect');
+    iGood.focus();
+    iGood.select();
+  }
+
+  function goDone() {
+    updateProgress();
+    doneSummary.innerHTML = '';
+    items.forEach(it => {
+      const d = done[it.id];
+      const t = d.good + d.defective;
+      let badges = '<span class="badge bg-success">良品 ' + d.good + '</span>';
+      if (d.defective > 0) {
+        badges += ' <span class="badge bg-danger">不良 ' + d.defective
+          + '・' + d.reason + '</span>';
+      }
+      if (t !== it.expected) {
+        const diff = t - it.expected;
+        badges += ' <span class="badge bg-warning text-dark">'
+          + (diff > 0 ? '超過 +' + diff : '不足 ' + diff) + '</span>';
+      }
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'list-group-item list-group-item-action py-2';
+      row.innerHTML =
+        '<div class="font-monospace small fw-bold">' + it.sku + '</div>'
+        + '<div class="text-muted" style="font-size:.7rem">' + it.name + '</div>'
+        + '<div class="mt-1">' + badges + '</div>';
+      row.addEventListener('click', () => goInspect(it));   // タップで再検品
+      doneSummary.appendChild(row);
+    });
+    show('done');
+  }
+
+  function execCurrent() {
+    const gRaw = iGood.value.trim();
+    const dRaw = iDef.value.trim();
+    const g = parseInt(gRaw, 10);
+    const d = parseInt(dRaw, 10);
+    // 数字以外が含まれる等の不正値はエラー表示して止める（無反応にしない）
+    if ((gRaw !== '' && (isNaN(g) || g < 0)) ||
+        (dRaw !== '' && (isNaN(d) || d < 0))) {
+      iError.textContent = '数量は 0 以上の数字で入力してください。';
+      iError.classList.remove('d-none');
+      return;
+    }
+    iError.classList.add('d-none');
+    const good = isNaN(g) ? 0 : g;          // 空欄は 0 とみなす
+    const defective = isNaN(d) ? 0 : d;
+    iGood.value = good;
+    iDef.value = defective;
+    updateReason();
+    // 不良品があるのに理由未選択なら止める
+    if (defective > 0 && iReason.value === '') {
+      reasonMsg.classList.remove('d-none');
+      iReason.focus();
+      return;
+    }
+    done[current.id] = {good: good, defective: defective,
+                        reason: defective > 0 ? iReason.value : ''};
+    document.getElementById('hg-' + current.id).value = good;
+    document.getElementById('hd-' + current.id).value = defective;
+    document.getElementById('hr-' + current.id).value = defective > 0 ? iReason.value : '';
+    goScan();
+  }
+
+  // 商品スキャン。wms.js のグローバル Enter 移動には渡さない
+  scanInput.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const code = scanInput.value.trim();
+    scanInput.value = '';
+    if (!code) return;
+    const it = items.find(x => x.jan === code || x.sku === code);
+    if (!it) {
+      scanMsg.textContent = '指示に無い商品です: ' + code;
+      scanMsg.className = 'form-text text-danger';
+      return;
+    }
+    goInspect(it);
+  });
+
+  // 数量欄: 数字以外（- 等）は入力時に除去。空欄でフォーカスを外したら 0 を補完
+  function setupQtyInput(input, afterChange) {
+    input.addEventListener('input', function () {
+      const cleaned = input.value.replace(/[^0-9]/g, '');
+      if (cleaned !== input.value) input.value = cleaned;
+      iError.classList.add('d-none');
+      afterChange();
+    });
+    input.addEventListener('blur', function () {
+      if (input.value.trim() === '') { input.value = '0'; afterChange(); }
+    });
+  }
+  setupQtyInput(iGood, checkDiff);
+  setupQtyInput(iDef, function () { updateReason(); checkDiff(); });
+  iReason.addEventListener('change', function () {
+    if (iReason.value !== '') reasonMsg.classList.add('d-none');
+  });
+  // 良品数・不良品数欄で Enter → 実行
+  [iGood, iDef].forEach(function (el) {
+    el.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      execCurrent();
+    });
+  });
+  // 数量ステッパー（− / ＋ ボタンで増減）
+  function bindStepper(input, minusId, plusId, afterChange) {
+    function step(delta) {
+      input.value = Math.max(0, (parseInt(input.value, 10) || 0) + delta);
+      afterChange();
+    }
+    document.getElementById(minusId).addEventListener('click', function () { step(-1); });
+    document.getElementById(plusId).addEventListener('click', function () { step(1); });
+  }
+  bindStepper(iGood, 'good-minus', 'good-plus', checkDiff);
+  bindStepper(iDef, 'def-minus', 'def-plus', function () { updateReason(); checkDiff(); });
+  execBtn.addEventListener('click', execCurrent);
+  document.getElementById('ins-back').addEventListener('click', goScan);
+
+  // 初期化
+  if (total === 0) { goDone(); } else { goScan(); }
+  // wms.js の先頭フィールドフォーカスを上書きしてスキャン欄にフォーカス
+  window.addEventListener('DOMContentLoaded', function () {
+    if (!sScan.classList.contains('d-none')) scanInput.focus();
+  });
+})();
+</script>
+{% endblock %}
