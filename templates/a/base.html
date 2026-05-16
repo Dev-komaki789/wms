@@ -25,6 +25,7 @@
     }
     .menu-card-disabled { opacity: .55; cursor: not-allowed; }
   </style>
+  {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-light">
   {# ========== トップナビバー ========== #}
@@ -96,8 +97,20 @@
         <a href="{% url 'inbound:order_inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-arrow-down-square me-2"></i>入荷指示
         </a>
+        <a href="{% url 'inbound:handheld_arrival' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-box-arrow-in-right me-2"></i>入荷受け入れ
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
+        <a href="{% url 'inbound:handheld_inspection' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-check2-square me-2"></i>入荷検品
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
         <a href="{% url 'stock:handheld_in' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-box-arrow-in-down me-2"></i>計画外入庫
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
+        <a href="{% url 'stock:handheld_out' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-box-arrow-up me-2"></i>計画外出庫
           <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
         </a>
         <a href="#" class="list-group-item list-group-item-action disabled text-muted">
@@ -115,6 +128,8 @@
   {# ========== メインコンテンツ ========== #}
   <main class="container">
     {# Django messages framework: ProtectedError などの通知 #}
+    {# handheld 画面はスマホ筐体の中にメッセージを出すため、この block を空にして抑止する #}
+    {% block messages %}
     {% if messages %}
       {% for message in messages %}
         <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
@@ -123,6 +138,7 @@
         </div>
       {% endfor %}
     {% endif %}
+    {% endblock %}
 
     {% block content %}{% endblock %}
   </main>

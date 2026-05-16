@@ -75,7 +75,8 @@
     </h6>
     <div class="row g-3">
       {% include 'a/_menu_card.html' with url='inbound:order_inquiry' icon='bi-clipboard-plus' label='入荷指示' %}
-      {% include 'a/_menu_card.html' with disabled=True icon='bi-check2-square' label='入荷検品' %}
+      {% include 'a/_menu_card.html' with url='inbound:handheld_arrival' icon='bi-box-arrow-in-right' label='入荷受け入れ' %}
+      {% include 'a/_menu_card.html' with url='inbound:handheld_inspection' icon='bi-check2-square' label='入荷検品' %}
       {% include 'a/_menu_card.html' with disabled=True icon='bi-box-seam' label='格納' %}
     </div>
   </div>
@@ -99,7 +100,7 @@
 <div class="row g-3 mb-4">
   {% include 'a/_menu_card.html' with url='stock:inquiry' icon='bi-list-stars' label='在庫照会' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' %}
-  {% include 'a/_menu_card.html' with disabled=True icon='bi-box-arrow-up' label='計画外出庫' %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_out' icon='bi-box-arrow-up' label='計画外出庫' %}
   {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-check' label='棚卸' %}
 </div>
 

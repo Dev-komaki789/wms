@@ -1,10 +1,10 @@
 {% extends 'a/handheld_base.html' %}
 
-{% block title %}計画外入庫{% endblock %}
-{% block page_title %}<i class="bi bi-box-arrow-in-down me-1"></i>計画外入庫{% endblock %}
+{% block title %}計画外出庫{% endblock %}
+{% block page_title %}<i class="bi bi-box-arrow-up me-1"></i>計画外出庫{% endblock %}
 
 {% block hh_content %}
-<form method="post" autocomplete="off" id="stock-in-form">
+<form method="post" autocomplete="off" id="stock-out-form">
   {% csrf_token %}
   {% if form.non_field_errors %}
     <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
@@ -64,7 +64,7 @@
   // バーコードスキャナーは通常 CR/LF を末尾に付けて送信するので、Enter で次へ進めるとスキャンが繋がる。
   // 厳格モード: 現在フィールドが invalid（必須未入力等）なら前進せず、ブラウザ標準の吹き出しエラーを出す。
   const chain = ['id_location_code', 'id_sku_code', 'id_quantity', 'id_note'];
-  const form = document.getElementById('stock-in-form');
+  const form = document.getElementById('stock-out-form');
   const submitBtn = form.querySelector('button[type="submit"]');
   chain.forEach((id, idx) => {
     const input = document.getElementById(id);

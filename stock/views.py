@@ -8,7 +8,7 @@ from django.views.generic.edit import FormView
 
 from masters.models import Area
 
-from .forms import UnplannedStockInForm
+from .forms import UnplannedStockInForm, UnplannedStockOutForm
 from .models import StockBalance, StockMovement
 
 
@@ -128,6 +128,71 @@ class UnplannedStockInView(LoginRequiredMixin, FormView):
         messages.success(
             self.request,
             f'入庫完了: {sku.sku_code} を {location.location_code} に {quantity} 個 '
+            f'(在庫 {quantity_before} → {quantity_after})',
+        )
+        return super().form_valid(form)
+
+
+class UnplannedStockOutView(LoginRequiredMixin, FormView):
+    """計画外出庫画面（handheld 端末用）。
+
+    OutboundOrder を介さず StockMovement.OUT を直接発行し、StockBalance を減算する。
+    出庫成功後は同じ URL に redirect → メッセージ表示 + フォーム初期化で連続出庫に対応。
+    """
+
+    template_name = 'a/handheld/stock_out.html'
+    form_class = UnplannedStockOutForm
+    success_url = reverse_lazy('stock:handheld_out')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['request'] = self.request  # form 側で現在倉庫スコープを判定するため
+        return kwargs
+
+    def form_valid(self, form):
+        location = form._location
+        sku = form._sku
+        quantity = form.cleaned_data['quantity']
+        note = form.cleaned_data.get('note', '')
+
+        with transaction.atomic():
+            # 出庫対象の在庫行を行ロックして取得する。
+            # form.clean() で在庫数は検証済みだが、検証〜確定の間に他端末が
+            # 在庫を減らす可能性に備え、ロック確保後にもう一度残数を確認する。
+            balance = (
+                StockBalance.objects.select_for_update()
+                .filter(location=location, sku=sku)
+                .first()
+            )
+            on_hand = balance.quantity if balance else 0
+            if quantity > on_hand:
+                form.add_error(
+                    'quantity',
+                    f'在庫不足です。{location.location_code} の在庫は {on_hand} 個です。',
+                )
+                return self.form_invalid(form)
+
+            quantity_before = on_hand
+            quantity_after = on_hand - quantity
+
+            StockMovement.objects.create(
+                movement_type=StockMovement.MovementType.OUT,
+                location=location,
+                sku=sku,
+                quantity=-quantity,  # OUT なので負の値で記録
+                quantity_before=quantity_before,
+                quantity_after=quantity_after,
+                reference_type=StockMovement.ReferenceType.MANUAL_OUT,
+                reference_id=None,
+                note=note,
+                created_by=self.request.user,
+            )
+            balance.quantity = quantity_after
+            balance.save()
+
+        messages.success(
+            self.request,
+            f'出庫完了: {sku.sku_code} を {location.location_code} から {quantity} 個 '
             f'(在庫 {quantity_before} → {quantity_after})',
         )
         return super().form_valid(form)

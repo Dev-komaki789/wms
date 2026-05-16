@@ -1,132 +1,134 @@
-{% load static %}
+{% extends 'a/base.html' %}
 {% comment %}
 ハンディ/スマホ向け実行系画面のベーステンプレート。
 
-業務 WMS のハンディ端末画面の特徴に合わせる:
-- スマホ縦長レイアウト（PC でも max-width 480px で固定 → スマホで触る前提を体感できる）
-- サイドバー・ハンバーガーなし（業務に集中、誤タップ防止）
-- 確認モーダルなし（連続スキャン高速化、memory の規約に準拠）
-- 大きいフォント・大きいボタン（手袋でも押せる、ハンディの物理ボタンと同等）
-- viewport は固定 (user-scalable=no) で勝手なズームを抑止
-{% endcomment %}
-<!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>{% block title %}WMS{% endblock %}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <style>
-    /* === 実機スマホでアクセスしたときの素のレイアウト === */
-    body {
-      background: #495057;
-      min-height: 100vh;
-      margin: 0;
-    }
-    .hh-screen {
-      max-width: 480px;
-      margin: 0 auto;
-      min-height: 100vh;
-      background: #f8f9fa;
-      box-shadow: 0 0 1.5rem rgba(0,0,0,.35);
-      display: flex;
-      flex-direction: column;
-    }
-    /* ヘッダー: 戻る + タイトル */
-    .hh-header {
-      background: var(--bs-primary);
-      color: white;
-      padding: 0.75rem 0.5rem;
-      display: flex;
-      align-items: center;
-      flex-shrink: 0;
-    }
-    .hh-header .hh-back {
-      color: white;
-      text-decoration: none;
-      padding: 0.25rem 0.75rem;
-      border-radius: .375rem;
-      font-size: 1.4rem;
-      line-height: 1;
-    }
-    .hh-header .hh-back:hover { background: rgba(255,255,255,.15); }
-    .hh-header .hh-title {
-      flex-grow: 1;
-      text-align: center;
-      font-weight: 600;
-      font-size: 1.15rem;
-      padding-right: 2.5rem;  /* 戻るボタンと逆側の余白で title を視覚的に中央寄せ */
-    }
-    .hh-main { flex-grow: 1; padding: 1rem; overflow-y: auto; }
-    .hh-screen .form-control,
-    .hh-screen .form-select {
-      font-size: 1.1rem;
-      padding: 0.85rem 0.75rem;
-    }
-    .hh-screen label { font-weight: 600; margin-bottom: 0.35rem; }
-    .btn-hh {
-      font-size: 1.25rem;
-      padding: 1rem;
-      width: 100%;
-      font-weight: 600;
-    }
+外枠は他の PC 画面と共通（トップナビ・背景）にし、その中にスマホ筐体を
+「はめ込み」表示する。面接官・業務担当が PC で見たとき、実行系画面も同じ
+アプリの一部だと一目で分かるようにするため。
 
-    /* === PC（画面幅 600px 以上）で見るときはスマホ筐体に「はめ込み」表示 === */
-    @media (min-width: 600px) {
-      body {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem 1rem;
-      }
-      .hh-screen {
-        max-width: 390px;
-        min-height: 780px;
-        /* スマホ筐体: 黒い枠 + 角丸 + 二重影 */
-        border: 14px solid #1a1a1a;
-        border-radius: 44px;
-        box-shadow:
-          0 1.5rem 3rem rgba(0,0,0,.55),
-          inset 0 0 0 2px #333;
-        overflow: hidden;
-        position: relative;
-      }
-      /* ノッチ（上部のカメラ・スピーカーグリルっぽい黒帯） */
-      .hh-screen::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 140px;
-        height: 22px;
-        background: #1a1a1a;
-        border-radius: 0 0 16px 16px;
-        z-index: 1000;
-      }
-      /* ホームインジケータ（下端のスワイプアップバー） */
-      .hh-screen::after {
-        content: '';
-        position: absolute;
-        bottom: 6px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 110px;
-        height: 4px;
-        background: rgba(0,0,0,.4);
-        border-radius: 2px;
-        z-index: 1000;
-      }
-      /* ノッチに隠れないようヘッダーの上部に余白 */
-      .hh-header { padding-top: 1.75rem; }
-      /* ホームインジケータと被らないようメイン下部に余白 */
-      .hh-main { padding-bottom: 2rem; }
+スマホ筐体の中身は実機のハンディ画面と同じルール（memory の規約に準拠）:
+- 筐体内にサイドバー・確認モーダルなし（連続スキャン高速化、誤タップ防止）
+- 大きいフォント・大きいボタン（手袋でも押せる）
+
+ハンディ実機（画面幅 600px 未満）では筐体枠を外して素のレイアウトになる。
+{% endcomment %}
+
+{% block extra_css %}
+<style>
+  /* スマホ筐体を中央寄せで配置するラッパ */
+  .hh-wrap {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 2rem;
+  }
+  /* スマホ画面本体 */
+  .hh-screen {
+    width: 100%;
+    max-width: 390px;
+    background: #f8f9fa;
+    display: flex;
+    flex-direction: column;
+    border-radius: .5rem;
+    overflow: hidden;
+    box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.15);
+  }
+  /* スマホ画面内のヘッダー: 戻る + タイトル */
+  .hh-header {
+    background: var(--bs-primary);
+    color: white;
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .hh-header .hh-back {
+    color: white;
+    text-decoration: none;
+    padding: 0.25rem 0.75rem;
+    border-radius: .375rem;
+    font-size: 1.4rem;
+    line-height: 1;
+  }
+  .hh-header .hh-back:hover { background: rgba(255,255,255,.15); }
+  .hh-header .hh-title {
+    flex-grow: 1;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.15rem;
+    padding-right: 2.5rem;  /* 戻るボタンと逆側の余白で title を視覚的に中央寄せ */
+  }
+  .hh-main { flex-grow: 1; padding: 1rem; }
+  .hh-screen .form-control,
+  .hh-screen .form-select {
+    font-size: 1.1rem;
+    padding: 0.85rem 0.75rem;
+  }
+  .hh-screen label { font-weight: 600; margin-bottom: 0.35rem; }
+  .btn-hh {
+    font-size: 1.25rem;
+    padding: 1rem;
+    width: 100%;
+    font-weight: 600;
+  }
+  /* HT 画面共通: 棚番・商品コード・数量など重要項目は大きく表示する */
+  .hh-screen .hh-key {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: var(--bs-font-monospace, monospace);
+    line-height: 1.25;
+  }
+
+  /* === PC（画面幅 600px 以上）ではスマホ筐体に「はめ込み」表示 === */
+  @media (min-width: 600px) {
+    .hh-screen {
+      min-height: 780px;
+      /* スマホ筐体: 黒い枠 + 角丸 + 二重影 */
+      border: 14px solid #1a1a1a;
+      border-radius: 44px;
+      box-shadow:
+        0 1.5rem 3rem rgba(0,0,0,.45),
+        inset 0 0 0 2px #333;
+      position: relative;
     }
-  </style>
-  {% block extra_css %}{% endblock %}
-</head>
-<body>
+    /* ノッチ（上部のカメラ・スピーカーグリルっぽい黒帯） */
+    .hh-screen::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 140px;
+      height: 22px;
+      background: #1a1a1a;
+      border-radius: 0 0 16px 16px;
+      z-index: 1000;
+    }
+    /* ホームインジケータ（下端のスワイプアップバー） */
+    .hh-screen::after {
+      content: '';
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 4px;
+      background: rgba(0,0,0,.4);
+      border-radius: 2px;
+      z-index: 1000;
+    }
+    /* ノッチに隠れないようヘッダーの上部に余白 */
+    .hh-header { padding-top: 1.75rem; }
+    /* ホームインジケータと被らないようメイン下部に余白 */
+    .hh-main { padding-bottom: 2rem; }
+  }
+</style>
+{% endblock %}
+
+{# メッセージはスマホ筐体の中に出すので、base.html の通常表示は抑止 #}
+{% block messages %}{% endblock %}
+
+{% block content %}
+<div class="hh-wrap">
   <div class="hh-screen">
     <header class="hh-header">
       <a href="{% block back_url %}{% url 'home' %}{% endblock %}" class="hh-back" aria-label="戻る">
@@ -143,10 +145,8 @@
           </div>
         {% endfor %}
       {% endif %}
-      {% block content %}{% endblock %}
+      {% block hh_content %}{% endblock %}
     </main>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  {% block extra_js %}{% endblock %}
-</body>
-</html>
+</div>
+{% endblock %}
