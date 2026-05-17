@@ -77,7 +77,7 @@
       {% include 'a/_menu_card.html' with url='inbound:order_inquiry' icon='bi-clipboard-plus' label='入荷指示' %}
       {% include 'a/_menu_card.html' with url='inbound:handheld_arrival' icon='bi-box-arrow-in-right' label='入荷受け入れ' %}
       {% include 'a/_menu_card.html' with url='inbound:handheld_inspection' icon='bi-check2-square' label='入荷検品' %}
-      {% include 'a/_menu_card.html' with disabled=True icon='bi-box-seam' label='格納' %}
+      {% include 'a/_menu_card.html' with url='inbound:handheld_putaway' icon='bi-box-seam' label='棚入れ' %}
     </div>
   </div>
   <div class="col-md-6">
@@ -86,9 +86,11 @@
       <i class="bi bi-arrow-up-square me-1"></i>出荷
     </h6>
     <div class="row g-3">
-      {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-minus' label='出荷指示' %}
-      {% include 'a/_menu_card.html' with disabled=True icon='bi-hand-index-thumb' label='ピッキング' %}
-      {% include 'a/_menu_card.html' with disabled=True icon='bi-shield-check' label='出荷検品' %}
+      {% include 'a/_menu_card.html' with url='outbound:order_inquiry' icon='bi-clipboard-minus' label='出荷指示' %}
+      {% include 'a/_menu_card.html' with url='outbound:launch' icon='bi-rocket-takeoff' label='出荷起動' %}
+      {% include 'a/_menu_card.html' with url='outbound:picking_list_inquiry' icon='bi-printer' label='ピッキングリスト印刷' %}
+      {% include 'a/_menu_card.html' with url='outbound:handheld_picking' icon='bi-hand-index-thumb' label='ピッキング' %}
+      {% include 'a/_menu_card.html' with url='outbound:handheld_inspection' icon='bi-shield-check' label='出荷検品' %}
     </div>
   </div>
 </div>
@@ -101,6 +103,7 @@
   {% include 'a/_menu_card.html' with url='stock:inquiry' icon='bi-list-stars' label='在庫照会' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_out' icon='bi-box-arrow-up' label='計画外出庫' %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_transfer' icon='bi-arrow-left-right' label='棚間移動' %}
   {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-check' label='棚卸' %}
 </div>
 
@@ -109,6 +112,7 @@
   <i class="bi bi-gear-wide-connected me-1"></i>システム
 </h6>
 <div class="row g-3 mb-4">
+  {% include 'a/_menu_card.html' with url='core:error_log_inquiry' icon='bi-exclamation-triangle' label='エラーログ照会' %}
   {% include 'a/_menu_card.html' with href='/admin/' icon='bi-shield-lock' label='Django Admin' %}
 </div>
 {% endblock %}

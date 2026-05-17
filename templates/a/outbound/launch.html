@@ -1,0 +1,117 @@
+{% extends 'a/base.html' %}
+
+{% block title %}出荷起動{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-rocket-takeoff me-2 text-primary"></i>出荷起動
+  </h2>
+  <a href="{% url 'outbound:order_inquiry' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-clipboard-minus"></i> 出荷指示照会
+  </a>
+</div>
+
+<div class="alert alert-info d-flex align-items-start">
+  <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+  <div>
+    出荷起動待ちの指示を選んで「出荷起動」すると、<strong>在庫引き当て</strong>（在庫数の多い棚から）と
+    <strong>ピッキングリスト生成</strong>を実行します。全明細を引き当てられた指示のみ起動します
+    （在庫不足の指示は起動されず、出荷起動待ちのまま残ります）。
+    オーダーピッキング対象の明細はピッキングリストを発行（要ピッキング作業）、
+    <strong>AGV/GTP 対象は自動ピッキング・自動仕分け済み</strong>として処理し
+    出荷検品工程へ進めます。
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div class="card shadow-sm">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
+      <span class="text-muted small">
+        出荷起動待ち: <strong class="text-dark">{{ orders|length }}</strong> 件
+      </span>
+      {% if orders %}
+      <button type="submit" class="btn btn-primary btn-sm"
+              data-confirm="選択した出荷指示を起動しますか？在庫引き当てとピッキングリスト生成を実行します。"
+              data-confirm-yes="出荷起動する">
+        <i class="bi bi-rocket-takeoff"></i> 選択した指示を出荷起動
+      </button>
+      {% endif %}
+    </div>
+
+    {% if orders %}
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center" style="width: 44px">
+            <input type="checkbox" class="form-check-input" id="check-all" title="すべて選択">
+          </th>
+          <th class="text-start text-nowrap">指示番号</th>
+          <th class="text-start">顧客</th>
+          <th class="text-end text-nowrap">優先度</th>
+          <th class="text-center text-nowrap">出荷期限</th>
+          <th class="text-end text-nowrap">明細</th>
+          <th class="text-end text-nowrap">指示数量</th>
+          <th class="text-end text-nowrap">登録日時</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td class="text-center">
+            <input type="checkbox" class="form-check-input order-check"
+                   name="order_ids" value="{{ o.pk }}">
+          </td>
+          <td class="text-start text-nowrap">
+            <a href="{% url 'outbound:order_detail' o.pk %}"
+               class="font-monospace fw-bold text-decoration-none">{{ o.outbound_order_code }}</a>
+          </td>
+          <td class="text-start">
+            {% if o.customer %}{{ o.customer.customer_name }}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.priority }}</td>
+          <td class="text-center text-nowrap small font-monospace">{{ o.deadline_at|date:"Y/m/d H:i"|default:"—" }}</td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.item_count|default:0 }}</td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.total_ordered|default:0 }}</td>
+          <td class="text-end text-nowrap text-muted small font-monospace">{{ o.created_at|date:"Y/m/d H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-check2-circle d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      出荷起動待ちの指示はありません
+    </div>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  // ヘッダーのチェックボックスで全行を一括トグル
+  const checkAll = document.getElementById('check-all');
+  const rowChecks = Array.from(document.querySelectorAll('.order-check'));
+  if (!checkAll) return;
+  function syncHeader() {
+    const checked = rowChecks.filter(function (c) { return c.checked; });
+    checkAll.checked = rowChecks.length > 0 && checked.length === rowChecks.length;
+    checkAll.indeterminate = checked.length > 0 && checked.length < rowChecks.length;
+  }
+  checkAll.addEventListener('change', function () {
+    rowChecks.forEach(function (cb) { cb.checked = checkAll.checked; });
+    checkAll.indeterminate = false;
+  });
+  rowChecks.forEach(function (cb) {
+    cb.addEventListener('change', syncHeader);
+  });
+})();
+</script>
+{% endblock %}

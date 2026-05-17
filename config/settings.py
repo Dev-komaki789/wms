@@ -47,6 +47,7 @@ INSTALLED_APPS = [
 
     # WMS apps
     'accounts',
+    'core',
     'masters',
     'stock',
     'inbound',
@@ -63,6 +64,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 画面で発生した未処理例外を ErrorLog に記録する
+    'core.middleware.ErrorLogMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

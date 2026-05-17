@@ -1,0 +1,185 @@
+{% extends 'a/base.html' %}
+
+{% block title %}出荷指示照会{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-clipboard-minus me-2 text-primary"></i>出荷指示照会
+  </h2>
+  <a href="{% url 'outbound:order_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg"></i> 出荷指示新規登録
+  </a>
+</div>
+
+<div class="card shadow-sm">
+  {# 検索バー (2 行構成: 1 行目=テキスト/select 系、2 行目=日付範囲 + 検索/クリア) #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" id="inquiry-search-form" class="row g-2 align-items-end">
+      {# Row 1 #}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">指示番号 / OMS注文番号 / 配送先</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="例: OO-20260517-001" value="{{ filters.q }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">顧客</label>
+        <input type="text" name="customer" class="form-control form-control-sm"
+               placeholder="例: サンプル商事 / CUST-0001" value="{{ filters.customer }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if filters.status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">出荷元種別</label>
+        <select name="source_type" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in source_type_choices %}
+            <option value="{{ val }}" {% if filters.source_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# Row 2 #}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">出荷期限 (から)</label>
+        <input type="date" name="deadline_from" class="form-control form-control-sm"
+               min="2000-01-01" max="2099-12-31" value="{{ filters.deadline_from }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">出荷期限 (まで)</label>
+        <input type="date" name="deadline_to" class="form-control form-control-sm"
+               min="2000-01-01" max="2099-12-31" value="{{ filters.deadline_to }}">
+      </div>
+      <div class="col-md-6 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search"></i> 検索
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="clearInquiryForm(this)">クリア</button>
+      </div>
+    </form>
+  </div>
+
+  {% if searched %}
+    {# サマリー #}
+    <div class="row g-0 text-center border-bottom bg-white">
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold">{{ stats.total }}</div>
+        <div class="small text-muted">該当件数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-secondary">{{ stats.allocation_wait }}</div>
+        <div class="small text-muted">起動待ち</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-info">{{ stats.picking_wait }}</div>
+        <div class="small text-muted">ピッキング待ち</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-primary">{{ stats.inspection_wait }}</div>
+        <div class="small text-muted">検品待ち</div>
+      </div>
+      <div class="col py-2">
+        <div class="fs-5 fw-bold text-success">{{ stats.shipped }}</div>
+        <div class="small text-muted">出荷完了</div>
+      </div>
+    </div>
+
+    <div class="px-3 py-2 border-bottom bg-white small text-muted">
+      検索結果: <strong class="text-dark">{{ orders|length }}</strong> 件
+    </div>
+
+    {# 検索結果テーブル（横スクロール保険つき。コード/日付/バッジ列は text-nowrap で固定幅化） #}
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-start text-nowrap">指示番号</th>
+          <th class="text-start">顧客</th>
+          <th class="text-center text-nowrap">出荷元</th>
+          <th class="text-end text-nowrap">優先度</th>
+          <th class="text-center text-nowrap">出荷期限</th>
+          <th class="text-center text-nowrap">ステータス</th>
+          <th class="text-end text-nowrap">明細</th>
+          <th class="text-end text-nowrap">指示数量</th>
+          <th class="text-end text-nowrap">登録日時</th>
+          <th class="text-center text-nowrap" style="width: 160px">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td class="text-start text-nowrap">
+            <a href="{% url 'outbound:order_detail' o.pk %}"
+               class="font-monospace fw-bold text-decoration-none">{{ o.outbound_order_code }}</a>
+          </td>
+          <td class="text-start">
+            {% if o.customer %}
+              {{ o.customer.customer_name }}
+              <span class="text-muted small">（<span class="font-monospace">{{ o.customer.customer_code }}</span>）</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-center text-nowrap small">
+            {% if o.source_type == 'oms' %}<span class="badge bg-info text-dark">OMS</span>
+            {% elif o.source_type == 'manual' %}<span class="badge bg-secondary">手動</span>
+            {% elif o.source_type == 'return' %}<span class="badge bg-danger">返品</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.priority }}</td>
+          <td class="text-center text-nowrap small font-monospace">{{ o.deadline_at|date:"Y/m/d H:i"|default:"—" }}</td>
+          <td class="text-center text-nowrap">
+            {% include 'a/outbound/_status_badge.html' with status=o.status %}
+          </td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.item_count|default:0 }}</td>
+          <td class="text-end text-nowrap font-monospace small">{{ o.total_ordered|default:0 }}</td>
+          <td class="text-end text-nowrap text-muted small font-monospace">{{ o.created_at|date:"Y/m/d H:i" }}</td>
+          <td class="text-center text-nowrap">
+            {% if o.status == 'allocation_wait' %}
+              {# 出荷起動前（出荷起動待ち）の指示のみ編集・削除可。起動後は不可 #}
+              <a href="{% url 'outbound:order_update' o.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+              <a href="{% url 'outbound:order_delete' o.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+            {% else %}
+              <span class="text-muted" title="出荷起動後は編集・削除できません">
+                <i class="bi bi-lock-fill"></i>
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-4">条件に一致する出荷指示が見つかりませんでした</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      条件を指定して「検索」を押してください
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clearInquiryForm(btn) {
+  const form = btn.closest('form');
+  if (!form) return;
+  form.querySelectorAll('input[type="text"], input[type="search"], input[type="date"]').forEach(i => { i.value = ''; });
+  form.querySelectorAll('select').forEach(s => { s.selectedIndex = 0; });
+  const firstField = form.querySelector(
+    'input:not([type="hidden"]):not([disabled]):not([readonly]),'
+    + 'select:not([disabled]),'
+    + 'textarea:not([disabled])'
+  );
+  if (firstField) firstField.focus();
+}
+</script>
+{% endblock %}

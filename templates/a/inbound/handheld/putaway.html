@@ -1,0 +1,193 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}入荷棚入れ{% endblock %}
+{% block page_title %}<i class="bi bi-box-seam me-1"></i>入荷棚入れ{% endblock %}
+
+{% block hh_content %}
+{# 入荷指示番号を読み取って指示内容を呼び出す（GET 照会） #}
+<form method="get" id="putaway-lookup-form" class="mb-3">
+  <label class="form-label" for="putaway-code">
+    <i class="bi bi-upc-scan text-primary me-1"></i>入荷指示番号
+    <span class="text-danger">*</span>
+  </label>
+  <div class="input-group">
+    <input type="text" name="code" id="putaway-code"
+           class="form-control hh-key"
+           value="{{ code }}" placeholder="入荷指示番号をスキャン"
+           autocomplete="off" autofocus required>
+    <button type="submit" class="btn btn-outline-primary" aria-label="照会">
+      <i class="bi bi-search"></i>
+    </button>
+  </div>
+</form>
+
+{% if lookup_error %}
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-1"></i>{{ lookup_error }}
+  </div>
+{% endif %}
+
+{% if order %}
+<div class="card mb-3">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ order.inbound_order_code }}</span>
+    {% include 'a/inbound/_status_badge.html' with status=order.status %}
+  </div>
+
+  <div class="px-3 py-2 border-bottom">
+    <div class="row g-1 small">
+      <div class="col-5 text-muted">仕入先</div>
+      <div class="col-7">
+        {% if order.supplier %}{{ order.supplier.supplier_name }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">入荷予定日</div>
+      <div class="col-7 font-monospace">{{ order.expected_date|date:"Y/m/d"|default:"—" }}</div>
+    </div>
+  </div>
+
+  {# 明細（計上数 = 在庫に積む数。不良品数は計上対象外） #}
+  <table class="table table-sm mb-0">
+    <thead class="table-light">
+      <tr>
+        <th class="ps-3">SKU / 商品</th>
+        <th class="text-end pe-3 text-nowrap">計上数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in item_rows %}
+      <tr>
+        <td class="ps-3">
+          <div class="font-monospace small">{{ row.sku }}</div>
+          <div class="text-muted" style="font-size:.75rem">{{ row.name }}</div>
+        </td>
+        <td class="text-end pe-3 align-middle">
+          {% if row.good is None %}
+            <span class="text-muted">—</span>
+          {% else %}
+            <span class="font-monospace fw-bold">{{ row.good }}</span>
+            {% if row.defective %}
+              <div class="text-danger" style="font-size:.7rem">不良 {{ row.defective }}</div>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="2" class="text-center text-muted small py-3">明細が登録されていません</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if order.status == 'putaway_wait' %}
+  {% if order.in_progress_by and order.in_progress_by != request.user %}
+    {# 別の担当者が棚入れ作業中 → 状況を見せて引き継ぎ可能にする #}
+    <div class="alert alert-warning">
+      <i class="bi bi-person-fill-lock me-1"></i>
+      この入荷指示は <strong>{{ order.in_progress_by.display_name|default:order.in_progress_by.username }}</strong> が
+      {% if order.in_progress_at %}<strong>{{ order.in_progress_at|date:"n/j H:i" }}</strong> から{% endif %}棚入れ作業中です。
+    </div>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="order_id" value="{{ order.pk }}">
+      <input type="hidden" name="takeover" value="1">
+      {# 1段階目: 引き継ぎボタン #}
+      <div id="takeover-prompt">
+        <button type="button" id="takeover-ask" class="btn btn-warning btn-hh">
+          <i class="bi bi-arrow-repeat me-1"></i> 引き継いで棚入れ作業を開始
+        </button>
+        <div class="text-muted small text-center mt-3">
+          <i class="bi bi-info-circle me-1"></i>
+          担当者が対応できない・開始時刻が古い場合は引き継げます
+        </div>
+      </div>
+      {# 2段階目: 画面内で確認（ポップアップを使わない） #}
+      <div id="takeover-confirm" class="d-none">
+        <div class="alert alert-warning mb-2">
+          <i class="bi bi-question-circle me-1"></i>
+          本当に引き継いで棚入れ作業を開始しますか？
+        </div>
+        <button type="submit" class="btn btn-warning btn-hh">
+          <i class="bi bi-check-lg me-1"></i> 引き継ぐ
+        </button>
+        <button type="button" id="takeover-cancel" class="btn btn-outline-secondary w-100 mt-2">
+          やめる
+        </button>
+      </div>
+    </form>
+  {% else %}
+    {# 検品済み → 棚入れ作業へ。開始で自分（担当者）に紐づけてロックする #}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="order_id" value="{{ order.pk }}">
+      <button type="submit" id="putaway-start-btn" class="btn btn-primary btn-hh">
+        <i class="bi bi-play-fill me-1"></i>
+        {% if order.in_progress_by %}棚入れを再開{% else %}棚入れ開始{% endif %}
+      </button>
+    </form>
+    <div class="text-muted small text-center mt-3">
+      <i class="bi bi-info-circle me-1"></i>
+      次の画面で商品と格納先の棚番をスキャンします
+    </div>
+  {% endif %}
+{% elif order.status == 'receiving_wait' or order.status == 'inspection_wait' %}
+  <div class="alert alert-warning mb-0">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    この入荷指示はまだ検品が完了していません。先に「入荷検品」を行ってください。
+  </div>
+{% else %}
+  <div class="alert alert-info mb-0">
+    <i class="bi bi-info-circle me-1"></i>
+    この入荷指示は現在「{{ order.get_status_display }}」です。棚入れの対象外です。
+  </div>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  // 入荷指示番号フィールド: スキャナーの Enter で即照会する。
+  // wms.js のグローバル Enter ハンドラに渡さないよう stopPropagation する。
+  const codeInput = document.getElementById('putaway-code');
+  const lookupForm = document.getElementById('putaway-lookup-form');
+  if (codeInput && lookupForm) {
+    codeInput.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (codeInput.checkValidity()) {
+        lookupForm.submit();
+      } else {
+        codeInput.reportValidity();
+      }
+    });
+  }
+  // 引き継ぎ: ポップアップを使わず画面内で確認する（2段階）
+  const tkAsk = document.getElementById('takeover-ask');
+  const tkPrompt = document.getElementById('takeover-prompt');
+  const tkConfirm = document.getElementById('takeover-confirm');
+  const tkCancel = document.getElementById('takeover-cancel');
+  if (tkAsk && tkPrompt && tkConfirm && tkCancel) {
+    tkAsk.addEventListener('click', function () {
+      tkPrompt.classList.add('d-none');
+      tkConfirm.classList.remove('d-none');
+      const yes = tkConfirm.querySelector('button[type="submit"]');
+      if (yes) yes.focus();
+    });
+    tkCancel.addEventListener('click', function () {
+      tkConfirm.classList.add('d-none');
+      tkPrompt.classList.remove('d-none');
+      tkAsk.focus();
+    });
+  }
+  // 指示が表示されているときは開始ボタンにフォーカスを当てる
+  window.addEventListener('DOMContentLoaded', function () {
+    const startBtn = document.getElementById('takeover-ask')
+                   || document.getElementById('putaway-start-btn');
+    if (startBtn) startBtn.focus();
+  });
+})();
+</script>
+{% endblock %}

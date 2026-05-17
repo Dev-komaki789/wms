@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -11,10 +13,13 @@ class OutboundOrder(models.Model):
     """出荷指示（OMS自動連携・手動・返品出荷）。"""
 
     class Status(models.TextChoices):
-        PENDING = 'pending', '出荷待ち'
-        PICKING = 'picking', 'ピッキング中'
-        INSPECTING = 'inspecting', '検品・梱包・送り状貼付中'
-        SHIPPED = 'shipped', '出荷済み'
+        # ステータス = 「次にやる作業」で統一（出荷起動→ピッキング→出荷検品→出荷完了）
+        # 「作業中」はステータスにせず、各工程の作業成果物のロックで表現する
+        # （ピッキング: PickingList.assigned_to / 検品梱包: Shipment.in_progress_by）
+        ALLOCATION_WAIT = 'allocation_wait', '出荷起動待ち'
+        PICKING_WAIT = 'picking_wait', 'ピッキング作業待ち'
+        INSPECTION_WAIT = 'inspection_wait', '出荷検品作業待ち'
+        SHIPPED = 'shipped', '出荷完了'
         CANCELLED = 'cancelled', '取消'
 
     class SourceType(models.TextChoices):
@@ -49,7 +54,7 @@ class OutboundOrder(models.Model):
         'ステータス',
         max_length=20,
         choices=Status.choices,
-        default=Status.PENDING,
+        default=Status.ALLOCATION_WAIT,
     )
     source_type = models.CharField(
         '出荷元種別',
@@ -97,6 +102,37 @@ class OutboundOrder(models.Model):
 
     def __str__(self):
         return self.outbound_order_code
+
+    # 画面登録の出荷指示番号は種別ごとに prefix を変えて一目で識別できるようにする
+    # （OMS連携は上位システムの番号をそのまま使うので採番対象外）
+    CODE_PREFIX_BY_SOURCE_TYPE = {
+        'manual': 'OO',
+        'return': 'RO',
+    }
+
+    @classmethod
+    def next_code(cls, date, source_type):
+        """date × source_type 別に次の出荷指示番号を生成（{prefix}-YYYYMMDD-NNN）。
+
+        - 通常出荷 (manual): OO-YYYYMMDD-NNN
+        - 返品出荷 (return): RO-YYYYMMDD-NNN
+        連番は種別ごとに独立してカウントする。
+        """
+        try:
+            code_prefix = cls.CODE_PREFIX_BY_SOURCE_TYPE[source_type]
+        except KeyError as e:
+            raise ValueError(
+                f'next_code は manual / return のみサポートします (got: {source_type})'
+            ) from e
+        prefix = f'{code_prefix}-{date.strftime("%Y%m%d")}-'
+        max_n = 0
+        for code in cls.objects.filter(
+            outbound_order_code__startswith=prefix
+        ).values_list('outbound_order_code', flat=True):
+            m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'{prefix}{max_n + 1:03d}'
 
 
 class StockReservation(models.Model):
@@ -168,7 +204,12 @@ class OutboundOrderItem(models.Model):
     )
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
     location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, verbose_name='ピッキング元ロケーション'
+        Location,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name='ピッキング元ロケーション',
+        help_text='出荷起動の在庫引き当てで確定する（登録時は NULL）。',
     )
     reservation = models.ForeignKey(
         StockReservation,
@@ -264,6 +305,19 @@ class PickingList(models.Model):
     def __str__(self):
         return self.picking_list_code
 
+    @classmethod
+    def next_code(cls, date):
+        """次のピッキングリスト番号（PL-YYYYMMDD-NNN）を生成する。"""
+        prefix = f'PL-{date.strftime("%Y%m%d")}-'
+        max_n = 0
+        for code in cls.objects.filter(
+            picking_list_code__startswith=prefix
+        ).values_list('picking_list_code', flat=True):
+            m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'{prefix}{max_n + 1:03d}'
+
 
 class PickingListItem(models.Model):
     """ピッキングリスト明細。"""
@@ -332,6 +386,9 @@ class Shipment(models.Model):
 
     class Status(models.TextChoices):
         INSPECTING = 'inspecting', '検品・梱包・送り状貼付中'
+        # READY（出荷準備完了）は MVP では未使用。出荷検品・梱包完了をもって出荷完了
+        # (shipped) とみなす簡略化を採っており、トラック積込・出発（出荷バース管理）が
+        # スコープ外のため。将来この工程を足すなら INSPECTING → READY → SHIPPED とする。
         READY = 'ready', '出荷準備完了'
         SHIPPED = 'shipped', '出荷済み'
 
@@ -350,6 +407,16 @@ class Shipment(models.Model):
     )
     tracking_number = models.CharField('追跡番号', max_length=100, blank=True)
     shipped_at = models.DateTimeField('出荷日時', null=True, blank=True)
+    in_progress_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='shipments_in_progress',
+        verbose_name='作業担当者',
+        help_text='検品・梱包の作業中の担当者。NULL=作業中でない（開始で設定、完了で解除）。',
+    )
+    in_progress_at = models.DateTimeField('作業開始日時', null=True, blank=True)
     inspected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -357,6 +424,7 @@ class Shipment(models.Model):
         blank=True,
         related_name='inspected_shipments',
         verbose_name='検品担当者',
+        help_text='検品・梱包を完了した担当者の記録（完了時に設定）。',
     )
     inspected_at = models.DateTimeField('検品完了日時', null=True, blank=True)
     created_by = models.ForeignKey(
@@ -379,6 +447,19 @@ class Shipment(models.Model):
 
     def __str__(self):
         return self.shipment_code
+
+    @classmethod
+    def next_code(cls, date):
+        """次の出荷番号（SH-YYYYMMDD-NNN）を生成する。"""
+        prefix = f'SH-{date.strftime("%Y%m%d")}-'
+        max_n = 0
+        for code in cls.objects.filter(
+            shipment_code__startswith=prefix
+        ).values_list('shipment_code', flat=True):
+            m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'{prefix}{max_n + 1:03d}'
 
 
 class ShipmentItem(models.Model):

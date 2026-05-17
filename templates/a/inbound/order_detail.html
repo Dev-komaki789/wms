@@ -1,0 +1,155 @@
+{% extends 'a/base.html' %}
+
+{% block title %}入荷指示詳細{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'inbound:order_inquiry' %}">入荷指示照会</a></li>
+    <li class="breadcrumb-item active">{{ order.inbound_order_code }}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">
+  <i class="bi bi-clipboard-plus me-2 text-primary"></i>入荷指示詳細
+</h2>
+
+{# ========== 概要 ========== #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="font-monospace fw-bold fs-5">{{ order.inbound_order_code }}</span>
+    {% include 'a/inbound/_status_badge.html' with status=order.status %}
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">倉庫</dt>
+      <dd class="col-sm-9">{{ order.warehouse.warehouse_name }}（<span class="font-monospace">{{ order.warehouse.warehouse_code }}</span>）</dd>
+
+      <dt class="col-sm-3">仕入先</dt>
+      <dd class="col-sm-9">
+        {% if order.supplier %}{{ order.supplier.supplier_name }}（<span class="font-monospace">{{ order.supplier.supplier_code }}</span>）
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+
+      <dt class="col-sm-3">入荷元種別</dt>
+      <dd class="col-sm-9">{{ order.get_source_type_display }}</dd>
+
+      <dt class="col-sm-3">入荷予定日</dt>
+      <dd class="col-sm-9 font-monospace">{{ order.expected_date|date:"Y/m/d"|default:"—" }}</dd>
+
+      <dt class="col-sm-3">発注番号</dt>
+      <dd class="col-sm-9 font-monospace">{{ order.purchase_order_code|default:"—" }}</dd>
+
+      <dt class="col-sm-3">納品書番号</dt>
+      <dd class="col-sm-9 font-monospace">{{ order.supplier_delivery_note_code|default:"—" }}</dd>
+
+      <dt class="col-sm-3">到着確認日時</dt>
+      <dd class="col-sm-9 font-monospace small">{{ order.arrived_at|date:"Y/m/d H:i"|default:"—" }}</dd>
+
+      <dt class="col-sm-3">入荷完了日時</dt>
+      <dd class="col-sm-9 font-monospace small">{{ order.received_at|date:"Y/m/d H:i"|default:"—" }}</dd>
+
+      {% if order.in_progress_by %}
+      <dt class="col-sm-3">作業担当者</dt>
+      <dd class="col-sm-9">
+        <i class="bi bi-person-fill-gear me-1 text-warning"></i>
+        {{ order.in_progress_by.display_name|default:order.in_progress_by.username }}
+        {% if order.in_progress_at %}
+          <span class="text-muted small">（{{ order.in_progress_at|date:"Y/m/d H:i" }} 開始）</span>
+        {% endif %}
+      </dd>
+      {% endif %}
+
+      {% if order.note %}
+      <dt class="col-sm-3">備考</dt>
+      <dd class="col-sm-9" style="white-space: pre-wrap">{{ order.note }}</dd>
+      {% endif %}
+
+      <dt class="col-sm-3">登録</dt>
+      <dd class="col-sm-9 text-muted small font-monospace">
+        {{ order.created_at|date:"Y/m/d H:i" }}
+        （{{ order.created_by.display_name|default:order.created_by.username }}）
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{# ========== 明細 ========== #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white">
+    <i class="bi bi-list-ul me-1"></i>明細（{{ order.items.all|length }} 件）
+    <span class="text-muted small ms-2">
+      実入荷数・検品結果・格納先は工程が進んだぶんだけ表示されます
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-start">SKU / 商品</th>
+          <th class="text-end text-nowrap">予定数</th>
+          <th class="text-end text-nowrap">実入荷数</th>
+          <th class="text-end text-nowrap">良品</th>
+          <th class="text-end text-nowrap">不良</th>
+          <th class="text-center text-nowrap">差異</th>
+          <th class="text-start text-nowrap">格納先</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in order.items.all %}
+        <tr>
+          <td class="text-start">
+            <span class="font-monospace fw-bold">{{ item.sku.sku_code }}</span>
+            {% if item.is_crossdock %}<span class="badge bg-warning text-dark ms-1">クロスドック</span>{% endif %}
+            <div class="text-muted small">{{ item.sku.product.product_name }}</div>
+          </td>
+          <td class="text-end font-monospace">{{ item.quantity_expected }}</td>
+          <td class="text-end font-monospace">
+            {% if order.status == 'receiving_wait' %}<span class="text-muted">—</span>
+            {% else %}{{ item.quantity_received }}{% endif %}
+          </td>
+          {% with r=item.inboundreceipt %}
+          {% if r %}
+            <td class="text-end font-monospace text-success-emphasis">{{ r.quantity_good }}</td>
+            <td class="text-end font-monospace {% if r.quantity_defective %}text-danger fw-bold{% else %}text-muted{% endif %}">{{ r.quantity_defective }}</td>
+            <td class="text-center">
+              {% if r.discrepancy_type == 'none' %}<span class="badge bg-success-subtle text-success-emphasis">差異なし</span>
+              {% elif r.discrepancy_type == 'shortage' %}<span class="badge bg-warning text-dark">数量不足</span>
+              {% elif r.discrepancy_type == 'excess' %}<span class="badge bg-warning text-dark">数量超過</span>
+              {% elif r.discrepancy_type == 'damaged' %}<span class="badge bg-danger">破損</span>
+              {% endif %}
+              {% if r.discrepancy_note %}<div class="text-muted small mt-1">{{ r.discrepancy_note }}</div>{% endif %}
+            </td>
+            <td class="text-start text-nowrap">
+              {% if r.location %}
+                <span class="font-monospace">{{ r.location.location_code }}</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+          {% else %}
+            <td class="text-end text-muted">—</td>
+            <td class="text-end text-muted">—</td>
+            <td class="text-center text-muted">—</td>
+            <td class="text-start text-muted">—</td>
+          {% endif %}
+          {% endwith %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">明細が登録されていません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="d-flex gap-2">
+  <a href="{% url 'inbound:order_inquiry' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 入荷指示照会へ戻る
+  </a>
+  {% if order.status == 'receiving_wait' and not order.in_progress_by %}
+    {# 受入れ作業待ち & 未着手のときのみ編集可（一覧と同じ条件） #}
+    <a href="{% url 'inbound:order_update' order.pk %}" class="btn btn-outline-primary">
+      <i class="bi bi-pencil"></i> 編集
+    </a>
+  {% endif %}
+</div>
+{% endblock %}

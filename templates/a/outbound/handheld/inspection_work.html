@@ -1,0 +1,335 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}出荷検品作業{% endblock %}
+{% block page_title %}<i class="bi bi-shield-check me-1"></i>出荷検品作業{% endblock %}
+{% block back_url %}{% url 'outbound:handheld_inspection' %}{% endblock %}
+
+{% block hh_content %}
+{{ items|json_script:"items-data" }}
+
+{# 対象の出荷指示 #}
+<div class="card mb-2">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ order.outbound_order_code }}</span>
+    {% include 'a/outbound/_status_badge.html' with status=order.status %}
+  </div>
+  <div class="px-3 py-2 small">
+    <div class="row g-1">
+      <div class="col-5 text-muted">顧客</div>
+      <div class="col-7">
+        {% if order.customer %}{{ order.customer.customer_name }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">出荷番号</div>
+      <div class="col-7 font-monospace">{{ shipment.shipment_code }}</div>
+    </div>
+  </div>
+</div>
+
+{# 進捗: 何個目 / 全部 #}
+<div class="d-flex align-items-center justify-content-between mb-3 px-1">
+  <span class="fw-bold">
+    <i class="bi bi-box-seam me-1 text-primary"></i>商品
+    <span class="fs-4 mx-1" id="cur-num">1</span>
+    <span class="text-muted">/ {{ items|length }}</span>
+  </span>
+  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">検品済み 0</span>
+</div>
+
+{# ===== STATE: スキャン ===== #}
+<div id="state-scan">
+  <label class="form-label" for="scan-input">
+    <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャン
+  </label>
+  <input type="text" id="scan-input" class="form-control hh-key"
+         placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
+  <div class="form-text" id="scan-msg">出荷する商品のバーコードを読み取ってください</div>
+
+  <div class="mt-3">
+    <div class="text-muted small mb-1">残りの商品（タップでも選択できます）</div>
+    <div class="list-group" id="remain-list"></div>
+  </div>
+
+  {# 検品済み: タップで再確認（打ち間違いの修正用） #}
+  <div class="mt-3 d-none" id="done-section">
+    <div class="text-muted small mb-1">検品済み（タップで再確認できます）</div>
+    <div class="list-group" id="done-list"></div>
+  </div>
+</div>
+
+{# ===== STATE: 検品確認（品番・員数の最終確認） ===== #}
+<div id="state-confirm" class="d-none">
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="text-muted small">出荷する商品</div>
+      <div class="hh-key" id="cf-sku"></div>
+      <div class="text-muted small mb-2" id="cf-name"></div>
+      <div class="d-flex justify-content-between align-items-center small">
+        <span class="text-muted"><i class="bi bi-pin-map me-1"></i>ピッキング元 棚番</span>
+        <span class="font-monospace" id="cf-loc"></span>
+      </div>
+      <hr class="my-2">
+
+      <div class="d-flex justify-content-between align-items-center small">
+        <span class="text-muted">指示数量</span>
+        <span class="hh-key" id="cf-ordered"></span>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-1">
+        <span class="text-muted">実出荷数</span>
+        <span class="hh-key text-primary" id="cf-picked"></span>
+      </div>
+      <div class="mt-2 text-center">
+        <span class="badge bg-danger d-none" id="cf-short"></span>
+      </div>
+      <div class="form-text mt-2">
+        <i class="bi bi-check2-circle me-1"></i>品番と員数（実出荷数）を確認して実行してください
+      </div>
+    </div>
+  </div>
+  <button type="button" id="cf-exec" class="btn btn-primary btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 実行
+  </button>
+  <button type="button" id="cf-back" class="btn btn-outline-secondary w-100 mt-2">
+    <i class="bi bi-arrow-left me-1"></i>スキャンに戻る
+  </button>
+</div>
+
+{# ===== STATE: 完了（このフォームを送信して確定） ===== #}
+<form method="post" id="state-done" class="d-none">
+  {% csrf_token %}
+  {% for it in items %}
+    <input type="hidden" name="confirmed_{{ it.id }}" id="hc-{{ it.id }}">
+  {% endfor %}
+  <div class="alert alert-success py-2">
+    <i class="bi bi-check-circle-fill me-1"></i>全 {{ items|length }} 商品の検品が完了しました
+  </div>
+  <div class="list-group mb-3" id="done-summary"></div>
+  <button type="submit" class="btn btn-success btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 出荷検品完了
+  </button>
+  <div class="text-muted small text-center mt-2">
+    <i class="bi bi-info-circle me-1"></i>実出荷数ぶんの在庫を引き落とし、出荷を完了します
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  const items = JSON.parse(document.getElementById('items-data').textContent);
+  const total = items.length;
+  // id -> true（検品済み）または {skip:true}（欠品で出荷対象外）
+  const done = {};
+  let current = null;       // 検品確認中の商品
+
+  const curNum  = document.getElementById('cur-num');
+  const doneBadge = document.getElementById('done-badge');
+  const sScan = document.getElementById('state-scan');
+  const sConfirm = document.getElementById('state-confirm');
+  const sDone = document.getElementById('state-done');
+  const scanInput = document.getElementById('scan-input');
+  const scanMsg   = document.getElementById('scan-msg');
+  const remainList = document.getElementById('remain-list');
+  const doneList = document.getElementById('done-list');
+  const doneSection = document.getElementById('done-section');
+  const cfSku  = document.getElementById('cf-sku');
+  const cfName = document.getElementById('cf-name');
+  const cfLoc  = document.getElementById('cf-loc');
+  const cfOrdered = document.getElementById('cf-ordered');
+  const cfPicked  = document.getElementById('cf-picked');
+  const cfShort   = document.getElementById('cf-short');
+  const execBtn = document.getElementById('cf-exec');
+  const doneSummary = document.getElementById('done-summary');
+
+  function doneCount() { return Object.keys(done).length; }
+
+  function show(state) {
+    sScan.classList.toggle('d-none', state !== 'scan');
+    sConfirm.classList.toggle('d-none', state !== 'confirm');
+    sDone.classList.toggle('d-none', state !== 'done');
+  }
+
+  function updateProgress() {
+    curNum.textContent = doneCount() >= total
+      ? total : Math.min(doneCount() + 1, total);
+    doneBadge.textContent = '検品済み ' + doneCount();
+  }
+
+  // スキャン画面: 残りの商品リストを描画（欠品で対象外の商品は初期化時に done 済み）
+  function renderRemain() {
+    remainList.innerHTML = '';
+    const remain = items.filter(it => done[it.id] === undefined);
+    remain.forEach(it => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action py-2';
+      let right = '<span class="text-muted">出荷 </span>'
+        + '<span class="font-monospace fw-bold">' + it.picked + '</span>';
+      if (it.short > 0) {
+        right += ' <span class="badge bg-danger ms-1">欠品 −' + it.short + '</span>';
+      }
+      b.innerHTML =
+        '<div class="d-flex justify-content-between align-items-center">'
+        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
+        + '<span class="small text-nowrap">' + right + '</span>'
+        + '</div>';
+      b.addEventListener('click', () => goConfirm(it));
+      remainList.appendChild(b);
+    });
+    if (remain.length === 0) {
+      remainList.innerHTML =
+        '<div class="list-group-item text-muted small text-center py-2">残りの商品はありません</div>';
+    }
+  }
+
+  // スキャン画面: 検品済みリストを描画（タップで再確認 = 打ち間違いの修正）
+  function renderDone() {
+    doneList.innerHTML = '';
+    const doneItems = items.filter(it => done[it.id] !== undefined);
+    doneSection.classList.toggle('d-none', doneItems.length === 0);
+    doneItems.forEach(it => {
+      const d = done[it.id];
+      if (d.skip) {
+        // 欠品（実出荷数 0）→ 出荷対象外。再確認不要なので非クリックの行で表示
+        const row = document.createElement('div');
+        row.className = 'list-group-item py-2';
+        row.innerHTML =
+          '<div class="d-flex justify-content-between align-items-center">'
+          + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+          + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
+          + '<span class="small text-nowrap text-muted">'
+          + '<i class="bi bi-dash-circle me-1"></i>欠品・出荷対象外</span>'
+          + '</div>';
+        doneList.appendChild(row);
+        return;
+      }
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'list-group-item list-group-item-action list-group-item-success py-2';
+      b.innerHTML =
+        '<div class="d-flex justify-content-between align-items-center">'
+        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
+        + '<span class="small text-nowrap"><i class="bi bi-check-circle-fill text-success me-1"></i>'
+        + '<span class="text-muted">出荷 </span>'
+        + '<span class="font-monospace fw-bold">' + it.picked + '</span></span>'
+        + '</div>';
+      b.addEventListener('click', () => goConfirm(it));
+      doneList.appendChild(b);
+    });
+  }
+
+  function goScan() {
+    current = null;
+    if (doneCount() >= total) { goDone(); return; }
+    updateProgress();
+    renderRemain();
+    renderDone();
+    show('scan');
+    scanInput.value = '';
+    scanMsg.textContent = '出荷する商品のバーコードを読み取ってください';
+    scanMsg.className = 'form-text';
+    scanInput.focus();
+  }
+
+  function goConfirm(it) {
+    current = it;
+    cfSku.textContent = it.sku;
+    cfName.textContent = it.name;
+    cfLoc.textContent = it.location || '—';
+    cfOrdered.textContent = it.ordered;
+    cfPicked.textContent = it.picked;
+    if (it.short > 0) {
+      cfShort.textContent = '欠品 −' + it.short + '（指示 ' + it.ordered
+        + ' / 実出荷 ' + it.picked + '）';
+      cfShort.classList.remove('d-none');
+    } else {
+      cfShort.classList.add('d-none');
+    }
+    const prev = done[it.id];
+    const willComplete = doneCount() + (prev === undefined ? 1 : 0) >= total;
+    execBtn.innerHTML = willComplete
+      ? '<i class="bi bi-check-lg me-1"></i> 実行（出荷検品完了へ）'
+      : '<i class="bi bi-check-lg me-1"></i> 実行（次の商品へ）';
+    updateProgress();
+    show('confirm');
+    execBtn.focus();
+  }
+
+  function goDone() {
+    updateProgress();
+    doneSummary.innerHTML = '';
+    items.forEach(it => {
+      const d = done[it.id];
+      let right;
+      if (d.skip) {
+        right = '<span class="badge bg-secondary">欠品・出荷対象外</span>';
+      } else {
+        right = '<span class="badge bg-success">出荷 ' + it.picked + '</span>';
+        if (it.short > 0) {
+          right += ' <span class="badge bg-danger">欠品 −' + it.short + '</span>';
+        }
+      }
+      const row = document.createElement(d.skip ? 'div' : 'button');
+      if (!d.skip) { row.type = 'button'; }
+      row.className = 'list-group-item py-2'
+        + (d.skip ? '' : ' list-group-item-action');
+      row.innerHTML =
+        '<div class="font-monospace small fw-bold">' + it.sku + '</div>'
+        + '<div class="text-muted" style="font-size:.7rem">' + it.name + '</div>'
+        + '<div class="mt-1">' + right + '</div>';
+      if (!d.skip) { row.addEventListener('click', () => goConfirm(it)); }
+      doneSummary.appendChild(row);
+    });
+    show('done');
+  }
+
+  function execCurrent() {
+    // 検証のみ（実出荷数はピッキング数で確定済み）。確認済みとして記録する
+    done[current.id] = true;
+    document.getElementById('hc-' + current.id).value = '1';
+    goScan();   // 次の商品 or 完了
+  }
+
+  // 商品スキャン。wms.js のグローバル Enter 移動には渡さない
+  scanInput.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const code = scanInput.value.trim();
+    scanInput.value = '';
+    if (!code) return;
+    const it = items.find(x => x.sku === code || (x.jan && x.jan === code));
+    if (!it) {
+      scanMsg.textContent = 'この出荷指示に無い商品です: ' + code;
+      scanMsg.className = 'form-text text-danger';
+      return;
+    }
+    if (it.picked <= 0) {
+      scanMsg.textContent = 'この商品は欠品のため出荷対象外です: ' + it.sku;
+      scanMsg.className = 'form-text text-danger';
+      return;
+    }
+    goConfirm(it);
+  });
+
+  execBtn.addEventListener('click', execCurrent);
+  document.getElementById('cf-back').addEventListener('click', goScan);
+
+  // 初期化: 欠品（実出荷数 0）の明細は出荷対象外として done 済みにする
+  items.forEach(it => {
+    if (it.picked <= 0) {
+      done[it.id] = {skip: true};
+      document.getElementById('hc-' + it.id).value = '1';
+    }
+  });
+  if (doneCount() >= total) { goDone(); } else { goScan(); }
+  // wms.js の先頭フィールドフォーカスを上書きしてスキャン欄にフォーカス
+  window.addEventListener('DOMContentLoaded', function () {
+    if (!sScan.classList.contains('d-none')) scanInput.focus();
+  });
+})();
+</script>
+{% endblock %}

@@ -67,11 +67,19 @@
         <div class="small text-muted">合計在庫数</div>
       </div>
       <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-warning-emphasis">{{ stats.total_reserved }}</div>
+        <div class="small text-muted">合計引き当て数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-success">{{ stats.total_available }}</div>
+        <div class="small text-muted">合計出荷可能数</div>
+      </div>
+      <div class="col py-2 border-end">
         <div class="fs-5 fw-bold text-info">{{ stats.sku_count }}</div>
         <div class="small text-muted">SKU種類</div>
       </div>
       <div class="col py-2 border-end">
-        <div class="fs-5 fw-bold text-success">{{ stats.in_stock }}</div>
+        <div class="fs-5 fw-bold text-dark">{{ stats.in_stock }}</div>
         <div class="small text-muted">在庫あり</div>
       </div>
       <div class="col py-2">
@@ -80,8 +88,9 @@
       </div>
     </div>
 
-    <div class="px-3 py-2 border-bottom bg-white small text-muted">
-      検索結果: <strong class="text-dark">{{ balances|length }}</strong> 件
+    <div class="px-3 py-2 border-bottom bg-white small text-muted d-flex justify-content-between flex-wrap gap-2">
+      <span>検索結果: <strong class="text-dark">{{ balances|length }}</strong> 件</span>
+      <span><i class="bi bi-info-circle me-1"></i>出荷可能数 = 在庫数 − 引き当て数（出荷起動で引き当て済みの数量）</span>
     </div>
 
     {# 検索結果テーブル #}
@@ -95,6 +104,8 @@
           <th class="text-start">JANコード</th>
           <th class="text-start">サイズ / カラー</th>
           <th class="text-end">在庫数</th>
+          <th class="text-end">引き当て数</th>
+          <th class="text-end">出荷可能数</th>
           <th class="text-end">更新日時</th>
         </tr>
       </thead>
@@ -142,10 +153,27 @@
               <span class="font-monospace text-muted">0</span>
             {% endif %}
           </td>
+          <td class="text-end">
+            {% if b.reserved > 0 %}
+              <span class="font-monospace text-warning-emphasis">{{ b.reserved }}</span>
+            {% else %}
+              <span class="font-monospace text-muted">0</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if b.available < 0 %}
+              {# 引き当てが在庫を超過 = 在庫差異の兆候。赤で警告表示 #}
+              <span class="font-monospace fw-bold text-danger">{{ b.available }}</span>
+            {% elif b.available > 0 %}
+              <span class="font-monospace fw-bold text-success">{{ b.available }}</span>
+            {% else %}
+              <span class="font-monospace text-muted">0</span>
+            {% endif %}
+          </td>
           <td class="text-end text-muted small font-monospace">{{ b.updated_at|date:"Y/m/d H:i" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-muted py-4">条件に一致する在庫が見つかりませんでした</td></tr>
+        <tr><td colspan="10" class="text-center text-muted py-4">条件に一致する在庫が見つかりませんでした</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -2,20 +2,22 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
-from django.db.models import Count, ProtectedError, Q, Sum
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Prefetch, ProtectedError, Q, Sum
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import (
-    CreateView, DeleteView, TemplateView, UpdateView, View,
+    CreateView, DeleteView, DetailView, TemplateView, UpdateView, View,
 )
 
+from masters.models import Location
 from masters.utils import get_current_warehouse
+from stock.models import StockBalance, StockMovement
 
 from .forms import InboundOrderForm, InboundOrderItemFormSet
-from .models import InboundOrder, InboundReceipt
+from .models import InboundOrder, InboundOrderItem, InboundReceipt
 
 
 class CurrentWarehouseScopedMixin:
@@ -147,6 +149,35 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
+class InboundOrderDetailView(
+    CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView
+):
+    """入荷指示の詳細（読み取り専用）。入荷指示照会の「表示」から遷移。
+
+    指示の概要・明細に加え、受け入れ／検品／棚入れの実績（実入荷数・検品結果・
+    格納先）も、工程が進んだぶんだけ表示する。状態を問わず閲覧できる。
+    """
+
+    model = InboundOrder
+    template_name = 'a/inbound/order_detail.html'
+    context_object_name = 'order'
+
+    def get_queryset(self):
+        # 明細は SKU 順に固定し、検品結果（格納先・担当者）まで一括取得する
+        items_qs = InboundOrderItem.objects.select_related(
+            'sku__product',
+            'inboundreceipt__location__area',
+            'inboundreceipt__inspected_by',
+            'inboundreceipt__putaway_by',
+        ).order_by('sku__sku_code')
+        return (
+            super().get_queryset()
+            .select_related('warehouse', 'supplier', 'created_by',
+                            'in_progress_by')
+            .prefetch_related(Prefetch('items', queryset=items_qs))
+        )
+
+
 class _OrderFormMixin:
     """Create/Update で共通の処理: 明細 formset の取り回し + 倉庫/作成者の自動設定。"""
 
@@ -178,17 +209,27 @@ class _OrderFormMixin:
         items = ctx['items']
         if not items.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
-        with transaction.atomic():
-            # 倉庫は現在ログイン中に固定（マスタと同じスコープ規約）
-            wh = get_current_warehouse(self.request)
-            if wh is not None and not form.instance.warehouse_id:
-                form.instance.warehouse = wh
-            # 新規時のみ created_by を設定（source_type はフォームの絞り込み選択肢で扱う）
-            if not form.instance.pk:
-                form.instance.created_by = self.request.user
-            self.object = form.save()
-            items.instance = self.object
-            items.save()
+        try:
+            with transaction.atomic():
+                # 倉庫は現在ログイン中に固定（マスタと同じスコープ規約）
+                wh = get_current_warehouse(self.request)
+                if wh is not None and not form.instance.warehouse_id:
+                    form.instance.warehouse = wh
+                # 新規時のみ created_by を設定（source_type はフォームの絞り込み選択肢で扱う）
+                if not form.instance.pk:
+                    form.instance.created_by = self.request.user
+                self.object = form.save()
+                items.instance = self.object
+                items.save()
+        except IntegrityError:
+            # 入荷指示番号は一意。フォーム検証〜保存の隙に他の登録と採番が衝突した
+            # 場合は 500 にせず、画面にエラーを出して再操作を促す。
+            form.add_error(
+                None,
+                '登録に失敗しました（入荷指示番号が他の登録と重複した可能性が'
+                'あります）。お手数ですが再度お試しください。',
+            )
+            return self.render_to_response(self.get_context_data(form=form))
         return HttpResponseRedirect(self.get_success_url())
 
 
@@ -652,3 +693,310 @@ class InboundInspectionWorkView(LoginRequiredMixin, View):
             f'（次工程: 棚入れ）',
         )
         return HttpResponseRedirect(reverse('inbound:handheld_inspection'))
+
+
+def _receipt_of(item):
+    """InboundOrderItem に紐づく検品結果（InboundReceipt）を返す。未検品なら None。"""
+    try:
+        return item.inboundreceipt
+    except InboundReceipt.DoesNotExist:
+        return None
+
+
+def _putaway_item_rows(order):
+    """棚入れ入口画面の明細表示用に、検品結果（計上数・不良数）を行リスト化する。"""
+    rows = []
+    for it in order.items.select_related('sku__product', 'inboundreceipt').all():
+        receipt = _receipt_of(it)
+        rows.append({
+            'sku': it.sku.sku_code,
+            'name': it.sku.product.product_name,
+            'received': receipt.quantity_received if receipt else None,
+            'defective': receipt.quantity_defective if receipt else 0,
+            # 計上数（在庫に積む数）= 実入荷数 − 不良品数。未検品は None
+            'good': receipt.quantity_good if receipt else None,
+        })
+    return rows
+
+
+class InboundPutawayView(LoginRequiredMixin, View):
+    """入荷棚入れ（棚入れ作業の入口）画面 — handheld 端末用。
+
+    入荷指示番号をスキャン → 検品済み(PUTAWAY_WAIT)の指示を表示 → 「棚入れ開始」で
+    対象指示を作業担当者（ログインユーザー）に紐づけてロックし、棚入れ作業画面へ進む。
+    別の担当者が作業中の指示は開始できない。
+    """
+
+    template_name = 'a/inbound/handheld/putaway.html'
+
+    def _scoped_orders(self):
+        qs = InboundOrder.objects.select_related(
+            'supplier', 'warehouse', 'in_progress_by')
+        wh = get_current_warehouse(self.request)
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        return qs
+
+    def get(self, request, *args, **kwargs):
+        code = request.GET.get('code', '').strip()
+        ctx = {'code': code}
+        if code:
+            order = (
+                self._scoped_orders()
+                .filter(inbound_order_code=code)
+                .first()
+            )
+            if order is None:
+                ctx['lookup_error'] = f'入荷指示番号「{code}」は見つかりません。'
+            else:
+                ctx['order'] = order
+                ctx['item_rows'] = _putaway_item_rows(order)
+        return render(request, self.template_name, ctx)
+
+    def post(self, request, *args, **kwargs):
+        """「棚入れ開始」「引き継いで開始」: 指示を担当者に紐づけて棚入れ作業へ。"""
+        order_id = request.POST.get('order_id', '')
+        takeover = request.POST.get('takeover') == '1'
+        with transaction.atomic():
+            order = None
+            if order_id.isdigit():
+                order = (
+                    self._scoped_orders()
+                    .select_for_update(of=('self',))
+                    .filter(pk=order_id)
+                    .first()
+                )
+            if order is None:
+                messages.error(request, '入荷指示が見つかりません。')
+                return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+            if order.status != InboundOrder.Status.PUTAWAY_WAIT:
+                messages.info(
+                    request,
+                    f'入荷指示 {order.inbound_order_code} は現在'
+                    f'「{order.get_status_display()}」のため、棚入れの対象外です。',
+                )
+                return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+            # 別の担当者が作業中: 引き継ぎ(takeover)指定がなければ開始不可
+            prev = order.in_progress_by
+            blocked = bool(prev) and prev.pk != request.user.pk
+            if blocked and not takeover:
+                worker = prev.display_name or prev.username
+                messages.error(
+                    request,
+                    f'入荷指示 {order.inbound_order_code} は {worker} が'
+                    f'棚入れ作業中です。',
+                )
+                return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+            # 担当者として確保。担当者が変わるとき（新規・引き継ぎ）は開始時刻を更新
+            if order.in_progress_by_id != request.user.pk:
+                order.in_progress_at = timezone.now()
+            order.in_progress_by = request.user
+            order.save()
+            if blocked and takeover:
+                worker = prev.display_name or prev.username
+                messages.info(
+                    request,
+                    f'{worker} から棚入れ作業を引き継ぎました。',
+                )
+        return HttpResponseRedirect(
+            reverse('inbound:handheld_putaway_work', args=[order.pk]))
+
+
+class InboundPutawayWorkView(LoginRequiredMixin, View):
+    """棚入れ作業（格納先ロケーション登録）画面 — handheld 端末用。
+
+    入荷棚入れ画面から遷移。検品済み指示の SKU を1商品ずつスキャンし、格納先
+    ロケーションをスキャンして割り当てる。「棚入れ完了」で計上数（実入荷数−不良
+    品数）ぶんの StockMovement.IN を発行して在庫を加算し、InboundReceipt に
+    格納先・担当者・入庫履歴を記録、ステータスを PUTAWAY_WAIT → COMPLETED
+    （入荷完了）へ進める。不良品数は在庫計上しない。
+    """
+
+    template_name = 'a/inbound/handheld/putaway_work.html'
+
+    def _scoped_orders(self):
+        qs = InboundOrder.objects.select_related(
+            'supplier', 'warehouse', 'in_progress_by')
+        wh = get_current_warehouse(self.request)
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        return qs
+
+    def _guard(self, request, order):
+        """棚入れ作業が可能か（存在・PUTAWAY_WAIT・担当者）を検査。不可なら redirect。"""
+        if order is None:
+            messages.error(request, '入荷指示が見つかりません。')
+            return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+        if order.status != InboundOrder.Status.PUTAWAY_WAIT:
+            messages.info(
+                request,
+                f'入荷指示 {order.inbound_order_code} は現在'
+                f'「{order.get_status_display()}」のため、棚入れの対象外です。',
+            )
+            return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+        if (order.in_progress_by_id
+                and order.in_progress_by_id != request.user.pk):
+            worker = (order.in_progress_by.display_name
+                      or order.in_progress_by.username)
+            messages.error(
+                request,
+                f'入荷指示 {order.inbound_order_code} は {worker} が'
+                f'棚入れ作業中です。',
+            )
+            return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+        return None
+
+    def get(self, request, pk, *args, **kwargs):
+        order = self._scoped_orders().filter(pk=pk).first()
+        guard = self._guard(request, order)
+        if guard:
+            return guard
+        # 1商品ずつ処理する handheld ウィザード用に、明細を JSON で渡す
+        items = []
+        for it in order.items.select_related(
+                'sku__product', 'inboundreceipt').all():
+            receipt = _receipt_of(it)
+            if receipt is None:
+                # 検品結果が無い = データ不整合。入口へ差し戻す
+                messages.error(
+                    request,
+                    f'入荷指示 {order.inbound_order_code} に未検品の明細があります。',
+                )
+                return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+            good = receipt.quantity_good
+            items.append({
+                'id': it.pk,
+                'sku': it.sku.sku_code,
+                'jan': it.sku.jan_code or '',
+                'name': it.sku.product.product_name,
+                'received': receipt.quantity_received,
+                'defective': receipt.quantity_defective,
+                'good': good,
+                # 格納可能なエリア区分（ピッキング種別から決まる）
+                'area_type': it.sku.required_location_type,
+                'area_type_label': it.sku.required_location_type.label,
+            })
+        return render(request, self.template_name,
+                      {'order': order, 'items': items})
+
+    def post(self, request, pk, *args, **kwargs):
+        with transaction.atomic():
+            # 確定対象の指示行をロックして取得（同時確定の二重処理を防ぐ）
+            order = (
+                self._scoped_orders()
+                .select_for_update(of=('self',))
+                .filter(pk=pk)
+                .first()
+            )
+            guard = self._guard(request, order)
+            if guard:
+                return guard
+
+            items = list(
+                order.items.select_related('sku', 'inboundreceipt').all())
+
+            # 1パス目: 全明細を検証（計上数 > 0 の明細は格納先ロケーション必須）
+            parsed = {}
+            for it in items:
+                receipt = _receipt_of(it)
+                if receipt is None:
+                    messages.error(
+                        request,
+                        f'未検品の明細があります（{it.sku.sku_code}）。',
+                    )
+                    return HttpResponseRedirect(
+                        reverse('inbound:handheld_putaway'))
+                good = receipt.quantity_good
+                location = None
+                if good > 0:
+                    code = (request.POST.get(f'loc_{it.pk}') or '').strip()
+                    if not code:
+                        messages.error(
+                            request,
+                            f'格納先が未登録の商品があります（{it.sku.sku_code}）。'
+                            f'棚入れ作業をやり直してください。',
+                        )
+                        return HttpResponseRedirect(reverse(
+                            'inbound:handheld_putaway_work', args=[pk]))
+                    location = (
+                        Location.objects
+                        .select_related('area')
+                        .filter(location_code=code, is_active=True,
+                                warehouse=order.warehouse)
+                        .first()
+                    )
+                    if location is None:
+                        messages.error(
+                            request,
+                            f'格納先の棚番「{code}」が無効です（{it.sku.sku_code}）。'
+                            f'棚入れ作業をやり直してください。',
+                        )
+                        return HttpResponseRedirect(reverse(
+                            'inbound:handheld_putaway_work', args=[pk]))
+                    # ピッキング種別に合うエリア区分かを検証
+                    # （種まき=通常棚 / オーダー=大型・長物）
+                    required = it.sku.required_location_type
+                    if location.area.location_type != required:
+                        messages.error(
+                            request,
+                            f'{it.sku.sku_code} は「{required.label}」に格納する商品です。'
+                            f'棚番「{code}」は「'
+                            f'{location.area.get_location_type_display()}」'
+                            f'エリアのため指定できません。',
+                        )
+                        return HttpResponseRedirect(reverse(
+                            'inbound:handheld_putaway_work', args=[pk]))
+                parsed[it.pk] = (receipt, good, location)
+
+            # 2パス目: 在庫加算・入庫履歴発行・検品結果（格納先など）の更新
+            now = timezone.now()
+            for it in items:
+                receipt, good, location = parsed[it.pk]
+                movement = None
+                if good > 0:
+                    # 在庫行をロックして取得（同時入庫での更新消失=lost update を
+                    # 防ぐ）。行が無ければ作成し、ロック付きで取り直す。
+                    StockBalance.objects.get_or_create(
+                        location=location, sku=it.sku,
+                        defaults={'quantity': 0},
+                    )
+                    balance = (
+                        StockBalance.objects.select_for_update()
+                        .get(location=location, sku=it.sku)
+                    )
+                    quantity_before = balance.quantity
+                    quantity_after = quantity_before + good
+                    movement = StockMovement.objects.create(
+                        movement_type=StockMovement.MovementType.IN,
+                        location=location,
+                        sku=it.sku,
+                        quantity=good,  # IN なので正の値
+                        quantity_before=quantity_before,
+                        quantity_after=quantity_after,
+                        reference_type=StockMovement.ReferenceType.INBOUND_ORDER,
+                        reference_id=order.pk,
+                        note='',
+                        created_by=request.user,
+                    )
+                    balance.quantity = quantity_after
+                    balance.save()
+                # 不良のみ（good == 0）の明細は在庫を動かさず格納先も NULL のまま
+                receipt.location = location
+                receipt.stock_movement = movement
+                receipt.putaway_by = request.user
+                receipt.putaway_at = now
+                receipt.save()
+
+            order.status = InboundOrder.Status.COMPLETED
+            order.received_at = now
+            # 棚入れ作業の担当者ロックを解除
+            order.in_progress_by = None
+            order.in_progress_at = None
+            order.save()
+
+        messages.success(
+            request,
+            f'入荷指示 {order.inbound_order_code} の棚入れが完了しました。'
+            f'（入荷完了）',
+        )
+        return HttpResponseRedirect(reverse('inbound:handheld_putaway'))

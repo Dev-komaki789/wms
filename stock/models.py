@@ -109,3 +109,61 @@ class StockMovement(models.Model):
 
     def __str__(self):
         return f'{self.movement_type} {self.sku.sku_code} {self.quantity:+d}'
+
+
+class StockTransfer(models.Model):
+    """棚間移動（ロケーション間の在庫移動）。
+
+    移動元から移動先へ在庫を移す操作。実行時に移動元 OUT・移動先 IN の
+    StockMovement を2本発行し（reference_type=stock_transfer）、両ロケーションの
+    StockBalance を増減する。MVP では移動は即時完了（status=completed）。
+    """
+
+    class Status(models.TextChoices):
+        COMPLETED = 'completed', '完了'
+        CANCELLED = 'cancelled', '取消'
+
+    from_location = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT,
+        related_name='transfers_out',
+        verbose_name='移動元ロケーション',
+    )
+    to_location = models.ForeignKey(
+        Location,
+        on_delete=models.PROTECT,
+        related_name='transfers_in',
+        verbose_name='移動先ロケーション',
+    )
+    sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
+    quantity = models.IntegerField('移動数', validators=[MinValueValidator(1)])
+    status = models.CharField(
+        'ステータス',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.COMPLETED,
+    )
+    transferred_at = models.DateTimeField('移動日時', null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        verbose_name='操作ユーザー',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'stock_transfers'
+        verbose_name = '棚間移動'
+        verbose_name_plural = '棚間移動'
+        indexes = [
+            models.Index(
+                fields=['-transferred_at'], name='idx_stock_transfers_at'
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f'{self.sku.sku_code} {self.from_location.location_code}'
+            f'→{self.to_location.location_code} x{self.quantity}'
+        )

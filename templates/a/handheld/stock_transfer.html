@@ -1,0 +1,70 @@
+{% extends 'a/handheld_base.html' %}
+{% load static %}
+
+{% block title %}棚間移動{% endblock %}
+{% block page_title %}<i class="bi bi-arrow-left-right me-1"></i>棚間移動{% endblock %}
+
+{% block hh_content %}
+<form method="post" autocomplete="off" id="stock-transfer-form"
+      data-hh-scan
+      data-loc-api="{% url 'masters:api_location_lookup' %}"
+      data-sku-api="{% url 'masters:api_sku_lookup' %}"
+      data-stock-api="{% url 'stock:api_stock_check' %}">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label" for="{{ form.from_location_code.id_for_label }}">
+      <i class="bi bi-box-arrow-up text-primary me-1"></i>{{ form.from_location_code.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.from_location_code }}
+    {% if form.from_location_code.errors %}<div class="invalid-feedback d-block">{{ form.from_location_code.errors|join:" " }}</div>{% endif %}
+    <div class="hh-scan-msg small" data-for="{{ form.from_location_code.id_for_label }}"></div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="{{ form.sku_code.id_for_label }}">
+      <i class="bi bi-upc-scan text-primary me-1"></i>{{ form.sku_code.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.sku_code }}
+    {% if form.sku_code.errors %}<div class="invalid-feedback d-block">{{ form.sku_code.errors|join:" " }}</div>{% endif %}
+    <div class="hh-scan-msg small" data-for="{{ form.sku_code.id_for_label }}"></div>
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label" for="{{ form.quantity.id_for_label }}">
+      <i class="bi bi-123 text-primary me-1"></i>{{ form.quantity.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.quantity }}
+    {% if form.quantity.errors %}<div class="invalid-feedback d-block">{{ form.quantity.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="mb-4">
+    <label class="form-label" for="{{ form.to_location_code.id_for_label }}">
+      <i class="bi bi-box-arrow-in-down text-primary me-1"></i>{{ form.to_location_code.label }}
+      <span class="text-danger">*</span>
+    </label>
+    {{ form.to_location_code }}
+    {% if form.to_location_code.errors %}<div class="invalid-feedback d-block">{{ form.to_location_code.errors|join:" " }}</div>{% endif %}
+    <div class="hh-scan-msg small" data-for="{{ form.to_location_code.id_for_label }}"></div>
+  </div>
+
+  <button type="submit" class="btn btn-primary btn-hh">
+    <i class="bi bi-check-lg me-1"></i> 実行
+  </button>
+</form>
+
+<div class="text-muted small text-center mt-4">
+  <i class="bi bi-info-circle me-1"></i>
+  Enter（バーコードスキャナーの送信）で次の入力へ進めます。棚番・SKU はスキャン時に実在をチェックします。
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/handheld_scan.js' %}"></script>
+{% endblock %}

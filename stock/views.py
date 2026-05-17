@@ -1,15 +1,20 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.urls import reverse_lazy
-from django.views.generic import TemplateView
+from django.utils import timezone
+from django.views.generic import TemplateView, View
 from django.views.generic.edit import FormView
 
-from masters.models import Area
+from masters.models import Area, Location, Sku
+from masters.utils import get_current_warehouse
+from outbound.models import StockReservation
 
-from .forms import UnplannedStockInForm, UnplannedStockOutForm
-from .models import StockBalance, StockMovement
+from .forms import StockTransferForm, UnplannedStockInForm, UnplannedStockOutForm
+from .models import StockBalance, StockMovement, StockTransfer
 
 
 class StockInquiryView(LoginRequiredMixin, TemplateView):
@@ -63,13 +68,36 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
             elif f['state'] == 'zero':
                 qs = qs.filter(quantity=0)
             qs = qs.order_by('location__location_code', 'sku__sku_code')
-            ctx['balances'] = qs
+            # 引き当て数 = この (ロケーション × SKU) に紐づく active な
+            # StockReservation の合計。出荷可能数 = 在庫数 − 引き当て数。
+            reserved_subquery = (
+                StockReservation.objects
+                .filter(
+                    location=OuterRef('location'),
+                    sku=OuterRef('sku'),
+                    status=StockReservation.Status.ACTIVE,
+                )
+                .values('location', 'sku')
+                .annotate(total=Sum('quantity'))
+                .values('total')
+            )
+            qs = qs.annotate(
+                reserved=Coalesce(
+                    Subquery(reserved_subquery, output_field=IntegerField()), 0
+                ),
+            ).annotate(
+                available=F('quantity') - F('reserved'),
+            )
+            balances = list(qs)
+            ctx['balances'] = balances
             ctx['stats'] = {
-                'rows': qs.count(),
-                'total_qty': qs.aggregate(s=Sum('quantity'))['s'] or 0,
-                'in_stock': qs.filter(quantity__gt=0).count(),
-                'zero': qs.filter(quantity=0).count(),
-                'sku_count': qs.values('sku').distinct().count(),
+                'rows': len(balances),
+                'total_qty': sum(b.quantity for b in balances),
+                'total_reserved': sum(b.reserved for b in balances),
+                'total_available': sum(b.available for b in balances),
+                'sku_count': len({b.sku_id for b in balances}),
+                'in_stock': sum(1 for b in balances if b.quantity > 0),
+                'zero': sum(1 for b in balances if b.quantity == 0),
             }
         else:
             ctx['balances'] = StockBalance.objects.none()
@@ -103,9 +131,15 @@ class UnplannedStockInView(LoginRequiredMixin, FormView):
         note = form.cleaned_data.get('note', '')
 
         with transaction.atomic():
-            balance, _ = StockBalance.objects.get_or_create(
+            # 在庫行をロックして取得（同時入庫での更新消失=lost update を防ぐ）。
+            # 行が無ければ作成し、ロック付きで取り直す。
+            StockBalance.objects.get_or_create(
                 location=location, sku=sku,
                 defaults={'quantity': 0},
+            )
+            balance = (
+                StockBalance.objects.select_for_update()
+                .get(location=location, sku=sku)
             )
             quantity_before = balance.quantity
             quantity_after = quantity_before + quantity
@@ -196,3 +230,146 @@ class UnplannedStockOutView(LoginRequiredMixin, FormView):
             f'(在庫 {quantity_before} → {quantity_after})',
         )
         return super().form_valid(form)
+
+
+class StockTransferView(LoginRequiredMixin, FormView):
+    """棚間移動画面（handheld 端末用）。
+
+    移動元棚番・SKU・数量・移動先棚番を入力し、ロケーション間で在庫を移す。
+    実行時に StockTransfer を1件、移動元 OUT・移動先 IN の StockMovement を2本
+    （reference_type=stock_transfer）発行し、両ロケーションの StockBalance を増減
+    する。移動成功後は同じ URL に redirect → メッセージ表示 + フォーム初期化で
+    連続作業に対応。
+    """
+
+    template_name = 'a/handheld/stock_transfer.html'
+    form_class = StockTransferForm
+    success_url = reverse_lazy('stock:handheld_transfer')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['request'] = self.request  # form 側で現在倉庫スコープを判定するため
+        return kwargs
+
+    def form_valid(self, form):
+        from_loc = form._from_location
+        to_loc = form._to_location
+        sku = form._sku
+        quantity = form.cleaned_data['quantity']
+
+        with transaction.atomic():
+            # 移動元・移動先の在庫行を location_id 昇順でロック（既存行のみ。
+            # 同時実行の相互移動でのデッドロックを避けるため一定順で取得する）。
+            list(
+                StockBalance.objects.select_for_update()
+                .filter(sku=sku, location__in=[from_loc, to_loc])
+                .order_by('location_id')
+            )
+            from_balance = (
+                StockBalance.objects
+                .filter(location=from_loc, sku=sku).first()
+            )
+            from_on_hand = from_balance.quantity if from_balance else 0
+            # form.clean() で検証済みだが、検証〜確定の間に在庫が減る可能性に
+            # 備え、ロック確保後にもう一度残数を確認する。
+            if quantity > from_on_hand:
+                form.add_error(
+                    'quantity',
+                    f'在庫不足です。{from_loc.location_code} の '
+                    f'{sku.sku_code} 在庫は {from_on_hand} 個です。',
+                )
+                return self.form_invalid(form)
+            # 移動先の在庫行（無ければ 0 で作成。新規行はこのトランザクション専有）
+            to_balance, _ = StockBalance.objects.get_or_create(
+                location=to_loc, sku=sku, defaults={'quantity': 0},
+            )
+
+            now = timezone.now()
+            transfer = StockTransfer.objects.create(
+                from_location=from_loc, to_location=to_loc, sku=sku,
+                quantity=quantity, status=StockTransfer.Status.COMPLETED,
+                transferred_at=now, created_by=self.request.user,
+            )
+            # 移動元から OUT
+            StockMovement.objects.create(
+                movement_type=StockMovement.MovementType.OUT,
+                location=from_loc, sku=sku,
+                quantity=-quantity,  # OUT なので負の値で記録
+                quantity_before=from_on_hand,
+                quantity_after=from_on_hand - quantity,
+                reference_type=StockMovement.ReferenceType.STOCK_TRANSFER,
+                reference_id=transfer.pk,
+                note='', created_by=self.request.user,
+            )
+            from_balance.quantity = from_on_hand - quantity
+            from_balance.save()
+            # 移動先へ IN
+            to_before = to_balance.quantity
+            StockMovement.objects.create(
+                movement_type=StockMovement.MovementType.IN,
+                location=to_loc, sku=sku,
+                quantity=quantity,  # IN なので正の値
+                quantity_before=to_before,
+                quantity_after=to_before + quantity,
+                reference_type=StockMovement.ReferenceType.STOCK_TRANSFER,
+                reference_id=transfer.pk,
+                note='', created_by=self.request.user,
+            )
+            to_balance.quantity = to_before + quantity
+            to_balance.save()
+
+        messages.success(
+            self.request,
+            f'棚間移動完了: {sku.sku_code} を {from_loc.location_code} '
+            f'→ {to_loc.location_code} に {quantity} 個',
+        )
+        return super().form_valid(form)
+
+
+class StockCheckAPIView(LoginRequiredMixin, View):
+    """ロケーション × SKU の在庫紐づきチェック API（AJAX 用）。
+
+    棚間移動などで、スキャンした SKU が移動元の棚に在庫として実在するかを
+    その場で検証するためのエンドポイント。SKU の実在・ロケーションの実在
+    （現在倉庫スコープ）・その組み合わせの在庫数（StockBalance.quantity）を返す。
+    棚に在庫が無い（on_hand=0）場合、呼び出し側でエラー表示する。
+    """
+
+    def get(self, request):
+        loc_code = (request.GET.get('location') or '').strip()
+        sku_code = (request.GET.get('sku') or '').strip()
+
+        sku = None
+        if sku_code:
+            sku = (
+                Sku.objects.select_related('product')
+                .filter(sku_code=sku_code, is_active=True)
+                .first()
+            )
+
+        location = None
+        if loc_code:
+            loc_qs = Location.objects.filter(
+                location_code=loc_code, is_active=True)
+            wh = get_current_warehouse(request)
+            if wh is not None:
+                loc_qs = loc_qs.filter(warehouse=wh)
+            location = loc_qs.first()
+
+        on_hand = 0
+        if sku is not None and location is not None:
+            balance = (
+                StockBalance.objects
+                .filter(location=location, sku=sku)
+                .first()
+            )
+            on_hand = balance.quantity if balance else 0
+
+        return JsonResponse({
+            'sku_found': sku is not None,
+            'location_found': location is not None,
+            'on_hand': on_hand,
+            'sku_code': sku.sku_code if sku else sku_code,
+            'product_name': sku.product.product_name if sku else '',
+            'location_code': location.location_code if location else loc_code,
+        })

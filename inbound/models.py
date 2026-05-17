@@ -235,3 +235,11 @@ class InboundReceipt(models.Model):
 
     def __str__(self):
         return f'{self.inbound_order_item} ({self.get_discrepancy_type_display()})'
+
+    @property
+    def quantity_good(self):
+        """在庫計上対象の良品数（実入荷数 − 不良品数）。
+
+        棚入れではこの数だけ在庫を加算する（不良品は計上しない）。
+        """
+        return max(0, self.quantity_received - self.quantity_defective)

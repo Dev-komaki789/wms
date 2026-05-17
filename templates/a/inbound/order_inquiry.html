@@ -117,7 +117,10 @@
       <tbody>
         {% for o in orders %}
         <tr>
-          <td class="text-start text-nowrap"><span class="font-monospace fw-bold text-primary">{{ o.inbound_order_code }}</span></td>
+          <td class="text-start text-nowrap">
+            <a href="{% url 'inbound:order_detail' o.pk %}"
+               class="font-monospace fw-bold text-decoration-none">{{ o.inbound_order_code }}</a>
+          </td>
           <td class="text-start">
             {% if o.supplier %}
               {{ o.supplier.supplier_name }}

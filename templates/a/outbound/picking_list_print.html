@@ -1,0 +1,112 @@
+{% extends 'a/base.html' %}
+
+{% block title %}ピッキングリスト {{ picking_list.picking_list_code }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pl-barcode svg { width: 240px; height: auto; display: block; }
+  /* 印刷時はアプリのナビ等を隠し、帳票だけをきれいに出力する */
+  @media print {
+    .navbar, #sidebar { display: none !important; }
+    body { background: #fff !important; }
+    main.container { max-width: 100%; padding: 0; }
+    .pl-doc { border: none !important; box-shadow: none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# 画面操作ボタン（印刷物には出さない） #}
+<div class="d-print-none mb-3 d-flex gap-2">
+  <button type="button" class="btn btn-primary" onclick="window.print()">
+    <i class="bi bi-printer"></i> 印刷
+  </button>
+  <a href="{% url 'outbound:picking_list_inquiry' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 一覧へ戻る
+  </a>
+</div>
+
+<div class="pl-doc card shadow-sm">
+  <div class="card-body">
+    {# ヘッダー: タイトル + リスト番号 + バーコード #}
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+      <div>
+        <div class="text-muted small">ピッキングリスト</div>
+        <div class="fs-3 fw-bold font-monospace">{{ picking_list.picking_list_code }}</div>
+      </div>
+      <div class="text-center">
+        <div class="pl-barcode">{{ barcode_svg|safe }}</div>
+        <div class="font-monospace small mt-1">{{ picking_list.picking_list_code }}</div>
+      </div>
+    </div>
+
+    {# メタ情報 #}
+    <div class="row g-3 mb-3 small">
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">倉庫</span>
+        {{ picking_list.warehouse.warehouse_name }}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">エリア</span>
+        {{ picking_list.area.area_name|default:picking_list.area.area_code }}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">ピッキング種別</span>
+        {{ picking_list.get_picking_type_display }}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">ステータス</span>
+        {{ picking_list.get_status_display }}
+      </div>
+      {% if outbound_order %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">出荷指示</span>
+        <span class="font-monospace">{{ outbound_order.outbound_order_code }}</span>
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">顧客</span>
+        {% if outbound_order.customer %}{{ outbound_order.customer.customer_name }}
+        {% else %}—{% endif %}
+      </div>
+      {% endif %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">担当者</span>
+        {% if picking_list.assigned_to %}{{ picking_list.assigned_to.display_name|default:picking_list.assigned_to.username }}
+        {% else %}—{% endif %}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">生成日時</span>
+        <span class="font-monospace">{{ picking_list.created_at|date:"Y/m/d H:i" }}</span>
+      </div>
+    </div>
+
+    {# 明細（棚番順） #}
+    <table class="table table-sm table-bordered align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center" style="width: 48px">#</th>
+          <th class="text-start">棚番</th>
+          <th class="text-start">SKU</th>
+          <th class="text-start">商品名</th>
+          <th class="text-end" style="width: 90px">指示数</th>
+          <th class="text-center" style="width: 110px">ピッキング実績</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in line_items %}
+        <tr>
+          <td class="text-center">{{ it.sort_order|default:forloop.counter }}</td>
+          <td class="text-start font-monospace fw-bold">{{ it.location.location_code }}</td>
+          <td class="text-start font-monospace">{{ it.sku.sku_code }}</td>
+          <td class="text-start">{{ it.sku.product.product_name }}</td>
+          <td class="text-end font-monospace">{{ it.quantity_requested }}</td>
+          <td></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-3">明細がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -51,4 +51,6 @@ urlpatterns = [
 
     # AJAX API
     path('api/skus/search/', views.SkuSearchAPIView.as_view(), name='api_sku_search'),
+    path('api/skus/lookup/', views.SkuLookupAPIView.as_view(), name='api_sku_lookup'),
+    path('api/locations/lookup/', views.LocationLookupAPIView.as_view(), name='api_location_lookup'),
 ]

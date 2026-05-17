@@ -686,3 +686,63 @@ class SkuSearchAPIView(LoginRequiredMixin, View):
                 for sku in qs
             ]
         })
+
+
+class SkuLookupAPIView(LoginRequiredMixin, View):
+    """SKU コードの実在チェック API（AJAX 用）。
+
+    handheld 画面でスキャンした SKU をその場で検証するためのエンドポイント。
+    SKU コードの完全一致で1件引き、有効（is_active）なものだけを「実在」とみなす。
+    フォームの clean_sku_code と同じ条件で判定する。
+    """
+
+    def get(self, request):
+        code = (request.GET.get('code') or '').strip()
+        if not code:
+            return JsonResponse({'found': False})
+        sku = (
+            Sku.objects.select_related('product')
+            .filter(sku_code=code, is_active=True)
+            .first()
+        )
+        if sku is None:
+            return JsonResponse({'found': False})
+        return JsonResponse({
+            'found': True,
+            'sku_code': sku.sku_code,
+            'jan_code': sku.jan_code,
+            'product_name': sku.product.product_name,
+        })
+
+
+class LocationLookupAPIView(LoginRequiredMixin, View):
+    """棚番の実在チェック API（AJAX 用）。
+
+    棚入れ作業など handheld 画面で、スキャンした棚番をその場で検証するための
+    エンドポイント。棚番コードの完全一致で1件引き、現在倉庫スコープ・有効
+    （is_active）のものだけを「実在」とみなす。
+    """
+
+    def get(self, request):
+        code = (request.GET.get('code') or '').strip()
+        if not code:
+            return JsonResponse({'found': False})
+        qs = (
+            Location.objects.select_related('area')
+            .filter(location_code=code, is_active=True)
+        )
+        wh = get_current_warehouse(request)
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        location = qs.first()
+        if location is None:
+            return JsonResponse({'found': False})
+        return JsonResponse({
+            'found': True,
+            'location_code': location.location_code,
+            'location_name': location.location_name,
+            'area_name': location.area.area_name or location.area.area_code,
+            # エリア区分（storage / large_item）。棚入れ時の格納先チェックに使う
+            'area_location_type': location.area.location_type,
+            'area_location_type_display': location.area.get_location_type_display(),
+        })

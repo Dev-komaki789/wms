@@ -1,0 +1,135 @@
+{% extends 'a/base.html' %}
+
+{% block title %}出荷指示詳細{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'outbound:order_inquiry' %}">出荷指示照会</a></li>
+    <li class="breadcrumb-item active">{{ order.outbound_order_code }}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">
+  <i class="bi bi-clipboard-minus me-2 text-primary"></i>出荷指示詳細
+</h2>
+
+{# ========== 概要 ========== #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="font-monospace fw-bold fs-5">{{ order.outbound_order_code }}</span>
+    {% include 'a/outbound/_status_badge.html' with status=order.status %}
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">倉庫</dt>
+      <dd class="col-sm-9">{{ order.warehouse.warehouse_name }}（<span class="font-monospace">{{ order.warehouse.warehouse_code }}</span>）</dd>
+
+      <dt class="col-sm-3">顧客</dt>
+      <dd class="col-sm-9">
+        {% if order.customer %}{{ order.customer.customer_name }}（<span class="font-monospace">{{ order.customer.customer_code }}</span>）
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+
+      <dt class="col-sm-3">出荷元種別</dt>
+      <dd class="col-sm-9">{{ order.get_source_type_display }}</dd>
+
+      <dt class="col-sm-3">OMS注文番号</dt>
+      <dd class="col-sm-9 font-monospace">{{ order.external_order_id|default:"—" }}</dd>
+
+      <dt class="col-sm-3">出荷期限</dt>
+      <dd class="col-sm-9 font-monospace small">{{ order.deadline_at|date:"Y/m/d H:i"|default:"—" }}</dd>
+
+      <dt class="col-sm-3">優先度</dt>
+      <dd class="col-sm-9 font-monospace">{{ order.priority }}</dd>
+
+      <dt class="col-sm-3">配送先</dt>
+      <dd class="col-sm-9">
+        {% if order.delivery_name or order.delivery_address or order.delivery_postal_code %}
+          {% if order.delivery_name %}{{ order.delivery_name }}<br>{% endif %}
+          {% if order.delivery_postal_code %}<span class="font-monospace">〒{{ order.delivery_postal_code }}</span> {% endif %}
+          {{ order.delivery_address }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+
+      <dt class="col-sm-3">出荷日時</dt>
+      <dd class="col-sm-9 font-monospace small">{{ order.shipped_at|date:"Y/m/d H:i"|default:"—" }}</dd>
+
+      {% if order.status == 'cancelled' %}
+      <dt class="col-sm-3">取消</dt>
+      <dd class="col-sm-9">
+        {{ order.get_cancel_reason_display|default:"—" }}
+        {% if order.cancelled_at %}<span class="text-muted small">（{{ order.cancelled_at|date:"Y/m/d H:i" }}{% if order.cancelled_by %} / {{ order.cancelled_by.display_name|default:order.cancelled_by.username }}{% endif %}）</span>{% endif %}
+      </dd>
+      {% endif %}
+
+      {% if order.note %}
+      <dt class="col-sm-3">備考</dt>
+      <dd class="col-sm-9" style="white-space: pre-wrap">{{ order.note }}</dd>
+      {% endif %}
+
+      <dt class="col-sm-3">登録</dt>
+      <dd class="col-sm-9 text-muted small font-monospace">
+        {{ order.created_at|date:"Y/m/d H:i" }}
+        （{{ order.created_by.display_name|default:order.created_by.username }}）
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{# ========== 明細 ========== #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white">
+    <i class="bi bi-list-ul me-1"></i>明細（{{ order.items.all|length }} 件）
+    <span class="text-muted small ms-2">
+      ピッキング元ロケーション・実出荷数は工程が進んだぶんだけ表示されます
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-start">SKU / 商品</th>
+          <th class="text-end text-nowrap">指示数量</th>
+          <th class="text-start text-nowrap">ピッキング元</th>
+          <th class="text-end text-nowrap">実出荷数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in order.items.all %}
+        <tr>
+          <td class="text-start">
+            <span class="font-monospace fw-bold">{{ item.sku.sku_code }}</span>
+            <div class="text-muted small">{{ item.sku.product.product_name }}</div>
+          </td>
+          <td class="text-end font-monospace">{{ item.quantity_ordered }}</td>
+          <td class="text-start text-nowrap">
+            {% if item.location %}
+              <span class="font-monospace">{{ item.location.location_code }}</span>
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end font-monospace">
+            {% if order.status == 'shipped' %}{{ item.quantity_shipped }}
+            {% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-4">明細が登録されていません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="d-flex gap-2">
+  <a href="{% url 'outbound:order_inquiry' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 出荷指示照会へ戻る
+  </a>
+  {% if order.status == 'allocation_wait' %}
+    {# 出荷起動前（出荷起動待ち）のときのみ編集可（一覧と同じ条件） #}
+    <a href="{% url 'outbound:order_update' order.pk %}" class="btn btn-outline-primary">
+      <i class="bi bi-pencil"></i> 編集
+    </a>
+  {% endif %}
+</div>
+{% endblock %}

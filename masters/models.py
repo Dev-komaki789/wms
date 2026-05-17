@@ -314,6 +314,14 @@ class Sku(models.Model):
         TOTAL = 'total', '種まき方式（AGV/GTP）'
         ORDER = 'order', 'オーダーピッキング（大型・長物）'
 
+    # ピッキング種別ごとの格納先エリア区分の対応。
+    # 種まき方式（AGV/GTP）は通常棚、オーダーピッキング（大型・長物）は
+    # 大型・長物エリアに格納する。棚入れ時の格納先チェックに使う。
+    PICKING_TYPE_TO_LOCATION_TYPE = {
+        PickingType.TOTAL: Area.LocationType.STORAGE,
+        PickingType.ORDER: Area.LocationType.LARGE_ITEM,
+    }
+
     product = models.ForeignKey(Product, on_delete=models.PROTECT, verbose_name='商品')
     sku_code = models.CharField('SKUコード', max_length=50, unique=True)
     jan_code = models.CharField('JANコード', max_length=20, blank=True, db_index=True)
@@ -341,6 +349,14 @@ class Sku(models.Model):
 
     def __str__(self):
         return f'{self.sku_code} ({self.product.product_name})'
+
+    @property
+    def required_location_type(self):
+        """この SKU を格納すべきエリア区分（ピッキング種別から決まる）。
+
+        戻り値は Area.LocationType のメンバー。`.label` で表示名を得られる。
+        """
+        return self.PICKING_TYPE_TO_LOCATION_TYPE[self.picking_type]
 
     @classmethod
     def next_sku_code(cls):

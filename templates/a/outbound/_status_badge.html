@@ -1,0 +1,10 @@
+{% comment %}
+出荷指示ステータスのバッジ。
+使い方: {% include 'a/outbound/_status_badge.html' with status=order.status %}
+{% endcomment %}
+{% if status == 'allocation_wait' %}<span class="badge bg-secondary">出荷起動待ち</span>
+{% elif status == 'picking_wait' %}<span class="badge bg-info text-dark">ピッキング作業待ち</span>
+{% elif status == 'inspection_wait' %}<span class="badge bg-primary">出荷検品作業待ち</span>
+{% elif status == 'shipped' %}<span class="badge bg-success">出荷完了</span>
+{% elif status == 'cancelled' %}<span class="badge bg-dark">取消</span>
+{% endif %}

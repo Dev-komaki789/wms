@@ -1,0 +1,89 @@
+{% extends 'a/base.html' %}
+
+{% block title %}エラーログ詳細{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-exclamation-triangle me-2 text-primary"></i>エラーログ詳細
+  </h2>
+  <a href="{% url 'core:error_log_inquiry' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> 照会に戻る
+  </a>
+</div>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span>
+      {% if log.error_type == 'exception' %}
+        <span class="badge bg-danger">{{ log.get_error_type_display }}</span>
+      {% else %}
+        <span class="badge bg-warning text-dark">{{ log.get_error_type_display }}</span>
+      {% endif %}
+      {% if log.is_resolved %}
+        <span class="badge bg-success ms-1">対応済み</span>
+      {% else %}
+        <span class="badge bg-secondary ms-1">未対応</span>
+      {% endif %}
+    </span>
+    <span class="font-monospace text-muted small">{{ log.occurred_at|date:"Y/m/d H:i:s" }}</span>
+  </div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3 text-muted">概要</dt>
+      <dd class="col-sm-9">{{ log.summary }}</dd>
+
+      <dt class="col-sm-3 text-muted">発生元</dt>
+      <dd class="col-sm-9">
+        {% if log.source %}<span class="font-monospace">{{ log.source }}</span>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+        {% if log.request_method %}<span class="badge bg-light text-dark border ms-1">{{ log.request_method }}</span>{% endif %}
+      </dd>
+
+      <dt class="col-sm-3 text-muted">対象</dt>
+      <dd class="col-sm-9">{{ log.reference|default:"—" }}</dd>
+
+      <dt class="col-sm-3 text-muted">操作ユーザー</dt>
+      <dd class="col-sm-9">
+        {% if log.user %}{{ log.user.display_name|default:log.user.username }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+
+      <dt class="col-sm-3 text-muted">対応日時</dt>
+      <dd class="col-sm-9">
+        {% if log.resolved_at %}<span class="font-monospace">{{ log.resolved_at|date:"Y/m/d H:i:s" }}</span>
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </dd>
+    </dl>
+  </div>
+</div>
+
+{# 詳細（トレースバック / 取り込み失敗データ） #}
+<div class="card shadow-sm mb-3">
+  <div class="card-header bg-white">
+    <i class="bi bi-card-text me-1"></i>詳細
+  </div>
+  <div class="card-body">
+    {% if log.detail %}
+      <pre class="mb-0 p-3 bg-light border rounded small" style="white-space: pre-wrap; word-break: break-word; max-height: 480px; overflow:auto;">{{ log.detail }}</pre>
+    {% else %}
+      <div class="text-muted">詳細情報はありません。</div>
+    {% endif %}
+  </div>
+</div>
+
+{# 対応状況の切り替え #}
+<form method="post">
+  {% csrf_token %}
+  {% if log.is_resolved %}
+    <button type="submit" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-counterclockwise me-1"></i>「未対応」に戻す
+    </button>
+  {% else %}
+    <button type="submit" class="btn btn-success">
+      <i class="bi bi-check-lg me-1"></i>「対応済み」にする
+    </button>
+  {% endif %}
+  <a href="{% url 'core:error_log_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+</form>
+{% endblock %}
