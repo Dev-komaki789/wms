@@ -16,6 +16,7 @@ urlpatterns = [
 
     path('locations/', views.LocationListView.as_view(), name='location_list'),
     path('locations/new/', views.LocationCreateView.as_view(), name='location_create'),
+    path('locations/bulk/', views.LocationBulkCreateView.as_view(), name='location_bulk_create'),
     path('locations/<int:pk>/edit/', views.LocationUpdateView.as_view(), name='location_update'),
     path('locations/<int:pk>/delete/', views.LocationDeleteView.as_view(), name='location_delete'),
 
@@ -48,6 +49,10 @@ urlpatterns = [
     path('customers/new/', views.CustomerCreateView.as_view(), name='customer_create'),
     path('customers/<int:pk>/edit/', views.CustomerUpdateView.as_view(), name='customer_update'),
     path('customers/<int:pk>/delete/', views.CustomerDeleteView.as_view(), name='customer_delete'),
+
+    # マスタ CSV 入出力（<entity> = area/location/category/manufacturer/product/sku/supplier/customer）
+    path('csv/<slug:entity>/export/', views.MasterCsvExportView.as_view(), name='csv_export'),
+    path('csv/<slug:entity>/import/', views.MasterCsvImportView.as_view(), name='csv_import'),
 
     # AJAX API
     path('api/skus/search/', views.SkuSearchAPIView.as_view(), name='api_sku_search'),

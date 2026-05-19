@@ -8,33 +8,136 @@
     <i class="bi bi-diagram-3 me-2 text-primary"></i>カテゴリマスタ照会
   </h2>
   <div class="d-flex gap-2">
+    {% if not searched %}
     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleAllCategories(true)">
       <i class="bi bi-arrows-expand"></i> すべて展開
     </button>
     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleAllCategories(false)">
       <i class="bi bi-arrows-collapse"></i> すべて折畳
     </button>
+    {% endif %}
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="bi bi-download"></i> CSV出力
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'category' %}?delimiter=comma">カンマ区切り（,）</a></li>
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'category' %}?delimiter=caret">キャレット区切り（^）</a></li>
+      </ul>
+    </div>
+    <a href="{% url 'masters:csv_import' 'category' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-upload"></i> CSV取込
+    </a>
     <a href="{% url 'masters:category_create' %}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus-lg"></i> 新規登録
     </a>
   </div>
 </div>
 
-{# ツリー #}
 <div class="card shadow-sm">
-  <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
-    <span class="small text-muted fw-bold">カテゴリツリー</span>
-    <span class="small text-muted">▶ で展開 / ▼ で折畳</span>
+  {# 検索バー #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label small text-muted mb-1">キーワード（コード / 名称）</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               value="{{ filters.q }}" placeholder="例: カテゴリ名 / CAT-001">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          <option value="active" {% if filters.status == 'active' %}selected{% endif %}>有効</option>
+          <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>無効</option>
+        </select>
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 検索</button>
+        <a href="{% url 'masters:category_list' %}" class="btn btn-outline-secondary btn-sm">クリア</a>
+      </div>
+    </form>
   </div>
-  <div class="card-body p-0">
+
+  {% if searched %}
+    {# 検索結果（フラット表示・階層パス付き） #}
+    <div class="px-3 py-2 border-bottom bg-white small text-muted">
+      検索結果: <strong class="text-dark">{{ categories|length }}</strong> 件
+    </div>
     {% if categories %}
-    <ul class="list-group list-group-flush" id="category-tree">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="text-start text-nowrap">カテゴリコード</th>
+            <th class="text-start">カテゴリ（階層パス）</th>
+            <th class="text-center text-nowrap">種別</th>
+            <th class="text-center text-nowrap">ステータス</th>
+            <th class="text-center" style="width: 210px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in categories %}
+          <tr>
+            <td class="text-start text-nowrap"><span class="font-monospace">{{ c.category_code }}</span></td>
+            <td class="text-start">
+              <span class="fw-semibold">{{ c.category_name }}</span>
+              <div class="small text-muted">{{ c.breadcrumb_attr }}</div>
+            </td>
+            <td class="text-center">
+              {% if c.is_leaf %}
+                <span class="badge bg-success"><i class="bi bi-box-seam"></i> 商品登録先</span>
+              {% else %}
+                <span class="badge bg-light text-muted border"><i class="bi bi-diagram-3"></i> 分類用</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              {% if c.is_active %}
+                <span class="badge bg-success">有効</span>
+              {% else %}
+                <span class="badge bg-secondary">無効</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <a href="{% url 'masters:category_list' %}?highlight={{ c.pk }}" class="btn btn-sm btn-outline-secondary">ツリー</a>
+              <a href="{% url 'masters:category_update' c.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+              <a href="{% url 'masters:category_delete' c.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      条件に一致するカテゴリがありません。
+    </div>
+    {% endif %}
+  {% else %}
+    {# 階層ドリルダウン（大→中→小→詳細のコンボボックスで枝を絞り込む） #}
+    <div class="px-3 py-2 border-bottom bg-light">
+      <div class="d-flex align-items-center flex-wrap gap-2">
+        <span class="small text-muted fw-bold me-1"><i class="bi bi-funnel"></i> 階層で絞り込み</span>
+        <select id="cat-combo-0" class="form-select form-select-sm" style="width:auto; max-width:240px"></select>
+        <select id="cat-combo-1" class="form-select form-select-sm" style="width:auto; max-width:240px; display:none"></select>
+        <select id="cat-combo-2" class="form-select form-select-sm" style="width:auto; max-width:240px; display:none"></select>
+        <select id="cat-combo-3" class="form-select form-select-sm" style="width:auto; max-width:240px; display:none"></select>
+        <button type="button" id="cat-combo-clear" class="btn btn-sm btn-outline-secondary" style="display:none">
+          <i class="bi bi-x-lg"></i> 解除
+        </button>
+        <span class="small text-muted ms-auto">▶ で展開 / ▼ で折畳</span>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      {% if categories %}
+      <ul class="list-group list-group-flush" id="category-tree">
       {% for c in categories %}
       <li class="list-group-item category-node"
           data-pk="{{ c.pk }}"
           data-parent-pk="{{ c.parent_id|default:'' }}"
           data-depth="{{ c.depth_attr }}"
-          style="padding-left: {{ c.depth_attr|add:1 }}rem; {% if c.depth_attr > 0 %}border-left: 3px solid var(--bs-info-bg-subtle, #cfe2ff);{% endif %}">
+          style="padding-left: {{ c.depth_attr|add:1 }}rem; {% if c.is_leaf %}border-left: 4px solid var(--bs-success);{% elif c.depth_attr > 0 %}border-left: 3px solid var(--bs-info-bg-subtle, #cfe2ff);{% endif %}">
         <div class="d-flex align-items-center gap-2">
           {% if c.children_count > 0 %}
             <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 category-toggle"
@@ -46,22 +149,23 @@
             <span style="display:inline-block; width:1.5rem"></span>
           {% endif %}
 
-          {% if c.depth_attr == 0 %}
+          {# 末端カテゴリ（商品登録先）は緑の塗りタグで目立たせる #}
+          {% if c.is_leaf %}
+            <i class="bi bi-tag-fill text-success"></i>
+          {% elif c.depth_attr == 0 %}
             <i class="bi bi-folder-fill text-primary"></i>
-          {% elif c.is_leaf %}
-            <i class="bi bi-tag text-muted"></i>
           {% else %}
             <i class="bi bi-folder text-secondary"></i>
           {% endif %}
 
           <span class="font-monospace text-muted small" style="min-width: 110px">{{ c.category_code }}</span>
 
-          <span class="{% if c.depth_attr == 0 %}fw-bold{% elif c.depth_attr == 1 %}fw-semibold{% endif %} flex-grow-1">
+          <span class="{% if c.is_leaf %}fw-semibold{% elif c.depth_attr == 0 %}fw-bold{% elif c.depth_attr == 1 %}fw-semibold{% endif %} flex-grow-1">
             {{ c.category_name }}
           </span>
 
           {% if c.is_leaf %}
-            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+            <span class="badge bg-success">
               <i class="bi bi-box-seam"></i> 商品登録先
             </span>
           {% else %}
@@ -90,14 +194,15 @@
         </div>
       </li>
       {% endfor %}
-    </ul>
-    {% else %}
-    <div class="text-center text-muted py-5">
-      <i class="bi bi-diagram-3 d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
-      カテゴリがまだ登録されていません。「+ 新規登録」から作成してください。
+      </ul>
+      {% else %}
+      <div class="text-center text-muted py-5">
+        <i class="bi bi-diagram-3 d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+        カテゴリがまだ登録されていません。「+ 新規登録」から作成してください。
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
-  </div>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -111,6 +216,8 @@
     100%    { background-color: transparent; }
   }
 </style>
+<script id="category-nav" type="application/json">{{ category_nav_json|safe }}</script>
+<script id="cat-level-labels" type="application/json">{{ level_labels_json|safe }}</script>
 <script>
 (function () {
   'use strict';
@@ -128,6 +235,7 @@
   }
 
   let expanded = load();
+  let branchSet = null;   // コンボボックスで絞り込んだ枝（null = 絞り込みなし）
   if (expanded === null) {
     // 初回訪問: 深さ 0 を全部展開（深さ 1 が見える状態）をデフォルトに
     expanded = new Set();
@@ -136,15 +244,23 @@
   }
 
   // ---- 可視性の適用 ----
+  // branchSet（コンボボックスで絞り込んだ枝）が有効なときは、その枝のノード
+  // だけを全展開で表示する。無効なときは従来の展開／折畳ロジック。
   function applyVisibility() {
     document.querySelectorAll('.category-node').forEach(node => {
-      const depth = parseInt(node.dataset.depth);
-      // 深さ 0 は常時表示、それ以外は親が展開済みかどうか
-      const visible = depth === 0 || expanded.has(node.dataset.parentPk);
+      let visible;
+      if (branchSet) {
+        visible = branchSet.has(node.dataset.pk);
+      } else {
+        const depth = parseInt(node.dataset.depth);
+        // 深さ 0 は常時表示、それ以外は親が展開済みかどうか
+        visible = depth === 0 || expanded.has(node.dataset.parentPk);
+      }
       node.style.display = visible ? '' : 'none';
     });
     document.querySelectorAll('.category-toggle').forEach(btn => {
-      const isOpen = expanded.has(btn.dataset.targetParent);
+      // 枝の絞り込み中は全展開表示なのでアイコンは開いた状態にする
+      const isOpen = branchSet ? true : expanded.has(btn.dataset.targetParent);
       btn.dataset.expanded = String(isOpen);
       const icon = btn.querySelector('.toggle-icon');
       if (icon) {
@@ -194,6 +310,90 @@
       url.searchParams.delete('highlight');
       window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
     }
+  }
+
+  // ---- 階層ドリルダウン（大→中→小→詳細のコンボボックス） ----
+  const navEl = document.getElementById('category-nav');
+  const combo0 = document.getElementById('cat-combo-0');
+  if (navEl && combo0) {
+    const CATS = JSON.parse(navEl.textContent);
+    const LABELS = JSON.parse(
+      document.getElementById('cat-level-labels').textContent);
+    const combos = [0, 1, 2, 3].map(i => document.getElementById('cat-combo-' + i));
+    const clearBtn = document.getElementById('cat-combo-clear');
+
+    // 親pk（'' = ルート）-> 子カテゴリ配列
+    const childrenOf = {};
+    CATS.forEach(c => {
+      const key = c.parent === null ? '' : String(c.parent);
+      (childrenOf[key] = childrenOf[key] || []).push(c);
+    });
+
+    function fillCombo(combo, parentKey, levelIdx) {
+      const label = LABELS[levelIdx] || 'カテゴリ';
+      combo.innerHTML = '<option value="">— ' + label + ' を選択 —</option>';
+      (childrenOf[parentKey] || []).forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = String(c.pk);
+        opt.textContent = c.name + '（' + c.code + '）';
+        combo.appendChild(opt);
+      });
+    }
+
+    // 値が入っている最も深いコンボの選択pk（無ければ null）
+    function selectedPk() {
+      for (let i = combos.length - 1; i >= 0; i--) {
+        if (combos[i].value) return combos[i].value;
+      }
+      return null;
+    }
+
+    function applyBranchFilter() {
+      const pk = selectedPk();
+      clearBtn.style.display = pk ? '' : 'none';
+      if (!pk) {
+        branchSet = null;
+      } else {
+        // 選んだカテゴリ＋全子孫を「表示する枝」の集合にする
+        branchSet = new Set();
+        const stack = [pk];
+        while (stack.length) {
+          const cur = stack.pop();
+          branchSet.add(cur);
+          (childrenOf[cur] || []).forEach(c => stack.push(String(c.pk)));
+        }
+      }
+      applyVisibility();
+    }
+
+    function onComboChange(idx) {
+      // 選択より深い階層のコンボはクリアして隠す
+      for (let i = idx + 1; i < combos.length; i++) {
+        combos[i].value = '';
+        combos[i].style.display = 'none';
+      }
+      const pk = combos[idx].value;
+      // 子があれば次の階層のコンボを出して埋める
+      if (pk && idx + 1 < combos.length && (childrenOf[pk] || []).length > 0) {
+        fillCombo(combos[idx + 1], pk, idx + 1);
+        combos[idx + 1].style.display = '';
+      }
+      applyBranchFilter();
+    }
+
+    combos.forEach((combo, idx) => {
+      combo.addEventListener('change', () => onComboChange(idx));
+    });
+    clearBtn.addEventListener('click', () => {
+      combos.forEach((combo, i) => {
+        combo.value = '';
+        if (i > 0) combo.style.display = 'none';
+      });
+      applyBranchFilter();
+    });
+
+    // 初期化: 大カテゴリのコンボを埋める
+    fillCombo(combos[0], '', 0);
   }
 
   // ---- 「すべて展開」「すべて折畳」（テンプレートのボタンから呼ばれる） ----

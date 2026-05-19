@@ -1,0 +1,222 @@
+{% extends 'a/base.html' %}
+
+{% block title %}入出庫履歴照会{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-clock-history me-2 text-primary"></i>入出庫履歴照会
+  </h2>
+</div>
+
+<div class="alert alert-info d-flex align-items-start">
+  <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+  <div>
+    在庫が動いた記録（<strong>入庫 / 出庫 / 棚卸調整</strong>）を時系列で一覧します。
+    入荷・出荷・棚間移動・計画外入出庫など、すべての在庫変動が伝票種別つきで残ります。
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  {# 検索バー #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" id="movement-search-form" class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">SKUコード / JAN</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               placeholder="例: SKU-000001 / 4901..." value="{{ filters.q }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">商品</label>
+        <input type="text" name="product" class="form-control form-control-sm"
+               placeholder="例: インパクト / PRD-00001" value="{{ filters.product }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">棚番コード</label>
+        <input type="text" name="location" class="form-control form-control-sm"
+               placeholder="例: A-01" value="{{ filters.location }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">種別</label>
+        <select name="movement_type" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in movement_types %}
+            <option value="{{ val }}" {% if filters.movement_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">伝票種別</label>
+        <select name="reference_type" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in reference_types %}
+            <option value="{{ val }}" {% if filters.reference_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">移動日（From）</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">移動日（To）</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to }}">
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search"></i> 検索
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                onclick="clearInquiryForm(this)">クリア</button>
+      </div>
+    </form>
+  </div>
+
+  {% if searched %}
+    {# サマリー（打ち切り前の全件を集計） #}
+    <div class="row g-0 text-center border-bottom bg-white">
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold">{{ stats.total }}</div>
+        <div class="small text-muted">該当件数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-success">{{ stats.in_count }}</div>
+        <div class="small text-muted">入庫件数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-danger">{{ stats.out_count }}</div>
+        <div class="small text-muted">出庫件数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-secondary">{{ stats.adj_count }}</div>
+        <div class="small text-muted">棚卸調整件数</div>
+      </div>
+      <div class="col py-2 border-end">
+        <div class="fs-5 fw-bold text-success">+{{ stats.in_qty }}</div>
+        <div class="small text-muted">入庫合計数量</div>
+      </div>
+      <div class="col py-2">
+        <div class="fs-5 fw-bold text-danger">-{{ stats.out_qty }}</div>
+        <div class="small text-muted">出庫合計数量</div>
+      </div>
+    </div>
+
+    <div class="px-3 py-2 border-bottom bg-white small text-muted">
+      検索結果: <strong class="text-dark">{{ stats.total }}</strong> 件
+      {% if truncated %}
+        <span class="text-danger ms-1">（新しい順 {{ stats.shown }} 件を表示）</span>
+      {% endif %}
+    </div>
+
+    {% if truncated %}
+    <div class="alert alert-warning rounded-0 border-0 border-bottom mb-0 d-flex align-items-start">
+      <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+      <div>
+        該当件数が表示上限（{{ row_limit }} 件）を超えています。新しい順に
+        <strong>{{ row_limit }} 件のみ</strong>表示しています。移動日や条件で絞り込んでください。
+      </div>
+    </div>
+    {% endif %}
+
+    {# 検索結果テーブル #}
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-start text-nowrap">移動日時</th>
+          <th class="text-center text-nowrap">種別</th>
+          <th class="text-start">棚番コード</th>
+          <th class="text-start">SKUコード</th>
+          <th class="text-start">商品</th>
+          <th class="text-end text-nowrap">数量</th>
+          <th class="text-end text-nowrap">在庫変動</th>
+          <th class="text-start text-nowrap">伝票種別</th>
+          <th class="text-start text-nowrap">操作ユーザー</th>
+          <th class="text-start">備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in movements %}
+        <tr>
+          <td class="text-start text-nowrap font-monospace small">{{ m.moved_at|date:"Y/m/d H:i:s" }}</td>
+          <td class="text-center text-nowrap">
+            {% if m.movement_type == 'IN' %}
+              <span class="badge bg-success">{{ m.get_movement_type_display }}</span>
+            {% elif m.movement_type == 'OUT' %}
+              <span class="badge bg-danger">{{ m.get_movement_type_display }}</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ m.get_movement_type_display }}</span>
+            {% endif %}
+          </td>
+          <td class="text-start">
+            <span class="font-monospace fw-bold text-primary">{{ m.location.location_code }}</span>
+            {% if m.location.location_name %}
+              <span class="text-muted small d-block">{{ m.location.location_name }}</span>
+            {% endif %}
+          </td>
+          <td class="text-start"><span class="font-monospace">{{ m.sku.sku_code }}</span></td>
+          <td class="text-start">
+            {{ m.sku.product.product_name }}
+            <span class="text-muted small">（<span class="font-monospace">{{ m.sku.product.product_code }}</span>）</span>
+          </td>
+          <td class="text-end text-nowrap">
+            {% if m.quantity > 0 %}
+              <span class="font-monospace fw-bold text-success">{{ m.quantity|stringformat:"+d" }}</span>
+            {% else %}
+              <span class="font-monospace fw-bold text-danger">{{ m.quantity }}</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap font-monospace small text-muted">
+            {{ m.quantity_before }} <i class="bi bi-arrow-right mx-1"></i> <span class="text-dark">{{ m.quantity_after }}</span>
+          </td>
+          <td class="text-start text-nowrap">
+            {% if m.reference_type %}
+              <span class="badge bg-secondary-subtle text-secondary-emphasis border">{{ m.get_reference_type_display }}</span>
+              {% if m.reference_id %}
+                <span class="text-muted small font-monospace">#{{ m.reference_id }}</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-start text-nowrap small">
+            {{ m.created_by.display_name|default:m.created_by.username }}
+          </td>
+          <td class="text-start small">
+            {% if m.note %}{{ m.note }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-4">条件に一致する入出庫履歴が見つかりませんでした</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+      条件を指定して「検索」を押してください
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function clearInquiryForm(btn) {
+  const form = btn.closest('form');
+  if (!form) return;
+  form.querySelectorAll(
+    'input[type="text"], input[type="search"], input[type="date"]'
+  ).forEach(i => { i.value = ''; });
+  form.querySelectorAll('select').forEach(s => { s.selectedIndex = 0; });
+  // クリア後は最初の入力欄にカーソルを戻す（連続検索のしやすさ）
+  const firstField = form.querySelector(
+    'input:not([type="hidden"]):not([disabled]):not([readonly]),'
+    + 'select:not([disabled]),'
+    + 'textarea:not([disabled])'
+  );
+  if (firstField) firstField.focus();
+}
+</script>
+{% endblock %}

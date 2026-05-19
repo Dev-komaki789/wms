@@ -7,12 +7,61 @@
   <h2 class="mb-0">
     <i class="bi bi-people me-2 text-primary"></i>顧客マスタ照会
   </h2>
-  <a href="{% url 'masters:customer_create' %}" class="btn btn-primary">
-    <i class="bi bi-plus-lg"></i> 新規登録
-  </a>
+  <div class="d-flex gap-2">
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary dropdown-toggle"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="bi bi-download"></i> CSV出力
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'customer' %}?delimiter=comma">カンマ区切り（,）</a></li>
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'customer' %}?delimiter=caret">キャレット区切り（^）</a></li>
+      </ul>
+    </div>
+    <a href="{% url 'masters:csv_import' 'customer' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-upload"></i> CSV取込
+    </a>
+    <a href="{% url 'masters:customer_create' %}" class="btn btn-primary">
+      <i class="bi bi-plus-lg"></i> 新規登録
+    </a>
+  </div>
 </div>
 
 <div class="card">
+  {# 検索バー #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">キーワード（コード / 名称）</label>
+        <input type="text" name="q" class="form-control form-control-sm"
+               value="{{ filters.q }}" placeholder="例: 顧客名 / CUST-0001">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">顧客種別</label>
+        <select name="customer_type" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in customer_type_choices %}
+            <option value="{{ val }}" {% if filters.customer_type == val|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          <option value="active" {% if filters.status == 'active' %}selected{% endif %}>有効</option>
+          <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>無効</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 検索</button>
+        <a href="{% url 'masters:customer_list' %}" class="btn btn-outline-secondary btn-sm">クリア</a>
+      </div>
+    </form>
+  </div>
+  <div class="px-3 py-2 border-bottom bg-white small text-muted">
+    該当: <strong class="text-dark">{{ customers|length }}</strong> 件
+  </div>
   <table class="table table-hover align-middle mb-0">
     <thead class="table-light">
       <tr>
@@ -62,7 +111,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="8" class="text-center text-muted py-4">顧客がまだ登録されていません</td></tr>
+      <tr><td colspan="8" class="text-center text-muted py-4">{% if filters.q or filters.customer_type or filters.status %}条件に一致する顧客がありません{% else %}顧客がまだ登録されていません{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

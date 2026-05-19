@@ -10,10 +10,13 @@ from django.views.generic import (
     CreateView, DeleteView, DetailView, TemplateView, UpdateView, View,
 )
 
+from core.order_csv import OrderCsvExportView, OrderCsvImportView
+from core.utils import parse_query_date
 from masters.models import Area, Sku
 from masters.utils import get_current_warehouse
 from stock.models import StockBalance, StockMovement
 
+from .csv_io import OUTBOUND_ORDER_SPEC
 from .forms import OutboundOrderForm, OutboundOrderItemFormSet
 from .models import (
     OutboundOrder, OutboundOrderItem, PickingList, PickingListItem,
@@ -114,10 +117,12 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(status=f['status'])
             if f['source_type']:
                 qs = qs.filter(source_type=f['source_type'])
-            if f['deadline_from']:
-                qs = qs.filter(deadline_at__date__gte=f['deadline_from'])
-            if f['deadline_to']:
-                qs = qs.filter(deadline_at__date__lte=f['deadline_to'])
+            deadline_from = parse_query_date(f['deadline_from'])
+            deadline_to = parse_query_date(f['deadline_to'])
+            if deadline_from:
+                qs = qs.filter(deadline_at__date__gte=deadline_from)
+            if deadline_to:
+                qs = qs.filter(deadline_at__date__lte=deadline_to)
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_ordered=Sum('items__quantity_ordered'),
@@ -1186,3 +1191,15 @@ class OutboundInspectionWorkView(LoginRequiredMixin, View):
             f'（出荷完了）',
         )
         return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
+
+
+# ---- 出荷指示 CSV 入出力 ----
+
+class OutboundOrderCsvExportView(OrderCsvExportView):
+    """出荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。"""
+    spec = OUTBOUND_ORDER_SPEC
+
+
+class OutboundOrderCsvImportView(OrderCsvImportView):
+    """出荷指示を CSV でインポートする（新規作成のみ）。"""
+    spec = OUTBOUND_ORDER_SPEC

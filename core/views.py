@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
 from .models import ErrorLog
+from .utils import parse_query_date
 
 
 class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
@@ -49,10 +50,12 @@ class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(is_resolved=True)
             elif f['resolved'] == 'unresolved':
                 qs = qs.filter(is_resolved=False)
-            if f['date_from']:
-                qs = qs.filter(occurred_at__date__gte=f['date_from'])
-            if f['date_to']:
-                qs = qs.filter(occurred_at__date__lte=f['date_to'])
+            date_from = parse_query_date(f['date_from'])
+            date_to = parse_query_date(f['date_to'])
+            if date_from:
+                qs = qs.filter(occurred_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(occurred_at__date__lte=date_to)
             logs = list(qs.order_by('-occurred_at'))
             ctx['logs'] = logs
             ctx['stats'] = {

@@ -3,6 +3,7 @@
 ウィジェットに Bootstrap 5 のクラスを付与する。
 これにより各フォームテンプレートは `{{ field }}` を直接書くだけでよい。
 """
+import itertools
 import re
 
 from django import forms
@@ -218,6 +219,138 @@ class LocationForm(forms.ModelForm):
         return instance
 
 
+def _bulk_range_field(label, digits):
+    """一括登録フォームのセグメント範囲（開始/終了）用 IntegerField を作る。
+
+    digits 桁までに制限する。maxlength で入力時に桁数を制限し、max_value で
+    送信時にも検証する（単一登録フォームのセグメント入力と同じ方式）。
+    """
+    max_val = 10 ** digits - 1
+    return forms.IntegerField(
+        label=label,
+        required=False,
+        min_value=1,
+        max_value=max_val,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control text-center font-monospace',
+            'inputmode': 'numeric',
+            'pattern': r'\d*',
+            'maxlength': str(digits),
+            'autocomplete': 'off',
+        }),
+    )
+
+
+class LocationBulkCreateForm(forms.Form):
+    """ロケーション一括登録フォーム（範囲指定で棚番を自動生成）。
+
+    区分・エリアを選び、各セグメント（通路/ラック/段、または連番）の開始〜終了
+    範囲を指定すると、全組み合わせの棚番コードを生成する。clean() で範囲を検証
+    し、生成した棚番一覧を _codes・対象エリアを _area に保持する（実際の DB 登録
+    と既存棚番のスキップはビューが行う）。
+    """
+
+    # 一度に生成できる上限（範囲の打ち間違いによる大量生成を防ぐ）
+    MAX_BULK = 2000
+
+    area_type = forms.ChoiceField(
+        label='区分',
+        choices=[('', '— 区分を選択 —')] + list(Area.LocationType.choices),
+        widget=forms.Select(attrs=SELECT),
+    )
+    area = forms.ModelChoiceField(
+        label='エリア',
+        queryset=Area.objects.none(),
+        empty_label='— エリアを選択 —',
+        widget=forms.Select(attrs=SELECT),
+    )
+    # 通常棚の 列(通路)・連(ラック)・段 は2桁まで。大型・長物の連番は3桁
+    aisle_from = _bulk_range_field('通路（開始）', 2)
+    aisle_to = _bulk_range_field('通路（終了）', 2)
+    rack_from = _bulk_range_field('ラック（開始）', 2)
+    rack_to = _bulk_range_field('ラック（終了）', 2)
+    level_from = _bulk_range_field('段（開始）', 2)
+    level_to = _bulk_range_field('段（終了）', 2)
+    seq_from = _bulk_range_field('連番（開始）', 3)
+    seq_to = _bulk_range_field('連番（終了）', 3)
+    is_active = forms.BooleanField(
+        label=STATUS_LABEL,
+        required=False,
+        initial=True,
+        widget=StatusToggleWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._area = None
+        self._codes = []
+        # エリア dropdown は現在倉庫スコープに限定（単一登録フォームと同じ規約）
+        area_qs = (
+            Area.objects.select_related('warehouse')
+            .order_by('warehouse__warehouse_code', 'area_code')
+        )
+        current_wh = get_current_warehouse()
+        if current_wh is not None:
+            area_qs = area_qs.filter(warehouse=current_wh)
+        self.fields['area'].queryset = area_qs
+
+    def clean(self):
+        cleaned = super().clean()
+        area = cleaned.get('area')
+        if not area:
+            return cleaned
+
+        # 区分とエリアの整合性
+        area_type = cleaned.get('area_type')
+        if area_type and area_type != area.location_type:
+            self.add_error('area_type', '選択した区分とエリアの区分が一致しません。')
+            return cleaned
+
+        # 区分に応じたセグメントの開始〜終了を検証する
+        seg_defs = Area.LOCATION_CODE_SEGMENTS.get(area.location_type, [])
+        bounds = {}
+        total = 1
+        for key, label, _digits in seg_defs:
+            lo = cleaned.get(f'{key}_from')
+            hi = cleaned.get(f'{key}_to')
+            # 値が無い（未入力、または桁数オーバー等で field 検証に落ちた）場合、
+            # まだエラーが付いていなければ「入力してください」を出す
+            if lo is None and not self.has_error(f'{key}_from'):
+                self.add_error(f'{key}_from', '入力してください。')
+            if hi is None and not self.has_error(f'{key}_to'):
+                self.add_error(f'{key}_to', '入力してください。')
+            if lo is None or hi is None:
+                continue
+            if lo > hi:
+                self.add_error(
+                    f'{key}_to', f'{label}の終了は開始以上にしてください。')
+                continue
+            bounds[key] = (lo, hi)
+            total *= (hi - lo + 1)
+
+        # セグメントにエラーがあればここで終了
+        if any(self.has_error(f'{k}_from') or self.has_error(f'{k}_to')
+               for k, _, _ in seg_defs):
+            return cleaned
+
+        if total > self.MAX_BULK:
+            raise forms.ValidationError(
+                f'生成件数が {total} 件で上限（{self.MAX_BULK} 件）を超えます。'
+                f'範囲を狭めてください。'
+            )
+
+        # 全組み合わせの棚番コードを生成する
+        seg_keys = [k for k, _, _ in seg_defs]
+        codes = []
+        for combo in itertools.product(
+                *(range(bounds[k][0], bounds[k][1] + 1) for k in seg_keys)):
+            segments = {k: str(v) for k, v in zip(seg_keys, combo)}
+            codes.append(area.format_location_code(**segments))
+        self._area = area
+        self._codes = codes
+        return cleaned
+
+
 class CategoryForm(forms.ModelForm):
     """カテゴリ登録・編集フォーム。
 
@@ -267,6 +400,11 @@ class CategoryForm(forms.ModelForm):
             Category.objects.filter(pk__in=eligible_ids).order_by('sort_order', 'category_code')
         )
         self.fields['parent'].empty_label = '— ルート（大カテゴリとして登録）—'
+        # 親 select の各選択肢にカテゴリ名とカテゴリコードを併記する
+        # （同名カテゴリの区別・階層の把握をしやすくする）
+        self.fields['parent'].label_from_instance = (
+            lambda c: f'{c.category_name}（{c.category_code}）'
+        )
 
     def clean(self):
         cleaned = super().clean()

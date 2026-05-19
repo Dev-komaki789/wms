@@ -1,0 +1,310 @@
+{% extends 'a/base.html' %}
+
+{% block title %}ロケーション一括登録{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'masters:master_inquiry' %}">エリア・ロケーション照会</a></li>
+    <li class="breadcrumb-item active">ロケーション一括登録</li>
+  </ol>
+</nav>
+
+<h2 class="mb-1">ロケーション一括登録</h2>
+<p class="text-muted">
+  区分・エリアと各セグメントの範囲を指定すると、全組み合わせの棚番をまとめて登録します。
+  1件ずつ登録する場合は <a href="{% url 'masters:location_create' %}">ロケーション新規登録</a> へ。
+</p>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      {# Step1: 区分選択 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">Step 1. 区分選択</h6>
+      <div class="mb-4">
+        <label class="form-label d-block" for="{{ form.area_type.id_for_label }}">
+          {{ form.area_type.label }}<span class="text-danger">*</span>
+        </label>
+        {{ form.area_type }}
+        {% if form.area_type.errors %}<div class="invalid-feedback d-block">{{ form.area_type.errors|join:" " }}</div>{% endif %}
+      </div>
+
+      {# Step2: エリア選択 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">Step 2. エリア選択</h6>
+      <div class="row mb-4">
+        <div class="col-md-8">
+          <label class="form-label d-block" for="{{ form.area.id_for_label }}">
+            {{ form.area.label }}<span class="text-danger">*</span>
+          </label>
+          {{ form.area }}
+          <div class="form-text" id="area-format-hint">区分を先に選んでください。</div>
+          {% if form.area.errors %}<div class="invalid-feedback d-block">{{ form.area.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      {# Step3: 範囲指定 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">Step 3. 棚番の範囲指定</h6>
+      <div class="mb-3">
+        {# 通常棚: 通路 / ラック / 段 #}
+        <div class="seg-storage" style="display:none">
+          <div class="row g-2 align-items-center mb-2">
+            <label class="col-4 col-md-2 form-label mb-0">通路 <span class="text-danger">*</span></label>
+            <div class="col-auto" style="width:110px">{{ form.aisle_from }}</div>
+            <div class="col-auto text-muted px-1">〜</div>
+            <div class="col-auto" style="width:110px">{{ form.aisle_to }}</div>
+            <div class="col-12 col-md">
+              {% if form.aisle_from.errors %}<div class="text-danger small">通路（開始）: {{ form.aisle_from.errors|join:" " }}</div>{% endif %}
+              {% if form.aisle_to.errors %}<div class="text-danger small">通路（終了）: {{ form.aisle_to.errors|join:" " }}</div>{% endif %}
+            </div>
+          </div>
+          <div class="row g-2 align-items-center mb-2">
+            <label class="col-4 col-md-2 form-label mb-0">ラック <span class="text-danger">*</span></label>
+            <div class="col-auto" style="width:110px">{{ form.rack_from }}</div>
+            <div class="col-auto text-muted px-1">〜</div>
+            <div class="col-auto" style="width:110px">{{ form.rack_to }}</div>
+            <div class="col-12 col-md">
+              {% if form.rack_from.errors %}<div class="text-danger small">ラック（開始）: {{ form.rack_from.errors|join:" " }}</div>{% endif %}
+              {% if form.rack_to.errors %}<div class="text-danger small">ラック（終了）: {{ form.rack_to.errors|join:" " }}</div>{% endif %}
+            </div>
+          </div>
+          <div class="row g-2 align-items-center mb-2">
+            <label class="col-4 col-md-2 form-label mb-0">段 <span class="text-danger">*</span></label>
+            <div class="col-auto" style="width:110px">{{ form.level_from }}</div>
+            <div class="col-auto text-muted px-1">〜</div>
+            <div class="col-auto" style="width:110px">{{ form.level_to }}</div>
+            <div class="col-12 col-md">
+              {% if form.level_from.errors %}<div class="text-danger small">段（開始）: {{ form.level_from.errors|join:" " }}</div>{% endif %}
+              {% if form.level_to.errors %}<div class="text-danger small">段（終了）: {{ form.level_to.errors|join:" " }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+        {# 大型・長物: 連番 #}
+        <div class="seg-large-item" style="display:none">
+          <div class="row g-2 align-items-center mb-2">
+            <label class="col-4 col-md-2 form-label mb-0">連番 <span class="text-danger">*</span></label>
+            <div class="col-auto" style="width:110px">{{ form.seq_from }}</div>
+            <div class="col-auto text-muted px-1">〜</div>
+            <div class="col-auto" style="width:110px">{{ form.seq_to }}</div>
+            <div class="col-12 col-md">
+              {% if form.seq_from.errors %}<div class="text-danger small">連番（開始）: {{ form.seq_from.errors|join:" " }}</div>{% endif %}
+              {% if form.seq_to.errors %}<div class="text-danger small">連番（終了）: {{ form.seq_to.errors|join:" " }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="form-text seg-hint" style="display:none">区分とエリアを先に選んでください。</div>
+      </div>
+
+      {# プレビュー（生成範囲と件数） #}
+      <div class="alert alert-info" id="loc-preview-box">
+        <div class="row align-items-center">
+          <div class="col-sm-8">
+            <div class="small text-muted"><i class="bi bi-barcode me-1"></i>生成される棚番（範囲）</div>
+            <div class="font-monospace fs-5" id="loc-preview-range">—</div>
+          </div>
+          <div class="col-sm-4 text-sm-end">
+            <div class="small text-muted">生成件数</div>
+            <div class="fs-4 fw-bold" id="loc-preview-count">—</div>
+          </div>
+        </div>
+        <div class="small text-danger d-none mt-1" id="loc-preview-warn"></div>
+        <div class="small text-muted mt-1">
+          <i class="bi bi-info-circle me-1"></i>同じ棚番が既に存在する場合は自動でスキップされます（一度に登録できるのは {{ max_bulk }} 件まで）。
+        </div>
+      </div>
+
+      {# 補足情報 #}
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">補足情報</h6>
+      <div class="mb-3">
+        <label class="form-label d-block" for="{{ form.is_active.id_for_label }}">
+          {{ form.is_active.label }}
+        </label>
+        {{ form.is_active }}
+        <div class="form-text">登録するロケーションすべてに適用されます。</div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="この範囲でロケーションを一括登録しますか？（既存の棚番は自動でスキップされます）"
+                data-confirm-yes="一括登録する">
+          一括登録
+        </button>
+        <a href="{% url 'masters:master_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script id="areas-by-type" type="application/json">{{ areas_by_type_json|safe }}</script>
+<script>
+(function () {
+  'use strict';
+  const AREAS = JSON.parse(document.getElementById('areas-by-type').textContent);
+  const MAX = {{ max_bulk }};
+
+  const typeSelect = document.getElementById('{{ form.area_type.id_for_label }}');
+  const areaSelect = document.getElementById('{{ form.area.id_for_label }}');
+  const hint = document.getElementById('area-format-hint');
+  const segHint = document.querySelector('.seg-hint');
+  const rangeEl = document.getElementById('loc-preview-range');
+  const countEl = document.getElementById('loc-preview-count');
+  const warnEl = document.getElementById('loc-preview-warn');
+
+  function repopulateAreas(type) {
+    const prev = areaSelect.value;
+    areaSelect.innerHTML = '<option value="">— エリアを選択 —</option>';
+    if (type && AREAS[type]) {
+      for (const a of AREAS[type]) {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.dataset.areaCode = a.area_code;
+        opt.dataset.locationType = a.location_type;
+        opt.textContent = `${a.warehouse_code} / ${a.area_code} — ${a.area_name || ''}`;
+        areaSelect.appendChild(opt);
+      }
+    }
+    if (prev) { areaSelect.value = prev; if (!areaSelect.value) areaSelect.value = ''; }
+  }
+
+  function toggleSegments(type) {
+    document.querySelectorAll('.seg-storage').forEach(el => {
+      el.style.display = (type === 'storage') ? '' : 'none';
+    });
+    document.querySelectorAll('.seg-large-item').forEach(el => {
+      el.style.display = (type === 'large_item') ? '' : 'none';
+    });
+    if (segHint) segHint.style.display = type ? 'none' : '';
+  }
+
+  function updateHint(type) {
+    if (type === 'storage') hint.textContent = 'フォーマット: A-NN-NN-NN（エリアコード-通路-ラック-段）';
+    else if (type === 'large_item') hint.textContent = 'フォーマット: L-NNN（エリアコード-連番）';
+    else hint.textContent = '区分を先に選んでください。';
+  }
+
+  // セグメント定義（区分ごと）。pad 桁数は format_location_code と一致させる
+  const SEG_KEYS = {storage: ['aisle', 'rack', 'level'], large_item: ['seq']};
+  const SEG_LABEL = {aisle: '通路', rack: 'ラック', level: '段', seq: '連番'};
+  const SEG_PAD = {aisle: 2, rack: 2, level: 2, seq: 3};
+  const ALL_SEG = ['aisle', 'rack', 'level', 'seq'];
+
+  function segEl(key, bound) {
+    return document.getElementById('id_' + key + '_' + bound);
+  }
+
+  // セグメント入力値を 1 以上の整数で返す。未入力・不正・0 以下は null
+  function intval(key, bound) {
+    const v = segEl(key, bound).value.trim();
+    if (!/^\d+$/.test(v)) return null;
+    const n = parseInt(v, 10);
+    return n >= 1 ? n : null;
+  }
+
+  // 範囲を検証し、プレビューと「入力段階エラー」を更新する。
+  // 不正な範囲は customValidity を立てておく → 一括登録ボタン押下時、wms.js が
+  // 確認モーダルを出す前に form.checkValidity() で弾くため、実行前（入力段階）で
+  // ブラウザの吹き出しエラーに気づける。
+  function revalidate() {
+    warnEl.classList.add('d-none');
+    countEl.classList.remove('text-danger');
+    // いったん全セグメントの customValidity をクリアする
+    ALL_SEG.forEach(function (k) {
+      segEl(k, 'from').setCustomValidity('');
+      segEl(k, 'to').setCustomValidity('');
+    });
+
+    const opt = areaSelect.options[areaSelect.selectedIndex];
+    if (!opt || !opt.value) {
+      rangeEl.textContent = '—';
+      countEl.textContent = '—';
+      return;
+    }
+    const code = opt.dataset.areaCode || '';
+    const keys = SEG_KEYS[opt.dataset.locationType] || [];
+
+    let total = 1;
+    let problem = '';
+    const firstParts = [];
+    const lastParts = [];
+    for (const k of keys) {
+      const f = intval(k, 'from');
+      const t = intval(k, 'to');
+      if (f === null) {
+        segEl(k, 'from').setCustomValidity(SEG_LABEL[k] + 'の開始を入力してください。');
+        problem = problem || SEG_LABEL[k] + 'の開始を入力してください。';
+      }
+      if (t === null) {
+        segEl(k, 'to').setCustomValidity(SEG_LABEL[k] + 'の終了を入力してください。');
+        problem = problem || SEG_LABEL[k] + 'の終了を入力してください。';
+      }
+      if (f !== null && t !== null && f > t) {
+        segEl(k, 'to').setCustomValidity(
+          SEG_LABEL[k] + 'は終了を開始以上にしてください。');
+        problem = problem || SEG_LABEL[k] + 'は終了を開始以上にしてください。';
+      }
+      if (f !== null && t !== null && f <= t) {
+        total *= (t - f + 1);
+        firstParts.push(String(f).padStart(SEG_PAD[k], '0'));
+        lastParts.push(String(t).padStart(SEG_PAD[k], '0'));
+      }
+    }
+
+    if (problem) {
+      rangeEl.textContent = '範囲を確認してください';
+      countEl.textContent = '—';
+      warnEl.textContent = problem;
+      warnEl.classList.remove('d-none');
+      return;
+    }
+
+    // 全範囲そろった → 生成範囲と件数を表示
+    const first = code + '-' + firstParts.join('-');
+    const last = code + '-' + lastParts.join('-');
+    rangeEl.textContent = (first === last) ? first : (first + ' 〜 ' + last);
+    countEl.textContent = total + ' 件';
+    if (total > MAX) {
+      // 件数超過も入力段階で弾く（各「終了」欄に customValidity を立てる）
+      keys.forEach(function (k) {
+        segEl(k, 'to').setCustomValidity(
+          '生成件数が上限（' + MAX + '件）を超えています。範囲を狭めてください。');
+      });
+      warnEl.textContent = '生成件数 ' + total + ' 件が上限（' + MAX
+        + '件）を超えています。範囲を狭めてください。';
+      warnEl.classList.remove('d-none');
+      countEl.classList.add('text-danger');
+    }
+  }
+
+  function onTypeChange() {
+    const type = typeSelect.value;
+    repopulateAreas(type);
+    toggleSegments(type);
+    updateHint(type);
+    revalidate();
+  }
+
+  typeSelect.addEventListener('change', onTypeChange);
+  areaSelect.addEventListener('change', revalidate);
+  ALL_SEG.forEach(function (k) {
+    ['from', 'to'].forEach(function (bound) {
+      segEl(k, bound).addEventListener('input', function () {
+        // 数字以外を除去（桁数は maxlength で制限済み）
+        const cleaned = this.value.replace(/[^0-9]/g, '');
+        if (cleaned !== this.value) this.value = cleaned;
+        revalidate();
+      });
+    });
+  });
+
+  // 初期化（バリデーションエラーで再表示されたときも状態を復元）
+  onTypeChange();
+  if (areaSelect.value) revalidate();
+})();
+</script>
+{% endblock %}

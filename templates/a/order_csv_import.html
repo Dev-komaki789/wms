@@ -1,0 +1,155 @@
+{% extends 'a/base.html' %}
+
+{% block title %}{{ spec.label }} CSV取込{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">
+    <i class="bi bi-upload me-2 text-primary"></i>{{ spec.label }} CSV取込
+  </h2>
+  <a href="{% url spec.list_url %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 一覧へ戻る
+  </a>
+</div>
+
+<div class="alert alert-info d-flex align-items-start">
+  <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+  <div>
+    <strong>明細1行 ＝ CSV1行</strong>の様式です。指示ヘッダ項目（仕入先・予定日など）は
+    同じ指示の各行で繰り返し、<strong>「{{ spec.code_header }}」でグループ化</strong>して
+    1指示にまとめます。<br>
+    <strong>新規作成のみ</strong>です（{{ spec.code_header }}が既存と一致したらエラー。更新はしません）。
+    全行を検証し、<strong>1行でもエラーがあれば一切登録しません</strong>。
+    倉庫は現在の倉庫に固定。文字コードは UTF-8 / Shift_JIS に対応します。
+  </div>
+</div>
+
+{% if report %}
+<div class="card shadow-sm border-danger mb-4">
+  <div class="card-body py-2 bg-danger-subtle border-bottom">
+    <strong class="text-danger-emphasis">
+      <i class="bi bi-x-octagon-fill me-1"></i>取り込みエラー（{{ report.errors|length }} 件）
+    </strong>
+    <span class="small text-muted ms-2">エラーを修正して再アップロードしてください。確定された変更はありません。</span>
+  </div>
+  <div class="table-responsive">
+  <table class="table table-sm table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th class="text-end" style="width:6rem">行</th>
+        <th class="text-start">内容</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line, msg in report.errors %}
+      <tr>
+        <td class="text-end font-monospace">{% if line %}{{ line }}{% else %}—{% endif %}</td>
+        <td class="text-start small">{{ msg }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">CSVファイル</label>
+        <input type="file" name="csv_file" accept=".csv,.txt,text/csv" class="form-control" required>
+        <div class="form-text">
+          列の並びは
+          <a href="{% url spec.export_url %}">現在の{{ spec.label }}データのエクスポート</a>
+          と同じです（列の参考にしてください）。
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">区切り文字</label>
+        <select name="delimiter" class="form-select">
+          <option value="auto" {% if delimiter == 'auto' %}selected{% endif %}>自動判定（推奨）</option>
+          <option value="comma" {% if delimiter == 'comma' %}selected{% endif %}>カンマ（,）</option>
+          <option value="caret" {% if delimiter == 'caret' %}selected{% endif %}>キャレット（^）</option>
+        </select>
+        <div class="form-text">通常は「自動判定」で取り込めます（見出し行の区切りから判別）。</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="{{ spec.label }}を CSV から取り込みますか？"
+                data-confirm-yes="取り込む">
+          <i class="bi bi-upload"></i> 取り込む
+        </button>
+        <a href="{% url spec.list_url %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body py-2 bg-light border-bottom">
+    <strong><i class="bi bi-list-columns me-1"></i>ヘッダ列（指示）</strong>
+    <span class="small text-muted ms-2">同じ指示の各行で同じ値を繰り返します</span>
+  </div>
+  <div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th class="text-start">列名（見出し）</th>
+        <th class="text-center" style="width:6rem">必須</th>
+        <th class="text-start">説明</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for col in header_guide %}
+      <tr>
+        <td class="text-start"><span class="font-monospace">{{ col.header }}</span></td>
+        <td class="text-center">
+          {% if col.required %}
+            <span class="badge bg-danger">必須</span>
+          {% else %}
+            <span class="badge bg-secondary">任意</span>
+          {% endif %}
+        </td>
+        <td class="text-start small text-muted">{{ col.note|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body py-2 bg-light border-bottom">
+    <strong><i class="bi bi-list-columns me-1"></i>明細列</strong>
+    <span class="small text-muted ms-2">1行＝1明細（SKU）</span>
+  </div>
+  <div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th class="text-start">列名（見出し）</th>
+        <th class="text-center" style="width:6rem">必須</th>
+        <th class="text-start">説明</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for col in item_guide %}
+      <tr>
+        <td class="text-start"><span class="font-monospace">{{ col.header }}</span></td>
+        <td class="text-center">
+          {% if col.required %}
+            <span class="badge bg-danger">必須</span>
+          {% else %}
+            <span class="badge bg-secondary">任意</span>
+          {% endif %}
+        </td>
+        <td class="text-start small text-muted">{{ col.note|default:"—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import F, IntegerField, OuterRef, Q, Subquery, Sum
+from django.db.models import Count, F, IntegerField, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.urls import reverse_lazy
@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.views.generic import TemplateView, View
 from django.views.generic.edit import FormView
 
+from core.utils import parse_query_date
 from masters.models import Area, Location, Sku
 from masters.utils import get_current_warehouse
 from outbound.models import StockReservation
@@ -104,6 +105,106 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
             ctx['stats'] = None
 
         ctx['area_types'] = Area.LocationType.choices
+        ctx['filters'] = f
+        return ctx
+
+
+class StockMovementInquiryView(LoginRequiredMixin, TemplateView):
+    """入出庫履歴照会画面。
+
+    StockMovement（在庫移動の追記専用ログ）を時系列で照会する read-only 画面。
+    検索-first パターン（マスタ照会・在庫照会と同じ規約）。入庫 / 出庫 /
+    棚卸調整を、SKU・棚番・種別・伝票種別・期間で絞り込む。
+
+    StockMovement は追記専用で件数が無制限に増えるため、テーブルは新しい順
+    ROW_LIMIT 件で打ち切る（超過時は画面で警告し、期間での絞り込みを促す）。
+    サマリーは打ち切り前の全件を DB 集計するので、件数・数量は常に正確。
+    """
+
+    template_name = 'a/stock/movement_inquiry.html'
+
+    SEARCH_KEYS = ('q', 'product', 'location', 'movement_type',
+                   'reference_type', 'date_from', 'date_to')
+    ROW_LIMIT = 1000
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        MT = StockMovement.MovementType
+
+        searched = any(k in g for k in self.SEARCH_KEYS)
+        ctx['searched'] = searched
+
+        f = {
+            'q': g.get('q', '').strip(),
+            'product': g.get('product', '').strip(),
+            'location': g.get('location', '').strip(),
+            'movement_type': g.get('movement_type', ''),
+            'reference_type': g.get('reference_type', ''),
+            'date_from': g.get('date_from', ''),
+            'date_to': g.get('date_to', ''),
+        }
+
+        if searched:
+            qs = StockMovement.objects.select_related(
+                'location', 'location__area',
+                'sku', 'sku__product', 'created_by',
+            )
+            if f['q']:
+                qs = qs.filter(
+                    Q(sku__sku_code__icontains=f['q'])
+                    | Q(sku__jan_code__icontains=f['q'])
+                )
+            if f['product']:
+                qs = qs.filter(
+                    Q(sku__product__product_name__icontains=f['product'])
+                    | Q(sku__product__product_code__icontains=f['product'])
+                )
+            if f['location']:
+                qs = qs.filter(location__location_code__icontains=f['location'])
+            if f['movement_type']:
+                qs = qs.filter(movement_type=f['movement_type'])
+            if f['reference_type']:
+                qs = qs.filter(reference_type=f['reference_type'])
+            date_from = parse_query_date(f['date_from'])
+            date_to = parse_query_date(f['date_to'])
+            if date_from:
+                qs = qs.filter(moved_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(moved_at__date__lte=date_to)
+            qs = qs.order_by('-moved_at', '-id')
+
+            # サマリーは打ち切り前の全件を集計（件数・数量を正確に出す）。
+            agg = qs.aggregate(
+                total=Count('id'),
+                in_count=Count('id', filter=Q(movement_type=MT.IN)),
+                out_count=Count('id', filter=Q(movement_type=MT.OUT)),
+                adj_count=Count('id', filter=Q(movement_type=MT.ADJ)),
+                in_qty=Sum('quantity', filter=Q(movement_type=MT.IN)),
+                out_qty=Sum('quantity', filter=Q(movement_type=MT.OUT)),
+            )
+            total = agg['total']
+            movements = list(qs[:self.ROW_LIMIT])
+            ctx['movements'] = movements
+            ctx['truncated'] = total > self.ROW_LIMIT
+            ctx['stats'] = {
+                'total': total,
+                'shown': len(movements),
+                'in_count': agg['in_count'],
+                'out_count': agg['out_count'],
+                'adj_count': agg['adj_count'],
+                # OUT の quantity は負値で記録されるため符号反転して正の数で表示。
+                'in_qty': agg['in_qty'] or 0,
+                'out_qty': -(agg['out_qty'] or 0),
+            }
+        else:
+            ctx['movements'] = StockMovement.objects.none()
+            ctx['stats'] = None
+            ctx['truncated'] = False
+
+        ctx['movement_types'] = MT.choices
+        ctx['reference_types'] = StockMovement.ReferenceType.choices
+        ctx['row_limit'] = self.ROW_LIMIT
         ctx['filters'] = f
         return ctx
 

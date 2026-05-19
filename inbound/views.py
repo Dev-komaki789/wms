@@ -12,10 +12,13 @@ from django.views.generic import (
     CreateView, DeleteView, DetailView, TemplateView, UpdateView, View,
 )
 
+from core.order_csv import OrderCsvExportView, OrderCsvImportView
+from core.utils import parse_query_date
 from masters.models import Location
 from masters.utils import get_current_warehouse
 from stock.models import StockBalance, StockMovement
 
+from .csv_io import INBOUND_ORDER_SPEC
 from .forms import InboundOrderForm, InboundOrderItemFormSet
 from .models import InboundOrder, InboundOrderItem, InboundReceipt
 
@@ -119,10 +122,12 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(status=f['status'])
             if f['source_type']:
                 qs = qs.filter(source_type=f['source_type'])
-            if f['expected_from']:
-                qs = qs.filter(expected_date__gte=f['expected_from'])
-            if f['expected_to']:
-                qs = qs.filter(expected_date__lte=f['expected_to'])
+            expected_from = parse_query_date(f['expected_from'])
+            expected_to = parse_query_date(f['expected_to'])
+            if expected_from:
+                qs = qs.filter(expected_date__gte=expected_from)
+            if expected_to:
+                qs = qs.filter(expected_date__lte=expected_to)
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_expected=Sum('items__quantity_expected'),
@@ -1000,3 +1005,15 @@ class InboundPutawayWorkView(LoginRequiredMixin, View):
             f'（入荷完了）',
         )
         return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+
+
+# ---- 入荷指示 CSV 入出力 ----
+
+class InboundOrderCsvExportView(OrderCsvExportView):
+    """入荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。"""
+    spec = INBOUND_ORDER_SPEC
+
+
+class InboundOrderCsvImportView(OrderCsvImportView):
+    """入荷指示を CSV でインポートする（新規作成のみ）。"""
+    spec = INBOUND_ORDER_SPEC

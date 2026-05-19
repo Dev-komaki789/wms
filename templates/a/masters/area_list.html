@@ -12,7 +12,22 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2>エリアマスタ照会</h2>
-  <a href="{% url 'masters:area_create' %}" class="btn btn-primary">+ 新規登録</a>
+  <div class="d-flex gap-2">
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary dropdown-toggle"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="bi bi-download"></i> CSV出力
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'area' %}?delimiter=comma">カンマ区切り（,）</a></li>
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'area' %}?delimiter=caret">キャレット区切り（^）</a></li>
+      </ul>
+    </div>
+    <a href="{% url 'masters:csv_import' 'area' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-upload"></i> CSV取込
+    </a>
+    <a href="{% url 'masters:area_create' %}" class="btn btn-primary">+ 新規登録</a>
+  </div>
 </div>
 
 <div class="card">

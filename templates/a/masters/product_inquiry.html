@@ -14,6 +14,19 @@
     <a href="{% url 'masters:sku_inquiry' %}" class="btn btn-outline-primary btn-sm">
       <i class="bi bi-upc-scan"></i> SKUマスタ照会
     </a>
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="bi bi-download"></i> CSV出力
+      </button>
+      <ul class="dropdown-menu">
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'product' %}?delimiter=comma">カンマ区切り（,）</a></li>
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'product' %}?delimiter=caret">キャレット区切り（^）</a></li>
+      </ul>
+    </div>
+    <a href="{% url 'masters:csv_import' 'product' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-upload"></i> CSV取込
+    </a>
     <a href="{% url 'masters:product_create' %}" class="btn btn-primary btn-sm">
       <i class="bi bi-plus-lg"></i> 商品新規登録
     </a>

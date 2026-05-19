@@ -2,13 +2,19 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.db.models import ProtectedError, Q
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, TemplateView, View
+from django.views.generic.edit import FormView
 
+from core.models import ErrorLog
+
+from .csv_io import DELIMITERS, MASTER_SPECS, build_csv, column_guide, import_csv
 from .forms import (
-    AreaForm, CategoryForm, CustomerForm, LocationForm,
+    AreaForm, CategoryForm, CustomerForm, LocationBulkCreateForm, LocationForm,
     ManufacturerForm, ProductForm, SkuForm, SupplierForm,
 )
 from .models import (
@@ -110,6 +116,40 @@ class ProtectedErrorMixin:
                 f'先に関連データを削除または別の親に付け替えてください。',
             )
             return HttpResponseRedirect(self.success_url)
+
+
+class FilterableListMixin:
+    """一覧 ListView に「キーワード＋ステータス」の絞り込みを付与する。
+
+    サブクラスで search_fields にキーワード照合対象のフィールド名を列挙する。
+    一覧は常に表示し、検索条件があれば結果を絞り込む（件数の小さい業務マスタ
+    向け。商品・SKU のような検索-first 画面とは別方針）。
+    """
+
+    search_fields = []
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        q = self.request.GET.get('q', '').strip()
+        status = self.request.GET.get('status', '')
+        if q and self.search_fields:
+            cond = Q()
+            for field in self.search_fields:
+                cond |= Q(**{f'{field}__icontains': q})
+            qs = qs.filter(cond)
+        if status == 'active':
+            qs = qs.filter(is_active=True)
+        elif status == 'inactive':
+            qs = qs.filter(is_active=False)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['filters'] = {
+            'q': self.request.GET.get('q', '').strip(),
+            'status': self.request.GET.get('status', ''),
+        }
+        return ctx
 
 
 # ---- Master Inquiry (combined Area + Location overview) ----
@@ -253,6 +293,58 @@ class LocationCreateView(LocationFormContextMixin, LoginRequiredMixin, CreateVie
     success_url = reverse_lazy('masters:master_inquiry')
 
 
+class LocationBulkCreateView(LocationFormContextMixin, LoginRequiredMixin, FormView):
+    """ロケーション一括登録画面（範囲指定で棚番を自動生成）。
+
+    区分・エリアと各セグメントの開始〜終了範囲を指定 → 全組み合わせの棚番を
+    生成して bulk_create する。同一倉庫に既存の棚番はスキップし、登録件数・
+    スキップ件数を結果メッセージで報告する。
+    """
+
+    form_class = LocationBulkCreateForm
+    template_name = 'a/masters/location_bulk_form.html'
+    success_url = reverse_lazy('masters:master_inquiry')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['max_bulk'] = LocationBulkCreateForm.MAX_BULK
+        return ctx
+
+    def form_valid(self, form):
+        area = form._area
+        codes = form._codes
+        is_active = form.cleaned_data['is_active']
+        with transaction.atomic():
+            # 同一倉庫内で既に存在する棚番はスキップする
+            existing = set(
+                Location.objects
+                .filter(warehouse=area.warehouse, location_code__in=codes)
+                .values_list('location_code', flat=True)
+            )
+            to_create = [c for c in codes if c not in existing]
+            Location.objects.bulk_create([
+                Location(
+                    warehouse=area.warehouse, area=area,
+                    location_code=code, location_name='', is_active=is_active,
+                )
+                for code in to_create
+            ])
+        created = len(to_create)
+        skipped = len(existing)
+        if created:
+            msg = f'{created} 件のロケーションを一括登録しました。'
+            if skipped:
+                msg += f'（既存の {skipped} 件はスキップ）'
+            messages.success(self.request, msg)
+        else:
+            messages.info(
+                self.request,
+                f'登録対象がありませんでした'
+                f'（生成した {skipped} 件はすべて既存の棚番です）。',
+            )
+        return super().form_valid(form)
+
+
 class LocationUpdateView(LocationFormContextMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, UpdateView):
     model = Location
     form_class = LocationForm
@@ -275,31 +367,101 @@ class LocationDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, Protec
 # ---- Category ----
 
 class CategoryListView(LoginRequiredMixin, ListView):
-    """カテゴリ一覧をツリー順（深さ優先）で表示する。各ノードに depth_attr と children_count を付与。"""
+    """カテゴリ一覧。
+
+    検索条件が無いときはツリー（深さ優先、depth_attr / children_count 付き）。
+    キーワード／ステータスで絞り込んだときは、一致カテゴリのフラットな結果リスト
+    （breadcrumb_attr 付き）を表示する。ツリーは階層が深いと一致箇所が埋もれる
+    ため、検索時はフラット表示に切り替える。
+    """
 
     model = Category
     template_name = 'a/masters/category_list.html'
     context_object_name = 'categories'
 
     def get_queryset(self):
+        g = self.request.GET
+        q = g.get('q', '').strip()
+        status = g.get('status', '')
+        self._searched = bool(q) or bool(status)
+
         all_cats = list(
             Category.objects.select_related('parent').order_by('sort_order', 'category_code')
         )
         by_parent = {}
         for c in all_cats:
             by_parent.setdefault(c.parent_id, []).append(c)
+        for c in all_cats:
+            c.children_count = len(by_parent.get(c.pk, []))
 
-        flat = []
+        if not self._searched:
+            # ツリー（深さ優先）
+            flat = []
 
-        def walk(parent_id, depth):
-            for c in by_parent.get(parent_id, []):
-                c.depth_attr = depth
-                c.children_count = len(by_parent.get(c.pk, []))
-                flat.append(c)
-                walk(c.pk, depth + 1)
+            def walk(parent_id, depth):
+                for c in by_parent.get(parent_id, []):
+                    c.depth_attr = depth
+                    flat.append(c)
+                    walk(c.pk, depth + 1)
 
-        walk(None, 0)
-        return flat
+            walk(None, 0)
+            return flat
+
+        # 絞り込み: 一致カテゴリのフラットな結果（breadcrumb 付き）
+        by_pk = {c.pk: c for c in all_cats}
+
+        def breadcrumb_of(cat):
+            names, cur = [], cat
+            while cur is not None:
+                names.insert(0, cur.category_name)
+                cur = by_pk.get(cur.parent_id)
+            return ' › '.join(names)
+
+        result = all_cats
+        if q:
+            ql = q.lower()
+            result = [
+                c for c in result
+                if ql in c.category_code.lower() or ql in c.category_name.lower()
+            ]
+        if status == 'active':
+            result = [c for c in result if c.is_active]
+        elif status == 'inactive':
+            result = [c for c in result if not c.is_active]
+        for c in result:
+            c.breadcrumb_attr = breadcrumb_of(c)
+        return result
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['searched'] = getattr(self, '_searched', False)
+        ctx['filters'] = {
+            'q': self.request.GET.get('q', '').strip(),
+            'status': self.request.GET.get('status', ''),
+        }
+        # 階層ドリルダウン（コンボボックス）用: 全カテゴリの最小情報を JSON で渡す
+        cats = list(Category.objects.order_by('sort_order', 'category_code'))
+        by_pk = {c.pk: c for c in cats}
+
+        def depth_of(cat):
+            d, p = 0, cat.parent_id
+            while p is not None and d < 20:
+                d += 1
+                p = by_pk[p].parent_id if p in by_pk else None
+            return d
+
+        nav = [
+            {
+                'pk': c.pk, 'name': c.category_name, 'code': c.category_code,
+                'parent': c.parent_id, 'depth': depth_of(c),
+                'is_leaf': c.is_leaf,
+            }
+            for c in cats
+        ]
+        ctx['category_nav_json'] = json.dumps(nav, ensure_ascii=False)
+        ctx['level_labels_json'] = json.dumps(
+            Category.LEVEL_LABELS, ensure_ascii=False)
+        return ctx
 
 
 class CategoryFormContextMixin:
@@ -369,13 +531,12 @@ class CategoryDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- Manufacturer ----
 
-class ManufacturerListView(LoginRequiredMixin, ListView):
+class ManufacturerListView(FilterableListMixin, LoginRequiredMixin, ListView):
     model = Manufacturer
     template_name = 'a/masters/manufacturer_list.html'
     context_object_name = 'manufacturers'
-
-    def get_queryset(self):
-        return Manufacturer.objects.order_by('manufacturer_code')
+    ordering = ['manufacturer_code']
+    search_fields = ['manufacturer_code', 'manufacturer_name']
 
 
 class ManufacturerCreateView(LoginRequiredMixin, CreateView):
@@ -584,13 +745,12 @@ class SkuDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- Supplier ----
 
-class SupplierListView(LoginRequiredMixin, ListView):
+class SupplierListView(FilterableListMixin, LoginRequiredMixin, ListView):
     model = Supplier
     template_name = 'a/masters/supplier_list.html'
     context_object_name = 'suppliers'
-
-    def get_queryset(self):
-        return Supplier.objects.order_by('supplier_code')
+    ordering = ['supplier_code']
+    search_fields = ['supplier_code', 'supplier_name', 'contact_person']
 
 
 class SupplierCreateView(LoginRequiredMixin, CreateView):
@@ -615,13 +775,25 @@ class SupplierDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- Customer ----
 
-class CustomerListView(LoginRequiredMixin, ListView):
+class CustomerListView(FilterableListMixin, LoginRequiredMixin, ListView):
     model = Customer
     template_name = 'a/masters/customer_list.html'
     context_object_name = 'customers'
+    ordering = ['customer_code']
+    search_fields = ['customer_code', 'customer_name']
 
     def get_queryset(self):
-        return Customer.objects.order_by('customer_code')
+        qs = super().get_queryset()
+        ctype = self.request.GET.get('customer_type', '')
+        if ctype.isdigit():
+            qs = qs.filter(customer_type=int(ctype))
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['filters']['customer_type'] = self.request.GET.get('customer_type', '')
+        ctx['customer_type_choices'] = Customer.Type.choices
+        return ctx
 
 
 class CustomerCreateView(LoginRequiredMixin, CreateView):
@@ -746,3 +918,90 @@ class LocationLookupAPIView(LoginRequiredMixin, View):
             'area_location_type': location.area.location_type,
             'area_location_type_display': location.area.get_location_type_display(),
         })
+
+
+# ---- マスタ CSV 入出力 ----
+
+class MasterCsvExportView(LoginRequiredMixin, View):
+    """マスタを CSV（UTF-8 BOM付）でエクスポートする。
+
+    URL の <entity> で対象マスタを切り替える。全件を出力し、そのまま
+    Excel 等で編集して取り込み直すための雛形（テンプレート）も兼ねる。
+    """
+
+    def get(self, request, entity):
+        spec = MASTER_SPECS.get(entity)
+        if spec is None:
+            raise Http404('未知のマスタです。')
+        delimiter = DELIMITERS.get(request.GET.get('delimiter'), ',')
+        content = build_csv(spec, delimiter=delimiter)
+        response = HttpResponse(content, content_type='text/csv')
+        filename = f'{entity}_{timezone.localdate():%Y%m%d}.csv'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class MasterCsvImportView(LoginRequiredMixin, TemplateView):
+    """マスタを CSV でインポート（アップサート）する。
+
+    GET でアップロード画面、POST で取り込みを実行する。全行を検証し、
+    1行でもエラーがあれば一切確定しない（all-or-nothing）。失敗時は
+    ErrorLog（取り込みエラー）に1件記録し、画面に行ごとのエラーを表示する。
+    """
+
+    template_name = 'a/masters/csv_import.html'
+
+    def get_spec(self):
+        spec = MASTER_SPECS.get(self.kwargs['entity'])
+        if spec is None:
+            raise Http404('未知のマスタです。')
+        return spec
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        spec = self.get_spec()
+        ctx['spec'] = spec
+        ctx['columns'] = column_guide(spec)
+        ctx['auto_numbered'] = spec.auto_number is not None
+        ctx['delimiter'] = self.request.POST.get('delimiter') or 'auto'
+        return ctx
+
+    def post(self, request, entity):
+        spec = self.get_spec()
+        upload = request.FILES.get('csv_file')
+        if upload is None:
+            messages.error(request, 'CSV ファイルを選択してください。')
+            return self.render_to_response(self.get_context_data())
+
+        delimiter = DELIMITERS.get(request.POST.get('delimiter'))  # auto/未指定 → None（自動判定）
+        report = import_csv(spec, upload.read(), delimiter=delimiter)
+        if report.ok:
+            messages.success(
+                request,
+                f'{spec.label}マスタを取り込みました'
+                f'（新規 {report.created} 件 / 更新 {report.updated} 件）。',
+            )
+            return HttpResponseRedirect(reverse(spec.list_url))
+
+        # 失敗: ErrorLog に1件記録し、画面に行ごとのエラーを表示する
+        detail = '\n'.join(
+            f'{line}行目: {msg}' if line else msg
+            for line, msg in report.errors
+        )
+        ErrorLog.objects.create(
+            error_type=ErrorLog.ErrorType.IMPORT,
+            summary=(f'CSVインポート失敗: {spec.label}マスタ '
+                     f'{len(report.errors)}件のエラー')[:255],
+            detail=f'ファイル名: {upload.name}\n\n{detail}',
+            source=f'マスタCSVインポート（{spec.label}）',
+            request_method='POST',
+            user=request.user,
+        )
+        messages.error(
+            request,
+            f'取り込めませんでした。{len(report.errors)} 件のエラーがあります'
+            f'（確定された変更はありません）。',
+        )
+        ctx = self.get_context_data()
+        ctx['report'] = report
+        return self.render_to_response(ctx)

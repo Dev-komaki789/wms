@@ -15,9 +15,19 @@
 (function () {
   'use strict';
 
-  // === ページ読み込み時、最初の入力フィールドに自動フォーカス ===
-  // 一覧画面や削除確認画面など、入力フィールドが無い場合は何もしない
+  // === ページ読み込み時の共通処理 ===
   window.addEventListener('DOMContentLoaded', function () {
+    // 日付入力欄の年を4桁に制限する。
+    // <input type="date"> は仕様上6桁年（最大275760年）まで許容するため、
+    // min/max を与えて年を 2000〜9999 の範囲に収める。これをしないと
+    // 100000 年のような値で検索でき、サーバ側の日付変換が例外になる。
+    document.querySelectorAll('input[type="date"]').forEach(function (el) {
+      if (!el.getAttribute('min')) el.min = '2000-01-01';
+      if (!el.getAttribute('max')) el.max = '9999-12-31';
+    });
+
+    // 最初の入力フィールドに自動フォーカス。
+    // 一覧画面や削除確認画面など、入力フィールドが無い場合は何もしない。
     const firstField = document.querySelector(
       'form input:not([type="hidden"]):not([disabled]):not([readonly]),'
       + 'form select:not([disabled]),'
