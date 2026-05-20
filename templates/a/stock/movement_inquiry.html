@@ -13,7 +13,7 @@
   <i class="bi bi-info-circle-fill me-2 mt-1"></i>
   <div>
     在庫が動いた記録（<strong>入庫 / 出庫 / 棚卸調整</strong>）を時系列で一覧します。
-    入荷・出荷・棚間移動・計画外入出庫など、すべての在庫変動が伝票種別つきで残ります。
+    入荷・出荷・棚間移動・計画外入出庫など、すべての在庫変動が作業内容つきで残ります。
   </div>
 </div>
 
@@ -46,7 +46,7 @@
         </select>
       </div>
       <div class="col-md-2">
-        <label class="form-label small text-muted mb-1">伝票種別</label>
+        <label class="form-label small text-muted mb-1">作業内容</label>
         <select name="reference_type" class="form-select form-select-sm">
           <option value="">すべて</option>
           {% for val, label in reference_types %}
@@ -103,23 +103,10 @@
 
     <div class="px-3 py-2 border-bottom bg-white small text-muted">
       検索結果: <strong class="text-dark">{{ stats.total }}</strong> 件
-      {% if truncated %}
-        <span class="text-danger ms-1">（新しい順 {{ stats.shown }} 件を表示）</span>
-      {% endif %}
     </div>
-
-    {% if truncated %}
-    <div class="alert alert-warning rounded-0 border-0 border-bottom mb-0 d-flex align-items-start">
-      <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
-      <div>
-        該当件数が表示上限（{{ row_limit }} 件）を超えています。新しい順に
-        <strong>{{ row_limit }} 件のみ</strong>表示しています。移動日や条件で絞り込んでください。
-      </div>
-    </div>
-    {% endif %}
 
     {# 検索結果テーブル #}
-    <div class="table-responsive">
+    <div class="table-scroll">
     <table class="table table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
@@ -130,7 +117,7 @@
           <th class="text-start">商品</th>
           <th class="text-end text-nowrap">数量</th>
           <th class="text-end text-nowrap">在庫変動</th>
-          <th class="text-start text-nowrap">伝票種別</th>
+          <th class="text-start text-nowrap">作業内容</th>
           <th class="text-start text-nowrap">操作ユーザー</th>
           <th class="text-start">備考</th>
         </tr>
@@ -172,8 +159,8 @@
           <td class="text-start text-nowrap">
             {% if m.reference_type %}
               <span class="badge bg-secondary-subtle text-secondary-emphasis border">{{ m.get_reference_type_display }}</span>
-              {% if m.reference_id %}
-                <span class="text-muted small font-monospace">#{{ m.reference_id }}</span>
+              {% if m.reference_code %}
+                <span class="text-muted small font-monospace">{{ m.reference_code }}</span>
               {% endif %}
             {% else %}
               <span class="text-muted">—</span>
@@ -192,6 +179,7 @@
       </tbody>
     </table>
     </div>
+    {% include 'a/_pagination.html' %}
   {% else %}
     <div class="text-center text-muted py-5">
       <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>

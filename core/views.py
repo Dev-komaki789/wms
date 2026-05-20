@@ -1,13 +1,13 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
 from .models import ErrorLog
-from .utils import parse_query_date
+from .utils import paginate, parse_query_date
 
 
 class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
@@ -56,17 +56,22 @@ class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(occurred_at__date__gte=date_from)
             if date_to:
                 qs = qs.filter(occurred_at__date__lte=date_to)
-            logs = list(qs.order_by('-occurred_at'))
-            ctx['logs'] = logs
+            agg = qs.aggregate(
+                total=Count('id'),
+                exception=Count(
+                    'id', filter=Q(error_type=ErrorLog.ErrorType.EXCEPTION)),
+                imported=Count(
+                    'id', filter=Q(error_type=ErrorLog.ErrorType.IMPORT)),
+                unresolved=Count('id', filter=Q(is_resolved=False)),
+            )
+            page = paginate(self.request, qs.order_by('-occurred_at'))
+            ctx['logs'] = page
+            ctx['page_obj'] = page
             ctx['stats'] = {
-                'total': len(logs),
-                'exception': sum(
-                    1 for e in logs
-                    if e.error_type == ErrorLog.ErrorType.EXCEPTION),
-                'import': sum(
-                    1 for e in logs
-                    if e.error_type == ErrorLog.ErrorType.IMPORT),
-                'unresolved': sum(1 for e in logs if not e.is_resolved),
+                'total': agg['total'],
+                'exception': agg['exception'],
+                'import': agg['imported'],
+                'unresolved': agg['unresolved'],
             }
         else:
             ctx['logs'] = ErrorLog.objects.none()

@@ -1,0 +1,43 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}棚卸 {{ session.session_code }}{% endblock %}
+{% block page_title %}{{ session.session_code }}{% endblock %}
+{% block back_url %}{% url 'stock:handheld_stocktake' %}{% endblock %}
+
+{% block hh_content %}
+<div class="small text-muted text-center mb-2">
+  カウント済 <strong class="text-dark">{{ progress.counted }} / {{ progress.total }}</strong>
+  {% if session.area %}
+    ・対象 <span class="font-monospace">{{ session.area.area_code }}</span>
+  {% endif %}
+</div>
+
+<form method="post" autocomplete="off">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger small">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="mb-3">
+    <label class="form-label">{{ form.location_code.label }}</label>
+    {{ form.location_code }}
+    {% if form.location_code.errors %}<div class="text-danger small mt-1">{{ form.location_code.errors }}</div>{% endif %}
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">{{ form.sku_code.label }}</label>
+    {{ form.sku_code }}
+    {% if form.sku_code.errors %}<div class="text-danger small mt-1">{{ form.sku_code.errors }}</div>{% endif %}
+  </div>
+
+  <div class="mb-3">
+    <label class="form-label">{{ form.counted_quantity.label }}</label>
+    {{ form.counted_quantity }}
+    {% if form.counted_quantity.errors %}<div class="text-danger small mt-1">{{ form.counted_quantity.errors }}</div>{% endif %}
+  </div>
+
+  <button type="submit" class="btn btn-primary btn-hh">
+    <i class="bi bi-check2"></i> カウント記録
+  </button>
+</form>
+{% endblock %}

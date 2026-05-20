@@ -1,0 +1,171 @@
+{% extends 'a/base.html' %}
+
+{% block title %}棚卸 {{ session.session_code }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="bi bi-clipboard-check me-2 text-primary"></i>棚卸 <span class="font-monospace">{{ session.session_code }}</span>
+  </h2>
+  <a href="{% url 'stock:stocktake_inquiry' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 一覧へ戻る
+  </a>
+</div>
+
+{# ステータス + アクション #}
+<div class="card shadow-sm mb-3">
+  <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+    <div class="me-auto">
+      ステータス:
+      {% if session.status == 'planning' %}<span class="badge bg-secondary">計画中</span>
+      {% elif session.status == 'counting' %}<span class="badge bg-primary">カウント中</span>
+      {% elif session.status == 'review' %}<span class="badge bg-warning text-dark">差異確認中</span>
+      {% elif session.status == 'completed' %}<span class="badge bg-success">完了</span>
+      {% elif session.status == 'cancelled' %}<span class="badge bg-dark">取消</span>{% endif %}
+      {% if session.is_locked %}<span class="badge bg-danger ms-2">入出庫ロック中</span>{% endif %}
+    </div>
+    {% if can_start %}
+      <form method="post" action="{% url 'stock:stocktake_start' session.pk %}" class="d-inline m-0">{% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-sm"
+                data-confirm="この棚卸を開始しますか？現在の在庫を帳簿数としてスナップショットします。"
+                data-confirm-yes="開始する">
+          <i class="bi bi-play-fill"></i> カウント開始
+        </button>
+      </form>
+    {% endif %}
+    {% if can_review %}
+      <form method="post" action="{% url 'stock:stocktake_review' session.pk %}" class="d-inline m-0">{% csrf_token %}
+        <button type="submit" class="btn btn-warning btn-sm"
+                data-confirm="差異確認モードへ進みますか？以降の追加カウントはできません。"
+                data-confirm-yes="差異確認へ">
+          <i class="bi bi-list-check"></i> 差異確認へ進む
+        </button>
+      </form>
+    {% endif %}
+    {% if can_confirm %}
+      <form method="post" action="{% url 'stock:stocktake_confirm' session.pk %}" class="d-inline m-0">{% csrf_token %}
+        <button type="submit" class="btn btn-success btn-sm"
+                data-confirm="差異の出た明細に在庫調整（ADJ）を発行して棚卸を完了します。確定しますか？"
+                data-confirm-yes="確定する">
+          <i class="bi bi-check2-circle"></i> 確定（ADJ発行）
+        </button>
+      </form>
+    {% endif %}
+    {% if can_cancel %}
+      <form method="post" action="{% url 'stock:stocktake_cancel' session.pk %}" class="d-inline m-0">{% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger btn-sm"
+                data-confirm="この棚卸セッションを取り消しますか？取消後の再開はできません。"
+                data-confirm-yes="取り消す"
+                data-confirm-variant="danger">
+          <i class="bi bi-x-circle"></i> 取消
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{# 基本情報 + 進捗 #}
+<div class="row g-3 mb-3">
+  <div class="col-md-7">
+    <div class="card shadow-sm h-100">
+      <div class="card-body py-2 bg-light border-bottom"><strong>基本情報</strong></div>
+      <dl class="row mb-0 p-3 small">
+        <dt class="col-sm-4 text-muted">種別</dt>
+        <dd class="col-sm-8">{{ session.get_stocktake_type_display }}</dd>
+        <dt class="col-sm-4 text-muted">対象</dt>
+        <dd class="col-sm-8">
+          {% if session.area %}{{ session.area.area_name|default:session.area.area_code }} <span class="text-muted">（{{ session.area.area_code }}）</span>
+          {% else %}{{ session.warehouse.warehouse_name }} <span class="text-muted">全体（{{ session.warehouse.warehouse_code }}）</span>{% endif %}
+        </dd>
+        <dt class="col-sm-4 text-muted">予定日</dt>
+        <dd class="col-sm-8 font-monospace">{{ session.planned_at|date:"Y/m/d" }}</dd>
+        <dt class="col-sm-4 text-muted">開始日時</dt>
+        <dd class="col-sm-8 font-monospace">{{ session.started_at|date:"Y/m/d H:i:s"|default:"—" }}</dd>
+        <dt class="col-sm-4 text-muted">完了日時</dt>
+        <dd class="col-sm-8 font-monospace">{{ session.completed_at|date:"Y/m/d H:i:s"|default:"—" }}</dd>
+        <dt class="col-sm-4 text-muted">登録者</dt>
+        <dd class="col-sm-8">{{ session.created_by.display_name|default:session.created_by.username }}</dd>
+        {% if session.note %}
+          <dt class="col-sm-4 text-muted">備考</dt>
+          <dd class="col-sm-8">{{ session.note|linebreaksbr }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-body py-2 bg-light border-bottom"><strong>カウント進捗</strong></div>
+      <div class="row g-0 text-center">
+        <div class="col py-3 border-end">
+          <div class="fs-4 fw-bold">{{ item_stats.counted }} / {{ item_stats.total }}</div>
+          <div class="small text-muted">カウント済</div>
+        </div>
+        <div class="col py-3 border-end">
+          <div class="fs-4 fw-bold text-muted">{{ item_stats.uncounted }}</div>
+          <div class="small text-muted">未カウント</div>
+        </div>
+        <div class="col py-3">
+          <div class="fs-4 fw-bold text-warning-emphasis">{{ item_stats.diff_count }}</div>
+          <div class="small text-muted">差異あり</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# 明細テーブル #}
+<div class="card shadow-sm">
+  <div class="card-body py-2 bg-light border-bottom d-flex justify-content-between flex-wrap gap-2">
+    <strong>棚卸明細（{{ item_stats.total }} 件）</strong>
+    {% if session.status == 'counting' %}
+      <span class="small text-muted">ハンディから <a href="{% url 'stock:handheld_stocktake' %}">棚卸カウント</a> を実施してください</span>
+    {% endif %}
+  </div>
+  <div class="table-scroll">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th class="text-start text-nowrap">棚番</th>
+        <th class="text-start">SKU</th>
+        <th class="text-end text-nowrap">帳簿数</th>
+        <th class="text-end text-nowrap">実カウント数</th>
+        <th class="text-end text-nowrap">差異</th>
+        <th class="text-center">状態</th>
+        <th class="text-end text-nowrap">カウント日時</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in items %}
+      <tr>
+        <td class="text-start"><span class="font-monospace">{{ i.location.location_code }}</span></td>
+        <td class="text-start">
+          <span class="font-monospace">{{ i.sku.sku_code }}</span>
+          <span class="text-muted small d-block">{{ i.sku.product.product_name }}</span>
+        </td>
+        <td class="text-end font-monospace">{{ i.system_quantity }}</td>
+        <td class="text-end font-monospace">{% if i.counted_quantity is not None %}{{ i.counted_quantity }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td class="text-end font-monospace">
+          {% if i.difference is not None %}
+            {% if i.difference > 0 %}<span class="text-success fw-bold">+{{ i.difference }}</span>
+            {% elif i.difference < 0 %}<span class="text-danger fw-bold">{{ i.difference }}</span>
+            {% else %}<span class="text-muted">0</span>{% endif %}
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+        <td class="text-center">
+          {% if i.status == 'uncounted' %}<span class="badge bg-secondary">未</span>
+          {% elif i.status == 'counted' %}<span class="badge bg-primary">カウント済</span>
+          {% elif i.status == 'adjusted' %}<span class="badge bg-success">調整済</span>{% endif %}
+        </td>
+        <td class="text-end font-monospace small text-muted">{{ i.counted_at|date:"m/d H:i"|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="text-center text-muted py-4">
+        {% if session.status == 'planning' %}「カウント開始」で明細をスナップショットします{% else %}対象明細がありません{% endif %}
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% include 'a/_pagination.html' %}
+</div>
+{% endblock %}

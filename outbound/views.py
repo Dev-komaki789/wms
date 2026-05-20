@@ -11,8 +11,9 @@ from django.views.generic import (
 )
 
 from core.order_csv import OrderCsvExportView, OrderCsvImportView
-from core.utils import parse_query_date
+from core.utils import paginate, parse_query_date
 from masters.models import Area, Sku
+from stock.views import StocktakeLockGuardMixin
 from masters.utils import get_current_warehouse
 from stock.models import StockBalance, StockMovement
 
@@ -127,7 +128,9 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
                 item_count=Count('items'),
                 total_ordered=Sum('items__quantity_ordered'),
             ).order_by('-priority', 'deadline_at', '-outbound_order_code')
-            ctx['orders'] = qs
+            page = paginate(self.request, qs)
+            ctx['orders'] = page
+            ctx['page_obj'] = page
             ctx['stats'] = {
                 'total': qs.count(),
                 'allocation_wait': qs.filter(
@@ -983,7 +986,7 @@ class OutboundInspectionView(LoginRequiredMixin, View):
             reverse('outbound:handheld_inspection_work', args=[order.pk]))
 
 
-class OutboundInspectionWorkView(LoginRequiredMixin, View):
+class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
     """出荷検品・梱包作業（出荷確定）画面 — handheld 端末用。
 
     出荷検品画面から遷移。出荷する明細を1商品ずつ SKU スキャンで照合し、品番・員数を

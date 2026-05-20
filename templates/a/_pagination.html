@@ -1,0 +1,38 @@
+{# ページ送り UI。page_obj（Django Page）がコンテキストにあるとき表示する。      #}
+{# 検索条件は {% querystring %}（Django 5.1+）で保持し page だけ差し替える。      #}
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+<nav aria-label="ページ送り" class="border-top bg-white px-3 py-2">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+    {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="{% querystring page=1 %}" aria-label="先頭ページ">&laquo;</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="{% querystring page=page_obj.previous_page_number %}" aria-label="前のページ">&lsaquo;</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+      <li class="page-item disabled"><span class="page-link">&lsaquo;</span></li>
+    {% endif %}
+
+    <li class="page-item disabled">
+      <span class="page-link text-body">
+        {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} ページ
+        <span class="text-muted">（全 {{ page_obj.paginator.count }} 件）</span>
+      </span>
+    </li>
+
+    {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="{% querystring page=page_obj.next_page_number %}" aria-label="次のページ">&rsaquo;</a>
+      </li>
+      <li class="page-item">
+        <a class="page-link" href="{% querystring page=page_obj.paginator.num_pages %}" aria-label="最終ページ">&raquo;</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">&rsaquo;</span></li>
+      <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

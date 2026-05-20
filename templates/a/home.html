@@ -105,7 +105,8 @@
   {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_out' icon='bi-box-arrow-up' label='計画外出庫' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_transfer' icon='bi-arrow-left-right' label='棚間移動' %}
-  {% include 'a/_menu_card.html' with disabled=True icon='bi-clipboard-check' label='棚卸' %}
+  {% include 'a/_menu_card.html' with url='stock:stocktake_inquiry' icon='bi-clipboard-check' label='棚卸照会' %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_stocktake' icon='bi-clipboard-check' label='棚卸カウント' %}
 </div>
 
 {# ========== システム ========== #}

@@ -11,6 +11,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView, T
 from django.views.generic.edit import FormView
 
 from core.models import ErrorLog
+from core.utils import PAGE_SIZE, GetPageMixin, paginate
 
 from .csv_io import DELIMITERS, MASTER_SPECS, build_csv, column_guide, import_csv
 from .forms import (
@@ -118,7 +119,7 @@ class ProtectedErrorMixin:
             return HttpResponseRedirect(self.success_url)
 
 
-class FilterableListMixin:
+class FilterableListMixin(GetPageMixin):
     """一覧 ListView に「キーワード＋ステータス」の絞り込みを付与する。
 
     サブクラスで search_fields にキーワード照合対象のフィールド名を列挙する。
@@ -127,6 +128,7 @@ class FilterableListMixin:
     """
 
     search_fields = []
+    paginate_by = PAGE_SIZE
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -196,7 +198,9 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
             loc_qs = loc_qs.order_by(
                 'warehouse__warehouse_code', 'area__area_code', 'location_code'
             )
-            ctx['locations'] = loc_qs
+            page = paginate(self.request, loc_qs)
+            ctx['locations'] = page
+            ctx['page_obj'] = page
 
             # サマリー統計は検索結果ベース（フィルタ後の件数を集計）
             ctx['loc_stats'] = {
@@ -232,10 +236,11 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
 
 # ---- Area ----
 
-class AreaListView(CurrentWarehouseScopedMixin, LoginRequiredMixin, ListView):
+class AreaListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, ListView):
     model = Area
     template_name = 'a/masters/area_list.html'
     context_object_name = 'areas'
+    paginate_by = PAGE_SIZE
 
     def get_queryset(self):
         return (
@@ -273,10 +278,11 @@ class AreaDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, ProtectedE
 
 # ---- Location ----
 
-class LocationListView(CurrentWarehouseScopedMixin, LoginRequiredMixin, ListView):
+class LocationListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, ListView):
     model = Location
     template_name = 'a/masters/location_list.html'
     context_object_name = 'locations'
+    paginate_by = PAGE_SIZE
 
     def get_queryset(self):
         return (
@@ -366,7 +372,7 @@ class LocationDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, Protec
 
 # ---- Category ----
 
-class CategoryListView(LoginRequiredMixin, ListView):
+class CategoryListView(GetPageMixin, LoginRequiredMixin, ListView):
     """カテゴリ一覧。
 
     検索条件が無いときはツリー（深さ優先、depth_attr / children_count 付き）。
@@ -378,6 +384,11 @@ class CategoryListView(LoginRequiredMixin, ListView):
     model = Category
     template_name = 'a/masters/category_list.html'
     context_object_name = 'categories'
+
+    def get_paginate_by(self, queryset):
+        # ツリー表示はページ送りすると階層が分断されるため、
+        # 検索（フラットな結果リスト）のときだけページネーションする。
+        return PAGE_SIZE if getattr(self, '_searched', False) else None
 
     def get_queryset(self):
         g = self.request.GET
@@ -600,7 +611,9 @@ class ProductInquiryView(LoginRequiredMixin, TemplateView):
             elif p_status == 'inactive':
                 qs = qs.filter(is_active=False)
             qs = qs.order_by('product_code')
-            ctx['products'] = qs
+            page = paginate(self.request, qs)
+            ctx['products'] = page
+            ctx['page_obj'] = page
             ctx['p_stats'] = {
                 'total': qs.count(),
                 'active': qs.filter(is_active=True).count(),
@@ -695,7 +708,9 @@ class SkuInquiryView(LoginRequiredMixin, TemplateView):
             elif s_status == 'inactive':
                 qs = qs.filter(is_active=False)
             qs = qs.order_by('sku_code')
-            ctx['skus'] = qs
+            page = paginate(self.request, qs)
+            ctx['skus'] = page
+            ctx['page_obj'] = page
             ctx['s_stats'] = {
                 'total': qs.count(),
                 'active': qs.filter(is_active=True).count(),

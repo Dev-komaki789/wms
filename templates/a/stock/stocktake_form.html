@@ -1,0 +1,67 @@
+{% extends 'a/base.html' %}
+
+{% block title %}棚卸新規作成{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-clipboard-plus me-2 text-primary"></i>棚卸新規作成</h2>
+  <a href="{% url 'stock:stocktake_inquiry' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 一覧へ戻る
+  </a>
+</div>
+
+<div class="alert alert-info d-flex align-items-start">
+  <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+  <div>
+    棚卸セッションを作成します。作成直後は「計画中」となり、詳細画面の
+    <strong>「カウント開始」</strong>ボタンで現在の在庫を<strong>帳簿数としてスナップショット</strong>し、
+    ハンディでのカウントに進めます。完了時に差異 ≠ 0 の明細に StockMovement.ADJ を発行して在庫を実数に合わせます。
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">{{ form.stocktake_type.label }}</label>
+        {{ form.stocktake_type }}
+        {% if form.stocktake_type.errors %}<div class="text-danger small mt-1">{{ form.stocktake_type.errors }}</div>{% endif %}
+        <div class="form-text">全数＝現在倉庫の全棚×SKU / 循環＝指定エリアのみ</div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">{{ form.area.label }}</label>
+        {{ form.area }}
+        {% if form.area.errors %}<div class="text-danger small mt-1">{{ form.area.errors }}</div>{% endif %}
+        <div class="form-text">循環棚卸のときのみ指定（全数では空）</div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">{{ form.planned_at.label }}</label>
+        {{ form.planned_at }}
+        {% if form.planned_at.errors %}<div class="text-danger small mt-1">{{ form.planned_at.errors }}</div>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label fw-semibold">{{ form.note.label }}</label>
+        {{ form.note }}
+        {% if form.note.errors %}<div class="text-danger small mt-1">{{ form.note.errors }}</div>{% endif %}
+      </div>
+
+      <div class="d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-primary"
+                data-confirm="この内容で棚卸セッションを作成しますか？"
+                data-confirm-yes="作成する">
+          作成
+        </button>
+        <a href="{% url 'stock:stocktake_inquiry' %}" class="btn btn-outline-secondary">キャンセル</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

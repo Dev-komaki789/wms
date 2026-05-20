@@ -1,0 +1,42 @@
+{% extends 'a/handheld_base.html' %}
+
+{% block title %}棚卸カウント{% endblock %}
+{% block page_title %}棚卸カウント{% endblock %}
+
+{% block hh_content %}
+<div class="small text-muted text-center mb-2">カウント中の棚卸を選んでください</div>
+
+{% if sessions %}
+  <div class="list-group mb-3">
+    {% for s in sessions %}
+      <a href="{% url 'stock:handheld_stocktake_work' s.pk %}" class="list-group-item list-group-item-action">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="font-monospace fw-bold">{{ s.session_code }}</div>
+            <div class="small text-muted">
+              {% if s.area %}{{ s.area.area_code }}{% else %}{{ s.warehouse.warehouse_code }} 全体{% endif %}
+              ・{{ s.get_stocktake_type_display }}
+            </div>
+          </div>
+          <i class="bi bi-chevron-right text-muted"></i>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="alert alert-info text-center small">
+    カウント中の棚卸はありません。<br>PC で棚卸を作成・開始してください。
+  </div>
+{% endif %}
+
+<hr>
+<form method="post" class="mt-3">
+  {% csrf_token %}
+  <label class="form-label fw-semibold">棚卸番号でスキャン</label>
+  <input type="text" name="session_code" class="form-control hh-key mb-3"
+         placeholder="ST-YYYYMMDD-NNN" autocomplete="off" autofocus>
+  <button type="submit" class="btn btn-primary btn-hh">
+    <i class="bi bi-arrow-right-circle"></i> 開く
+  </button>
+</form>
+{% endblock %}

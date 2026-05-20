@@ -13,8 +13,9 @@ from django.views.generic import (
 )
 
 from core.order_csv import OrderCsvExportView, OrderCsvImportView
-from core.utils import parse_query_date
+from core.utils import paginate, parse_query_date
 from masters.models import Location
+from stock.views import StocktakeLockGuardMixin
 from masters.utils import get_current_warehouse
 from stock.models import StockBalance, StockMovement
 
@@ -132,7 +133,9 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
                 item_count=Count('items'),
                 total_expected=Sum('items__quantity_expected'),
             ).order_by('-expected_date', '-inbound_order_code')
-            ctx['orders'] = qs
+            page = paginate(self.request, qs)
+            ctx['orders'] = page
+            ctx['page_obj'] = page
             ctx['stats'] = {
                 'total': qs.count(),
                 'receiving_wait': qs.filter(
@@ -807,7 +810,7 @@ class InboundPutawayView(LoginRequiredMixin, View):
             reverse('inbound:handheld_putaway_work', args=[order.pk]))
 
 
-class InboundPutawayWorkView(LoginRequiredMixin, View):
+class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
     """棚入れ作業（格納先ロケーション登録）画面 — handheld 端末用。
 
     入荷棚入れ画面から遷移。検品済み指示の SKU を1商品ずつスキャンし、格納先
