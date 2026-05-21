@@ -64,6 +64,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # ハンディ作業者は PC 画面にアクセスできない（認証後に判定）
+    'accounts.middleware.HandheldOnlyMiddleware',
     # 画面で発生した未処理例外を ErrorLog に記録する
     'core.middleware.ErrorLogMiddleware',
 ]
@@ -81,6 +83,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'masters.context_processors.current_warehouse',
+                'accounts.context_processors.user_role',
             ],
         },
     },

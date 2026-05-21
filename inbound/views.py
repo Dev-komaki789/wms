@@ -4,10 +4,11 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, ProtectedError, Q, Sum
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django.views.generic import (
     CreateView, DeleteView, DetailView, TemplateView, UpdateView, View,
 )
@@ -814,10 +815,16 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
     """棚入れ作業（格納先ロケーション登録）画面 — handheld 端末用。
 
     入荷棚入れ画面から遷移。検品済み指示の SKU を1商品ずつスキャンし、格納先
-    ロケーションをスキャンして割り当てる。「棚入れ完了」で計上数（実入荷数−不良
-    品数）ぶんの StockMovement.IN を発行して在庫を加算し、InboundReceipt に
-    格納先・担当者・入庫履歴を記録、ステータスを PUTAWAY_WAIT → COMPLETED
-    （入荷完了）へ進める。不良品数は在庫計上しない。
+    ロケーションをスキャンして InboundPutawayItemView へ即時 POST する
+    （明細単位コミット = 中断耐性あり）。
+    1明細ごとに計上数ぶんの StockMovement.IN を発行して在庫を加算し、
+    InboundReceipt に格納先・担当者・入庫履歴を記録する。全明細が完了したら
+    指示のステータスを PUTAWAY_WAIT → COMPLETED（入荷完了）へ進める。
+    不良品数は在庫計上しない。
+
+    GET 時は putaway_at がまだ未設定の明細のみを画面に出す（途中離脱後の
+    再入場で「続きから」できる）。確定済みの明細は再編集不可（業務 WMS の
+    慣習に合わせ、間違いは棚間移動など別フローで物理修正する）。
     """
 
     template_name = 'a/inbound/handheld/putaway_work.html'
@@ -859,8 +866,10 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
         guard = self._guard(request, order)
         if guard:
             return guard
-        # 1商品ずつ処理する handheld ウィザード用に、明細を JSON で渡す
+        # 1商品ずつ処理する handheld ウィザード用に、未棚入れの明細だけを JSON で渡す
         items = []
+        done_count = 0
+        total = 0
         for it in order.items.select_related(
                 'sku__product', 'inboundreceipt').all():
             receipt = _receipt_of(it)
@@ -871,6 +880,11 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
                     f'入荷指示 {order.inbound_order_code} に未検品の明細があります。',
                 )
                 return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+            total += 1
+            if receipt.putaway_at is not None:
+                # 既に確定済み（前回の作業セッションで処理済み）→ 画面に出さない
+                done_count += 1
+                continue
             good = receipt.quantity_good
             items.append({
                 'id': it.pk,
@@ -884,130 +898,169 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
                 'area_type': it.sku.required_location_type,
                 'area_type_label': it.sku.required_location_type.label,
             })
-        return render(request, self.template_name,
-                      {'order': order, 'items': items})
+        return render(request, self.template_name, {
+            'order': order, 'items': items,
+            'done_count': done_count, 'total': total,
+        })
 
-    def post(self, request, pk, *args, **kwargs):
+
+class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
+    """棚入れの 1 明細を即時確定する API（fetch 用）。
+
+    POST 時に格納先ロケーションコードを受け取り、検品結果（InboundReceipt）に
+    格納先・担当者・入庫履歴を記録し、計上数ぶんの StockMovement.IN を発行して
+    在庫を加算する。全明細が完了したら指示のステータスを COMPLETED に進めて
+    作業担当者ロックを解除する。
+
+    レスポンス (JSON):
+      - ok=True  -> {'ok': True, 'all_done': bool, 'remaining': int, 'location': str}
+      - ok=False -> {'ok': False, 'error': str}（HTTP は 200 のまま。ステータスは body で判断）
+    """
+
+    http_method_names = ['post']
+
+    def _scoped_orders(self, request):
+        qs = InboundOrder.objects.select_related(
+            'supplier', 'warehouse', 'in_progress_by')
+        wh = get_current_warehouse(request)
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        return qs
+
+    def post(self, request, order_pk, item_pk, *args, **kwargs):
+        location_code = (request.POST.get('location_code') or '').strip()
         with transaction.atomic():
-            # 確定対象の指示行をロックして取得（同時確定の二重処理を防ぐ）
             order = (
-                self._scoped_orders()
+                self._scoped_orders(request)
                 .select_for_update(of=('self',))
-                .filter(pk=pk)
+                .filter(pk=order_pk)
                 .first()
             )
-            guard = self._guard(request, order)
-            if guard:
-                return guard
+            if order is None:
+                return JsonResponse({
+                    'ok': False, 'error': '入荷指示が見つかりません。',
+                })
+            if order.status != InboundOrder.Status.PUTAWAY_WAIT:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'入荷指示 {order.inbound_order_code} は'
+                             f'「{order.get_status_display()}」のため棚入れできません。',
+                })
+            if (order.in_progress_by_id
+                    and order.in_progress_by_id != request.user.pk):
+                worker = (order.in_progress_by.display_name
+                          or order.in_progress_by.username)
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'{worker} が棚入れ作業中です。',
+                })
 
-            items = list(
-                order.items.select_related('sku', 'inboundreceipt').all())
+            item = (
+                order.items.select_related('sku__product')
+                .filter(pk=item_pk).first()
+            )
+            if item is None:
+                return JsonResponse({
+                    'ok': False, 'error': '対象の明細が見つかりません。',
+                })
+            receipt = _receipt_of(item)
+            if receipt is None:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'{item.sku.sku_code} は未検品です。',
+                })
+            if receipt.putaway_at is not None:
+                # 既に確定済み（重複 POST の防御）
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'{item.sku.sku_code} は既に棚入れ済みです。',
+                })
 
-            # 1パス目: 全明細を検証（計上数 > 0 の明細は格納先ロケーション必須）
-            parsed = {}
-            for it in items:
-                receipt = _receipt_of(it)
-                if receipt is None:
-                    messages.error(
-                        request,
-                        f'未検品の明細があります（{it.sku.sku_code}）。',
-                    )
-                    return HttpResponseRedirect(
-                        reverse('inbound:handheld_putaway'))
-                good = receipt.quantity_good
-                location = None
-                if good > 0:
-                    code = (request.POST.get(f'loc_{it.pk}') or '').strip()
-                    if not code:
-                        messages.error(
-                            request,
-                            f'格納先が未登録の商品があります（{it.sku.sku_code}）。'
-                            f'棚入れ作業をやり直してください。',
-                        )
-                        return HttpResponseRedirect(reverse(
-                            'inbound:handheld_putaway_work', args=[pk]))
-                    location = (
-                        Location.objects
-                        .select_related('area')
-                        .filter(location_code=code, is_active=True,
-                                warehouse=order.warehouse)
-                        .first()
-                    )
-                    if location is None:
-                        messages.error(
-                            request,
-                            f'格納先の棚番「{code}」が無効です（{it.sku.sku_code}）。'
-                            f'棚入れ作業をやり直してください。',
-                        )
-                        return HttpResponseRedirect(reverse(
-                            'inbound:handheld_putaway_work', args=[pk]))
-                    # ピッキング種別に合うエリア区分かを検証
-                    # （種まき=通常棚 / オーダー=大型・長物）
-                    required = it.sku.required_location_type
-                    if location.area.location_type != required:
-                        messages.error(
-                            request,
-                            f'{it.sku.sku_code} は「{required.label}」に格納する商品です。'
-                            f'棚番「{code}」は「'
-                            f'{location.area.get_location_type_display()}」'
-                            f'エリアのため指定できません。',
-                        )
-                        return HttpResponseRedirect(reverse(
-                            'inbound:handheld_putaway_work', args=[pk]))
-                parsed[it.pk] = (receipt, good, location)
+            good = receipt.quantity_good
+            location = None
+            if good > 0:
+                if not location_code:
+                    return JsonResponse({
+                        'ok': False, 'error': '格納先の棚番を入力してください。',
+                    })
+                location = (
+                    Location.objects.select_related('area')
+                    .filter(location_code=location_code, is_active=True,
+                            warehouse=order.warehouse)
+                    .first()
+                )
+                if location is None:
+                    return JsonResponse({
+                        'ok': False,
+                        'error': f'棚番「{location_code}」は存在しないか無効です。',
+                    })
+                required = item.sku.required_location_type
+                if location.area.location_type != required:
+                    return JsonResponse({
+                        'ok': False,
+                        'error': f'{item.sku.sku_code} は「{required.label}」エリアに'
+                                 f'格納してください（「{location_code}」は'
+                                 f'「{location.area.get_location_type_display()}」エリア）。',
+                    })
 
-            # 2パス目: 在庫加算・入庫履歴発行・検品結果（格納先など）の更新
+            # 在庫加算 + StockMovement.IN 発行（不良のみ＝good==0 のときは何もしない）
+            movement = None
+            if good > 0:
+                StockBalance.objects.get_or_create(
+                    location=location, sku=item.sku,
+                    defaults={'quantity': 0},
+                )
+                balance = (
+                    StockBalance.objects.select_for_update()
+                    .get(location=location, sku=item.sku)
+                )
+                quantity_before = balance.quantity
+                quantity_after = quantity_before + good
+                movement = StockMovement.objects.create(
+                    movement_type=StockMovement.MovementType.IN,
+                    location=location,
+                    sku=item.sku,
+                    quantity=good,
+                    quantity_before=quantity_before,
+                    quantity_after=quantity_after,
+                    reference_type=StockMovement.ReferenceType.INBOUND_ORDER,
+                    reference_id=order.pk,
+                    note='',
+                    created_by=request.user,
+                )
+                balance.quantity = quantity_after
+                # 0 → 正への切り替えで FIFO 用の最古入荷日時をリセット
+                if quantity_before == 0:
+                    balance.first_received_at = movement.moved_at
+                balance.save()
+
             now = timezone.now()
-            for it in items:
-                receipt, good, location = parsed[it.pk]
-                movement = None
-                if good > 0:
-                    # 在庫行をロックして取得（同時入庫での更新消失=lost update を
-                    # 防ぐ）。行が無ければ作成し、ロック付きで取り直す。
-                    StockBalance.objects.get_or_create(
-                        location=location, sku=it.sku,
-                        defaults={'quantity': 0},
-                    )
-                    balance = (
-                        StockBalance.objects.select_for_update()
-                        .get(location=location, sku=it.sku)
-                    )
-                    quantity_before = balance.quantity
-                    quantity_after = quantity_before + good
-                    movement = StockMovement.objects.create(
-                        movement_type=StockMovement.MovementType.IN,
-                        location=location,
-                        sku=it.sku,
-                        quantity=good,  # IN なので正の値
-                        quantity_before=quantity_before,
-                        quantity_after=quantity_after,
-                        reference_type=StockMovement.ReferenceType.INBOUND_ORDER,
-                        reference_id=order.pk,
-                        note='',
-                        created_by=request.user,
-                    )
-                    balance.quantity = quantity_after
-                    balance.save()
-                # 不良のみ（good == 0）の明細は在庫を動かさず格納先も NULL のまま
-                receipt.location = location
-                receipt.stock_movement = movement
-                receipt.putaway_by = request.user
-                receipt.putaway_at = now
-                receipt.save()
+            receipt.location = location
+            receipt.stock_movement = movement
+            receipt.putaway_by = request.user
+            receipt.putaway_at = now
+            receipt.save()
 
-            order.status = InboundOrder.Status.COMPLETED
-            order.received_at = now
-            # 棚入れ作業の担当者ロックを解除
-            order.in_progress_by = None
-            order.in_progress_at = None
-            order.save()
+            # 全明細が putaway_at を持ったら入荷指示を COMPLETED に
+            remaining = (
+                order.items
+                .filter(inboundreceipt__putaway_at__isnull=True)
+                .count()
+            )
+            all_done = (remaining == 0)
+            if all_done:
+                order.status = InboundOrder.Status.COMPLETED
+                order.received_at = now
+                order.in_progress_by = None
+                order.in_progress_at = None
+                order.save()
 
-        messages.success(
-            request,
-            f'入荷指示 {order.inbound_order_code} の棚入れが完了しました。'
-            f'（入荷完了）',
-        )
-        return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+        return JsonResponse({
+            'ok': True, 'all_done': all_done, 'remaining': remaining,
+            'location': location.location_code if location else '',
+            'location_name': location.location_name if location else '',
+            'area_name': location.area.area_name if location else '',
+        })
 
 
 # ---- 入荷指示 CSV 入出力 ----

@@ -7,10 +7,13 @@
   <h2 class="mb-1">
     <i class="bi bi-grid-3x3-gap-fill me-2 text-primary"></i>メニュー
   </h2>
-  <div class="text-muted small">業務メニューを選択してください</div>
+  <div class="text-muted small">
+    {% if is_handheld_worker %}ハンディ業務メニュー{% else %}業務メニューを選択してください{% endif %}
+  </div>
 </div>
 
-{# ========== KPI サマリー ========== #}
+{% if not is_handheld_worker %}
+{# ========== KPI サマリー（管理者のみ） ========== #}
 <h6 class="text-muted text-uppercase small fw-bold mb-2">
   <i class="bi bi-bar-chart-fill me-1"></i>サマリー
 </h6>
@@ -53,7 +56,7 @@
   </div>
 </div>
 
-{# ========== マスタ管理 ========== #}
+{# ========== マスタ管理（管理者のみ） ========== #}
 <h6 class="text-muted text-uppercase small fw-bold mb-2">
   <i class="bi bi-archive me-1"></i>マスタ管理
 </h6>
@@ -66,6 +69,7 @@
   {% include 'a/_menu_card.html' with url='masters:supplier_list' icon='bi-truck' label='仕入先' %}
   {% include 'a/_menu_card.html' with url='masters:customer_list' icon='bi-people' label='顧客' %}
 </div>
+{% endif %}
 
 <div class="row g-3 mb-4">
   <div class="col-md-6">
@@ -74,7 +78,9 @@
       <i class="bi bi-arrow-down-square me-1"></i>入荷
     </h6>
     <div class="row g-3">
+      {% if not is_handheld_worker %}
       {% include 'a/_menu_card.html' with url='inbound:order_inquiry' icon='bi-clipboard-plus' label='入荷指示' %}
+      {% endif %}
       {% include 'a/_menu_card.html' with url='inbound:handheld_arrival' icon='bi-box-arrow-in-right' label='入荷受け入れ' %}
       {% include 'a/_menu_card.html' with url='inbound:handheld_inspection' icon='bi-check2-square' label='入荷検品' %}
       {% include 'a/_menu_card.html' with url='inbound:handheld_putaway' icon='bi-box-seam' label='棚入れ' %}
@@ -86,9 +92,11 @@
       <i class="bi bi-arrow-up-square me-1"></i>出荷
     </h6>
     <div class="row g-3">
+      {% if not is_handheld_worker %}
       {% include 'a/_menu_card.html' with url='outbound:order_inquiry' icon='bi-clipboard-minus' label='出荷指示' %}
       {% include 'a/_menu_card.html' with url='outbound:launch' icon='bi-rocket-takeoff' label='出荷起動' %}
       {% include 'a/_menu_card.html' with url='outbound:picking_list_inquiry' icon='bi-printer' label='ピッキングリスト印刷' %}
+      {% endif %}
       {% include 'a/_menu_card.html' with url='outbound:handheld_picking' icon='bi-hand-index-thumb' label='ピッキング' %}
       {% include 'a/_menu_card.html' with url='outbound:handheld_inspection' icon='bi-shield-check' label='出荷検品' %}
     </div>
@@ -100,16 +108,21 @@
   <i class="bi bi-clipboard-data me-1"></i>在庫管理
 </h6>
 <div class="row g-3 mb-4">
+  {% if not is_handheld_worker %}
   {% include 'a/_menu_card.html' with url='stock:inquiry' icon='bi-list-stars' label='在庫照会' %}
   {% include 'a/_menu_card.html' with url='stock:movement_inquiry' icon='bi-clock-history' label='入出庫履歴照会' %}
+  {% endif %}
   {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_out' icon='bi-box-arrow-up' label='計画外出庫' %}
   {% include 'a/_menu_card.html' with url='stock:handheld_transfer' icon='bi-arrow-left-right' label='棚間移動' %}
+  {% if not is_handheld_worker %}
   {% include 'a/_menu_card.html' with url='stock:stocktake_inquiry' icon='bi-clipboard-check' label='棚卸照会' %}
+  {% endif %}
   {% include 'a/_menu_card.html' with url='stock:handheld_stocktake' icon='bi-clipboard-check' label='棚卸カウント' %}
 </div>
 
-{# ========== システム ========== #}
+{% if not is_handheld_worker %}
+{# ========== システム（管理者のみ） ========== #}
 <h6 class="text-muted text-uppercase small fw-bold mb-2">
   <i class="bi bi-gear-wide-connected me-1"></i>システム
 </h6>
@@ -117,4 +130,5 @@
   {% include 'a/_menu_card.html' with url='core:error_log_inquiry' icon='bi-exclamation-triangle' label='エラーログ照会' %}
   {% include 'a/_menu_card.html' with href='/admin/' icon='bi-shield-lock' label='Django Admin' %}
 </div>
+{% endif %}
 {% endblock %}

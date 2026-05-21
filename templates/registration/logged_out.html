@@ -1,0 +1,18 @@
+{% extends 'a/base.html' %}
+
+{# Django admin の標準ログアウト完了画面（"ご利用ありがとうございました…"）を
+   WMS 用に差し替える。`/admin/logout/` の POST 後に表示される。 #}
+
+{% block title %}ログアウト{% endblock %}
+
+{% block content %}
+<div class="text-center py-5">
+  <div class="mb-3">
+    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+  </div>
+  <h2 class="mb-3">ログアウトしました</h2>
+  <a class="btn btn-primary mt-2" href="/admin/login/">
+    <i class="bi bi-box-arrow-in-right me-1"></i>もう一度ログイン
+  </a>
+</div>
+{% endblock %}

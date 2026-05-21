@@ -6,6 +6,13 @@
 
 {% block hh_content %}
 {{ items|json_script:"items-data" }}
+<div id="meta-data"
+     data-list-pk="{{ picking_list.pk }}"
+     data-csrf="{{ csrf_token }}"
+     data-item-api-base="{% url 'outbound:handheld_picking_item' list_pk=picking_list.pk item_pk=0 %}"
+     data-entry-url="{% url 'outbound:handheld_picking' %}"
+     data-done-count="{{ done_count }}"
+     data-total="{{ total }}"></div>
 
 {# 対象のピッキングリスト #}
 <div class="card mb-2">
@@ -26,14 +33,16 @@
   </div>
 </div>
 
-{# 進捗: 何個目 / 全部 #}
+{# 進捗バッジ: done_count = 既確定(前セッション含む)、total = 全明細 #}
 <div class="d-flex align-items-center justify-content-between mb-3 px-1">
   <span class="fw-bold">
     <i class="bi bi-box-seam me-1 text-primary"></i>商品
     <span class="fs-4 mx-1" id="cur-num">1</span>
-    <span class="text-muted">/ {{ items|length }}</span>
+    <span class="text-muted">/ {{ total }}</span>
   </span>
-  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">ピッキング済み 0</span>
+  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">
+    ピッキング済み {{ done_count }}
+  </span>
 </div>
 
 {# ===== STATE: スキャン ===== #}
@@ -48,12 +57,6 @@
   <div class="mt-3">
     <div class="text-muted small mb-1">残りの商品（棚番順・タップでも選択できます）</div>
     <div class="list-group" id="remain-list"></div>
-  </div>
-
-  {# ピッキング済み: タップで再編集（打ち間違いの修正用） #}
-  <div class="mt-3 d-none" id="done-section">
-    <div class="text-muted small mb-1">ピッキング済み（タップで修正できます）</div>
-    <div class="list-group" id="done-list"></div>
   </div>
 </div>
 
@@ -112,47 +115,42 @@
   <button type="button" id="pk-back" class="btn btn-outline-secondary w-100 mt-2">
     <i class="bi bi-arrow-left me-1"></i>スキャンに戻る
   </button>
+  <div class="text-muted small text-center mt-2">
+    <i class="bi bi-info-circle me-1"></i>実行すると即時に記録されます（途中離脱しても続きから再開できます）
+  </div>
 </div>
 
-{# ===== STATE: 完了（このフォームを送信して確定） ===== #}
-<form method="post" id="state-done" class="d-none">
-  {% csrf_token %}
-  {% for it in items %}
-    <input type="hidden" name="picked_{{ it.id }}" id="hp-{{ it.id }}">
-  {% endfor %}
-  <div class="alert alert-success py-2">
-    <i class="bi bi-check-circle-fill me-1"></i>全 {{ items|length }} 商品のピッキングが完了しました
-  </div>
-  <div class="list-group mb-3" id="done-summary"></div>
-  <button type="submit" class="btn btn-success btn-hh">
-    <i class="bi bi-check-lg me-1"></i> ピッキング完了
-  </button>
-  <div class="text-muted small text-center mt-2">
-    <i class="bi bi-info-circle me-1"></i>在庫の引き落としは次工程「出荷検品」で行います
-  </div>
-</form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
   'use strict';
+  const meta = document.getElementById('meta-data');
+  const LIST_PK = meta.dataset.listPk;
+  const CSRF = meta.dataset.csrf;
+  const ITEM_API_TPL = meta.dataset.itemApiBase;  // .../item/0/ を 0 → 実 pk に置換
+  const ENTRY_URL = meta.dataset.entryUrl;
+  const TOTAL = parseInt(meta.dataset.total, 10) || 0;
+  let doneCount = parseInt(meta.dataset.doneCount, 10) || 0;
+
+  function itemApiUrl(itemPk) {
+    return ITEM_API_TPL.replace(/\/0\/$/, '/' + itemPk + '/');
+  }
+
   const items = JSON.parse(document.getElementById('items-data').textContent);
-  const total = items.length;
-  const done = {};          // id -> 確定した実ピッキング数
+  const done = {};          // id -> 確定済み（即時コミット成功で積む）
   let current = null;       // ピッキング入力中の商品
   let verified = false;     // 現在の商品をスキャン照合済みか
+  let committing = false;   // 実行 POST の二重送信防止
 
   const curNum  = document.getElementById('cur-num');
   const doneBadge = document.getElementById('done-badge');
   const sScan = document.getElementById('state-scan');
   const sPick = document.getElementById('state-pick');
-  const sDone = document.getElementById('state-done');
   const scanInput = document.getElementById('scan-input');
   const scanMsg   = document.getElementById('scan-msg');
   const remainList = document.getElementById('remain-list');
-  const doneList = document.getElementById('done-list');
-  const doneSection = document.getElementById('done-section');
   const pkLoc  = document.getElementById('pk-loc');
   const pkSku  = document.getElementById('pk-sku');
   const pkName = document.getElementById('pk-name');
@@ -163,23 +161,23 @@
   const pkShort  = document.getElementById('pk-short');
   const pkError  = document.getElementById('pk-error');
   const execBtn  = document.getElementById('pk-exec');
-  const doneSummary = document.getElementById('done-summary');
 
-  function doneCount() { return Object.keys(done).length; }
+  function remainingCount() {
+    return items.filter(it => done[it.id] === undefined).length;
+  }
 
   function show(state) {
     sScan.classList.toggle('d-none', state !== 'scan');
     sPick.classList.toggle('d-none', state !== 'pick');
-    sDone.classList.toggle('d-none', state !== 'done');
   }
 
   function updateProgress() {
-    curNum.textContent = doneCount() >= total
-      ? total : Math.min(doneCount() + 1, total);
-    doneBadge.textContent = 'ピッキング済み ' + doneCount();
+    const completed = doneCount + Object.keys(done).length;
+    curNum.textContent = completed >= TOTAL
+      ? TOTAL : Math.min(completed + 1, TOTAL);
+    doneBadge.textContent = 'ピッキング済み ' + completed;
   }
 
-  // スキャン画面: 残りの商品リストを描画（棚番順）
   function renderRemain() {
     remainList.innerHTML = '';
     const remain = items.filter(it => done[it.id] === undefined);
@@ -204,38 +202,6 @@
     }
   }
 
-  // スキャン画面: ピッキング済みリストを描画（タップで再編集 = 打ち間違いの修正）
-  function renderDone() {
-    doneList.innerHTML = '';
-    const doneItems = items.filter(it => done[it.id] !== undefined);
-    doneSection.classList.toggle('d-none', doneItems.length === 0);
-    doneItems.forEach(it => {
-      const picked = done[it.id];
-      const short = picked < it.requested;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'list-group-item list-group-item-action py-2 '
-        + (short ? 'list-group-item-warning' : 'list-group-item-success');
-      let right = '<span class="font-monospace fw-bold">' + picked + '</span>'
-        + ' / ' + it.requested;
-      if (short) {
-        right += ' <span class="badge bg-danger ms-1">欠品</span>';
-      }
-      b.innerHTML =
-        '<div class="d-flex justify-content-between align-items-center">'
-        + '<span><span class="font-monospace small fw-bold">' + it.location + '</span>'
-        + '<div class="text-muted" style="font-size:.72rem">' + it.sku + '</div></span>'
-        + '<span class="small text-nowrap">'
-        + '<i class="bi ' + (short ? 'bi-exclamation-triangle-fill text-warning'
-                                   : 'bi-check-circle-fill text-success') + ' me-1"></i>'
-        + right + '</span>'
-        + '</div>';
-      b.addEventListener('click', () => goPick(it));
-      doneList.appendChild(b);
-    });
-  }
-
-  // 商品スキャン照合の結果表示
   function renderVerify() {
     if (verified) {
       prodResult.innerHTML =
@@ -254,7 +220,6 @@
       + '<i class="bi bi-exclamation-triangle me-1"></i>' + msg + '</div>';
   }
 
-  // 指示数量と実ピッキング数の差（不足）を表示
   function checkShort() {
     const v = parseInt(qtyInput.value, 10);
     if (!isNaN(v) && v < current.requested) {
@@ -266,7 +231,6 @@
     }
   }
 
-  // スキャンした商品コードが現在の商品と一致するか照合する
   function verifyProduct() {
     const code = prodInput.value.trim();
     if (!code) {
@@ -292,10 +256,8 @@
 
   function goScan() {
     current = null;
-    if (doneCount() >= total) { goDone(); return; }
     updateProgress();
     renderRemain();
-    renderDone();
     show('scan');
     scanInput.value = '';
     scanMsg.textContent = 'ピッキング元の棚番バーコードを読み取ってください';
@@ -305,56 +267,29 @@
 
   function goPick(it) {
     current = it;
-    // 棚番→SKU の2段スキャンが基本。再編集（確定済み）の商品のみ照合済み扱い
-    verified = done[it.id] !== undefined;
+    // per-item モデルでは確定済み商品はこのリストに無いので、必ず未照合スタート
+    verified = false;
     pkLoc.textContent = it.location;
     pkSku.textContent = it.sku;
     pkName.textContent = it.name;
     pkReq.textContent = it.requested;
-    prodInput.value = verified ? it.sku : '';
+    prodInput.value = '';
     renderVerify();
-    // 実ピッキング数は指示数量で初期表示（再編集時は確定済みの値）
-    qtyInput.value = (done[it.id] !== undefined) ? done[it.id] : it.requested;
+    qtyInput.value = it.requested;
     checkShort();
     pkError.classList.add('d-none');
-    const prev = done[it.id];
-    const willComplete = doneCount() + (prev === undefined ? 1 : 0) >= total;
+    const willComplete = remainingCount() <= 1;
     execBtn.innerHTML = willComplete
       ? '<i class="bi bi-check-lg me-1"></i> 実行（ピッキング完了へ）'
       : '<i class="bi bi-check-lg me-1"></i> 実行（次の商品へ）';
     updateProgress();
     show('pick');
-    if (verified) { qtyInput.focus(); qtyInput.select(); }
-    else { prodInput.focus(); }
+    prodInput.focus();
   }
 
-  function goDone() {
-    updateProgress();
-    doneSummary.innerHTML = '';
-    items.forEach(it => {
-      const picked = done[it.id];
-      const short = picked < it.requested;
-      let badges = '<span class="badge bg-success">実 ' + picked + '</span>'
-        + ' <span class="badge bg-secondary">指示 ' + it.requested + '</span>';
-      if (short) {
-        badges += ' <span class="badge bg-danger">欠品 ' + (picked - it.requested) + '</span>';
-      }
-      const row = document.createElement('button');
-      row.type = 'button';
-      row.className = 'list-group-item list-group-item-action py-2';
-      row.innerHTML =
-        '<div class="font-monospace small fw-bold">' + it.location
-        + ' <span class="text-muted">/ ' + it.sku + '</span></div>'
-        + '<div class="text-muted" style="font-size:.7rem">' + it.name + '</div>'
-        + '<div class="mt-1">' + badges + '</div>';
-      row.addEventListener('click', () => goPick(it));   // タップで再編集
-      doneSummary.appendChild(row);
-    });
-    show('done');
-  }
-
-  function execCurrent() {
-    // 商品スキャン照合が済んでいなければ止める（無反応にしない）
+  function commitCurrent() {
+    if (committing) return;
+    if (!current) return;
     if (!verified) {
       pkError.textContent = '商品をスキャンして照合してください。';
       pkError.classList.remove('d-none');
@@ -363,25 +298,56 @@
     }
     const raw = qtyInput.value.trim();
     const v = parseInt(raw, 10);
-    // 数字以外が含まれる等の不正値はエラー表示して止める
     if (raw !== '' && (isNaN(v) || v < 0)) {
       pkError.textContent = '実ピッキング数は 0 以上の数字で入力してください。';
       pkError.classList.remove('d-none');
       qtyInput.focus();
       return;
     }
-    let qty = isNaN(v) ? 0 : v;             // 空欄は 0 とみなす
-    if (qty > current.requested) { qty = current.requested; }  // 指示数量を上限に
+    let qty = isNaN(v) ? 0 : v;
+    if (qty > current.requested) { qty = current.requested; }
     qtyInput.value = qty;
     pkError.classList.add('d-none');
-    done[current.id] = qty;
-    document.getElementById('hp-' + current.id).value = qty;   // 送信用 hidden
-    goScan();   // 次の商品 or 完了
+
+    committing = true;
+    execBtn.disabled = true;
+    const body = new URLSearchParams();
+    body.append('csrfmiddlewaretoken', CSRF);
+    body.append('quantity_picked', String(qty));
+    fetch(itemApiUrl(current.id), {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.ok) {
+          pkError.textContent = data.error || '確定に失敗しました。';
+          pkError.classList.remove('d-none');
+          return;
+        }
+        done[current.id] = {picked: qty};
+        if (data.all_done) {
+          window.location.href = ENTRY_URL
+            + '?completed=' + encodeURIComponent(LIST_PK);
+        } else {
+          goScan();
+        }
+      })
+      .catch(() => {
+        pkError.textContent = '通信エラーが発生しました。もう一度お試しください。';
+        pkError.classList.remove('d-none');
+      })
+      .finally(() => {
+        committing = false;
+        execBtn.disabled = false;
+      });
   }
 
-  // 棚番スキャン。wms.js のグローバル Enter 移動には渡さない。
-  // ピッキングは「棚番順に巡回 → 棚番で位置を確定 → 商品で品違いを照合」が
-  // 基本動作なので、1段目は棚番で引く（商品の照合は次のピッキング画面で行う）。
+  // 棚番スキャン
   scanInput.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
@@ -391,14 +357,14 @@
     if (!code) return;
     const it = items.find(x => x.location === code);
     if (!it) {
-      scanMsg.textContent = 'このリストに無い棚番です: ' + code;
+      scanMsg.textContent = 'このリストに無い棚番、または既にピッキング済みです: ' + code;
       scanMsg.className = 'form-text text-danger';
       return;
     }
     goPick(it);
   });
 
-  // 商品スキャン欄: 入力が変わったら照合をやり直す（古い結果を残さない）
+  // 商品スキャン欄
   prodInput.addEventListener('input', function () {
     verified = false;
     prodResult.innerHTML = '';
@@ -410,7 +376,7 @@
     verifyProduct();
   });
 
-  // 数量欄: 数字以外は入力時に除去。空欄でフォーカスを外したら 0 を補完
+  // 数量欄
   qtyInput.addEventListener('input', function () {
     const cleaned = qtyInput.value.replace(/[^0-9]/g, '');
     if (cleaned !== qtyInput.value) qtyInput.value = cleaned;
@@ -424,9 +390,8 @@
     if (e.key !== 'Enter') return;
     e.preventDefault();
     e.stopPropagation();
-    execCurrent();
+    commitCurrent();
   });
-  // 数量ステッパー（− / ＋ ボタンで増減。指示数量を上限とする）
   document.getElementById('qty-minus').addEventListener('click', function () {
     qtyInput.value = Math.max(0, (parseInt(qtyInput.value, 10) || 0) - 1);
     checkShort();
@@ -436,12 +401,15 @@
     qtyInput.value = Math.min(current.requested, next);
     checkShort();
   });
-  execBtn.addEventListener('click', execCurrent);
+  execBtn.addEventListener('click', commitCurrent);
   document.getElementById('pk-back').addEventListener('click', goScan);
 
   // 初期化
-  if (total === 0) { goDone(); } else { goScan(); }
-  // wms.js の先頭フィールドフォーカスを上書きしてスキャン欄にフォーカス
+  if (items.length === 0) {
+    window.location.href = ENTRY_URL;
+  } else {
+    goScan();
+  }
   window.addEventListener('DOMContentLoaded', function () {
     if (!sScan.classList.contains('d-none')) scanInput.focus();
   });

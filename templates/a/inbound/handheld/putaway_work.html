@@ -6,6 +6,13 @@
 
 {% block hh_content %}
 {{ items|json_script:"items-data" }}
+<div id="meta-data" data-order="{{ order.pk }}"
+     data-csrf="{{ csrf_token }}"
+     data-loc-api="{% url 'masters:api_location_lookup' %}"
+     data-item-api-base="{% url 'inbound:handheld_putaway_item' order_pk=order.pk item_pk=0 %}"
+     data-entry-url="{% url 'inbound:handheld_putaway' %}"
+     data-done-count="{{ done_count }}"
+     data-total="{{ total }}"></div>
 
 {# 対象の入荷指示 #}
 <div class="card mb-2">
@@ -26,14 +33,16 @@
   </div>
 </div>
 
-{# 進捗: 何個目 / 全部 #}
+{# 進捗バッジ: done_count = 既確定（前セッション含む）、total = 全明細 #}
 <div class="d-flex align-items-center justify-content-between mb-3 px-1">
   <span class="fw-bold">
     <i class="bi bi-box-seam me-1 text-primary"></i>商品
     <span class="fs-4 mx-1" id="cur-num">1</span>
-    <span class="text-muted">/ {{ items|length }}</span>
+    <span class="text-muted">/ {{ total }}</span>
   </span>
-  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">棚入れ済み 0</span>
+  <span class="badge bg-primary-subtle text-primary-emphasis" id="done-badge">
+    棚入れ済み {{ done_count }}
+  </span>
 </div>
 
 {# ===== STATE: スキャン ===== #}
@@ -48,12 +57,6 @@
   <div class="mt-3">
     <div class="text-muted small mb-1">残りの商品（タップでも選択できます）</div>
     <div class="list-group" id="remain-list"></div>
-  </div>
-
-  {# 棚入れ済み: タップで再編集（打ち間違いの修正用） #}
-  <div class="mt-3 d-none" id="done-section">
-    <div class="text-muted small mb-1">棚入れ済み（タップで修正できます）</div>
-    <div class="list-group" id="done-list"></div>
   </div>
 </div>
 
@@ -90,50 +93,47 @@
   <button type="button" id="pa-back" class="btn btn-outline-secondary w-100 mt-2">
     <i class="bi bi-arrow-left me-1"></i>スキャンに戻る
   </button>
+  <div class="text-muted small text-center mt-2">
+    <i class="bi bi-info-circle me-1"></i>実行すると即時に在庫加算されます（途中離脱しても続きから再開できます）
+  </div>
 </div>
 
-{# ===== STATE: 完了（このフォームを送信して確定） ===== #}
-<form method="post" id="state-done" class="d-none">
-  {% csrf_token %}
-  {% for it in items %}
-    <input type="hidden" name="loc_{{ it.id }}" id="hl-{{ it.id }}">
-  {% endfor %}
-  <div class="alert alert-success py-2">
-    <i class="bi bi-check-circle-fill me-1"></i>全 {{ items|length }} 商品の格納先を登録しました
-  </div>
-  <div class="list-group mb-3" id="done-summary"></div>
-  <button type="submit" class="btn btn-success btn-hh">
-    <i class="bi bi-check-lg me-1"></i> 棚入れ完了
-  </button>
-  <div class="text-muted small text-center mt-2">
-    <i class="bi bi-info-circle me-1"></i>計上数ぶんの在庫を加算し、入荷を完了します
-  </div>
-</form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
   'use strict';
-  const LOC_API = "{% url 'masters:api_location_lookup' %}";
+  const meta = document.getElementById('meta-data');
+  const ORDER_PK = meta.dataset.order;
+  const CSRF = meta.dataset.csrf;
+  const LOC_API = meta.dataset.locApi;
+  // item API は <int:item_pk> 部分を 0 で生成しておき、置換で組み立てる
+  const ITEM_API_TPL = meta.dataset.itemApiBase;
+  const ENTRY_URL = meta.dataset.entryUrl;
+  const TOTAL = parseInt(meta.dataset.total, 10) || 0;
+  let doneCount = parseInt(meta.dataset.doneCount, 10) || 0;
+
+  function itemApiUrl(itemPk) {
+    return ITEM_API_TPL.replace(/\/0\/$/, '/' + itemPk + '/');
+  }
+
+  // 画面初期化: GET で渡された「未棚入れ」の明細だけが処理対象
   const items = JSON.parse(document.getElementById('items-data').textContent);
-  const total = items.length;
-  // id -> {loc, locName, locArea} (棚入れ済み) または {skip:true} (不良のみで対象外)
+  // id -> {loc, locName, locArea} （即時コミット成功で done に積む）
   const done = {};
-  let current = null;       // 棚入れ入力中の商品
-  let currentLoc = null;    // 確認済みの格納先 {code, name, area}
-  let looking = false;      // ロケーション照会の二重送信防止
+  let current = null;          // 棚入れ入力中の商品
+  let currentLoc = null;       // 確認済みの格納先 {code, name, area}
+  let looking = false;         // ロケーション照会の二重送信防止
+  let committing = false;      // 実行 POST の二重送信防止
 
   const curNum  = document.getElementById('cur-num');
   const doneBadge = document.getElementById('done-badge');
   const sScan = document.getElementById('state-scan');
   const sPutaway = document.getElementById('state-putaway');
-  const sDone = document.getElementById('state-done');
   const scanInput = document.getElementById('jan-scan');
   const scanMsg   = document.getElementById('scan-msg');
   const remainList = document.getElementById('remain-list');
-  const doneList = document.getElementById('done-list');
-  const doneSection = document.getElementById('done-section');
   const pSku  = document.getElementById('pa-sku');
   const pName = document.getElementById('pa-name');
   const pGood = document.getElementById('pa-good');
@@ -143,23 +143,23 @@
   const locResult = document.getElementById('loc-result');
   const pError = document.getElementById('pa-error');
   const execBtn = document.getElementById('pa-exec');
-  const doneSummary = document.getElementById('done-summary');
 
-  function doneCount() { return Object.keys(done).length; }
+  function remainingCount() {
+    return items.filter(it => done[it.id] === undefined).length;
+  }
 
   function show(state) {
     sScan.classList.toggle('d-none', state !== 'scan');
     sPutaway.classList.toggle('d-none', state !== 'putaway');
-    sDone.classList.toggle('d-none', state !== 'done');
   }
 
   function updateProgress() {
-    curNum.textContent = doneCount() >= total
-      ? total : Math.min(doneCount() + 1, total);
-    doneBadge.textContent = '棚入れ済み ' + doneCount();
+    const completed = doneCount + Object.keys(done).length;
+    curNum.textContent = completed >= TOTAL
+      ? TOTAL : Math.min(completed + 1, TOTAL);
+    doneBadge.textContent = '棚入れ済み ' + completed;
   }
 
-  // スキャン画面: 残りの商品リストを描画（不良のみの商品は初期化時に done 済み）
   function renderRemain() {
     remainList.innerHTML = '';
     const remain = items.filter(it => done[it.id] === undefined);
@@ -182,43 +182,6 @@
     }
   }
 
-  // スキャン画面: 棚入れ済みリストを描画（タップで再編集 = 打ち間違いの修正）
-  function renderDone() {
-    doneList.innerHTML = '';
-    const doneItems = items.filter(it => done[it.id] !== undefined);
-    doneSection.classList.toggle('d-none', doneItems.length === 0);
-    doneItems.forEach(it => {
-      const d = done[it.id];
-      if (d.skip) {
-        // 不良のみ → 棚入れ対象外。再編集不要なので非クリックの行で表示
-        const row = document.createElement('div');
-        row.className = 'list-group-item py-2';
-        row.innerHTML =
-          '<div class="d-flex justify-content-between align-items-center">'
-          + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
-          + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
-          + '<span class="small text-nowrap text-muted">'
-          + '<i class="bi bi-dash-circle me-1"></i>棚入れ対象外</span>'
-          + '</div>';
-        doneList.appendChild(row);
-        return;
-      }
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'list-group-item list-group-item-action list-group-item-success py-2';
-      b.innerHTML =
-        '<div class="d-flex justify-content-between align-items-center">'
-        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
-        + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
-        + '<span class="small text-nowrap"><i class="bi bi-check-circle-fill text-success me-1"></i>'
-        + '<span class="font-monospace fw-bold">' + d.loc + '</span></span>'
-        + '</div>';
-      b.addEventListener('click', () => goPutaway(it));
-      doneList.appendChild(b);
-    });
-  }
-
-  // 確認済みロケーションを画面に表示する
   function renderLocResult() {
     if (currentLoc) {
       locResult.innerHTML =
@@ -239,7 +202,6 @@
       + '<i class="bi bi-exclamation-triangle me-1"></i>' + msg + '</div>';
   }
 
-  // 棚番をスキャン → API で実在チェック
   function lookupLocation() {
     if (looking) return;
     const code = locInput.value.trim();
@@ -264,7 +226,6 @@
           locInput.select();
           return;
         }
-        // ピッキング種別に合うエリア区分か検証（種まき=通常棚 / オーダー=大型・長物）
         if (data.area_location_type !== current.area_type) {
           currentLoc = null;
           locError('この商品は「' + current.area_type_label + '」エリアに'
@@ -293,10 +254,8 @@
   function goScan() {
     current = null;
     currentLoc = null;
-    if (doneCount() >= total) { goDone(); return; }
     updateProgress();
     renderRemain();
-    renderDone();
     show('scan');
     scanInput.value = '';
     scanMsg.textContent = '商品のバーコードを読み取ってください';
@@ -309,80 +268,86 @@
     pSku.textContent = it.sku;
     pName.textContent = it.name;
     pGood.textContent = it.good;
-    // 不良品があれば内訳を補足表示
     if (it.defective > 0) {
       pDetail.innerHTML = '実入荷数 ' + it.received
         + ' <span class="text-danger">（不良 ' + it.defective + ' は計上対象外）</span>';
     } else {
       pDetail.textContent = '実入荷数 ' + it.received;
     }
-    // 格納可能なエリア区分を案内（種まき=通常棚 / オーダー=大型・長物）
     paAreaHint.innerHTML = '<i class="bi bi-signpost-2 text-info me-1"></i>'
       + '<span class="text-muted small">格納先区分</span> '
       + '<span class="badge bg-info-subtle text-info-emphasis">'
       + it.area_type_label + '</span>';
-    // 再編集なら確定済みの格納先を復元、新規ならクリア
-    const prev = done[it.id];
-    if (prev && !prev.skip) {
-      currentLoc = {code: prev.loc, name: prev.locName, area: prev.locArea};
-      locInput.value = prev.loc;
-    } else {
-      currentLoc = null;
-      locInput.value = '';
-    }
+    // 新規入力（per-item モデルでは確定済み明細はこのリストに無い）
+    currentLoc = null;
+    locInput.value = '';
     renderLocResult();
     pError.classList.add('d-none');
-    const willComplete = doneCount() + (prev === undefined ? 1 : 0) >= total;
+    const willComplete = remainingCount() <= 1;
     execBtn.innerHTML = willComplete
       ? '<i class="bi bi-check-lg me-1"></i> 実行（棚入れ完了へ）'
       : '<i class="bi bi-check-lg me-1"></i> 実行（次の商品へ）';
     updateProgress();
     show('putaway');
-    if (currentLoc) { execBtn.focus(); } else { locInput.focus(); }
+    locInput.focus();
   }
 
-  function goDone() {
-    updateProgress();
-    doneSummary.innerHTML = '';
-    items.forEach(it => {
-      const d = done[it.id];
-      let right;
-      if (d.skip) {
-        right = '<span class="badge bg-secondary">棚入れ対象外（不良のみ）</span>';
-      } else {
-        right = '<span class="badge bg-success">計上 ' + it.good + '</span>'
-          + ' <span class="badge bg-primary font-monospace">' + d.loc + '</span>';
-      }
-      const row = document.createElement(d.skip ? 'div' : 'button');
-      if (!d.skip) { row.type = 'button'; }
-      row.className = 'list-group-item py-2'
-        + (d.skip ? '' : ' list-group-item-action');
-      row.innerHTML =
-        '<div class="font-monospace small fw-bold">' + it.sku + '</div>'
-        + '<div class="text-muted" style="font-size:.7rem">' + it.name + '</div>'
-        + '<div class="mt-1">' + right + '</div>';
-      if (!d.skip) { row.addEventListener('click', () => goPutaway(it)); }
-      doneSummary.appendChild(row);
-    });
-    show('done');
-  }
-
-  function execCurrent() {
-    // 格納先ロケーションが確認済みでなければ止める（無反応にしない）
-    if (!currentLoc) {
+  function commitCurrent() {
+    if (committing) return;
+    if (!current) return;
+    // 不良のみ（good <= 0）の明細は location なしで commit する
+    if (current.good > 0 && !currentLoc) {
       pError.textContent = '格納先の棚番をスキャンして確認してください。';
       pError.classList.remove('d-none');
       locInput.focus();
       return;
     }
     pError.classList.add('d-none');
-    done[current.id] = {loc: currentLoc.code, locName: currentLoc.name,
-                        locArea: currentLoc.area};
-    document.getElementById('hl-' + current.id).value = currentLoc.code;
-    goScan();   // 次の商品 or 完了
+    committing = true;
+    execBtn.disabled = true;
+    const body = new URLSearchParams();
+    body.append('csrfmiddlewaretoken', CSRF);
+    if (currentLoc) {
+      body.append('location_code', currentLoc.code);
+    }
+    fetch(itemApiUrl(current.id), {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.ok) {
+          pError.textContent = data.error || '確定に失敗しました。';
+          pError.classList.remove('d-none');
+          return;
+        }
+        // クライアント側 done に積む（再描画用）
+        done[current.id] = currentLoc
+          ? {loc: currentLoc.code, locName: currentLoc.name, locArea: currentLoc.area}
+          : {skip: true};
+        if (data.all_done) {
+          // 全明細確定 → 入荷完了。入口画面に戻して成功表示は次画面に任せる
+          window.location.href = ENTRY_URL
+            + '?completed=' + encodeURIComponent(ORDER_PK);
+        } else {
+          goScan();
+        }
+      })
+      .catch(() => {
+        pError.textContent = '通信エラーが発生しました。もう一度お試しください。';
+        pError.classList.remove('d-none');
+      })
+      .finally(() => {
+        committing = false;
+        execBtn.disabled = false;
+      });
   }
 
-  // 商品スキャン。wms.js のグローバル Enter 移動には渡さない
+  // 商品スキャン（JAN / SKU）
   scanInput.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
@@ -392,37 +357,34 @@
     if (!code) return;
     const it = items.find(x => x.jan === code || x.sku === code);
     if (!it) {
-      scanMsg.textContent = '指示に無い商品です: ' + code;
-      scanMsg.className = 'form-text text-danger';
-      return;
-    }
-    if (it.good <= 0) {
-      scanMsg.textContent = 'この商品は不良のみのため棚入れ対象外です: ' + it.sku;
+      scanMsg.textContent = '指示に無い商品、または既に棚入れ済みです: ' + code;
       scanMsg.className = 'form-text text-danger';
       return;
     }
     goPutaway(it);
   });
 
-  // ロケーション欄: 入力が変わったら確認をやり直す（古い確認結果を残さない）
+  // ロケーション欄
   locInput.addEventListener('input', function () {
     currentLoc = null;
     locResult.innerHTML = '';
   });
-  // ロケーション欄: スキャナーの Enter で照会。wms.js の移動には渡さない
   locInput.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     e.stopPropagation();
     lookupLocation();
   });
-  execBtn.addEventListener('click', execCurrent);
+  execBtn.addEventListener('click', commitCurrent);
   document.getElementById('pa-back').addEventListener('click', goScan);
 
-  // 初期化: 不良のみ（計上数 0）の明細は棚入れ対象外として done 済みにする
-  items.forEach(it => { if (it.good <= 0) { done[it.id] = {skip: true}; } });
-  if (doneCount() >= total) { goDone(); } else { goScan(); }
-  // wms.js の先頭フィールドフォーカスを上書きしてスキャン欄にフォーカス
+  // 初期化: 未棚入れの明細が 0 個（全部前セッションで処理済み）の場合は
+  // 即座に入口へ戻す（理論上ありえる: 全明細不良のみ等）
+  if (items.length === 0) {
+    window.location.href = ENTRY_URL;
+  } else {
+    goScan();
+  }
   window.addEventListener('DOMContentLoaded', function () {
     if (!sScan.classList.contains('d-none')) scanInput.focus();
   });

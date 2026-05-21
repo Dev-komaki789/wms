@@ -19,4 +19,8 @@ urlpatterns = [
     path('handheld/inspection/<int:pk>/', views.InboundInspectionWorkView.as_view(), name='handheld_inspection_work'),
     path('handheld/putaway/', views.InboundPutawayView.as_view(), name='handheld_putaway'),
     path('handheld/putaway/<int:pk>/', views.InboundPutawayWorkView.as_view(), name='handheld_putaway_work'),
+    # 1 明細ごとの即時コミット API（fetch から呼ばれる）。
+    # 全明細が確定したら入荷指示を COMPLETED に進める。
+    path('handheld/putaway/<int:order_pk>/item/<int:item_pk>/',
+         views.InboundPutawayItemView.as_view(), name='handheld_putaway_item'),
 ]

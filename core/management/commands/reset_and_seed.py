@@ -75,6 +75,7 @@ class Command(BaseCommand):
 
         with transaction.atomic():
             self._delete_all()
+            self._ensure_handheld_worker()
             self._create_masters()
             self._create_initial_stock()
             self._create_completed_inbound()
@@ -85,6 +86,37 @@ class Command(BaseCommand):
             self._create_stocktakes()
 
         self._print_summary()
+
+    def _ensure_handheld_worker(self):
+        """ハンディ作業者グループと worker1 ユーザーを用意する（冪等）。
+
+        worker1 はハンディ画面しか開けないテスト用アカウント。
+        Group が無ければ作る・ユーザーが無ければ作る・既存ユーザーの場合は
+        グループ所属だけを保証する。
+        """
+        from accounts.permissions import ensure_handheld_group
+        self.stdout.write('  ハンディ作業者グループ・worker1 を用意...')
+        group = ensure_handheld_group()
+        User = get_user_model()
+        user, created = User.objects.get_or_create(
+            username='worker1',
+            defaults={
+                'display_name': '作業者1（ハンディ専用）',
+                # is_staff=True は /admin/login/ を通すためだけに必要。
+                # 実際の /admin/ はミドルウェアがブロックして home へ戻す。
+                'is_staff': True,
+                'is_superuser': False,
+            },
+        )
+        if created:
+            user.set_password('***REDACTED***')
+            user.save()
+        else:
+            # 既存ユーザーでも is_staff だけは保証する
+            if not user.is_staff:
+                user.is_staff = True
+                user.save(update_fields=['is_staff'])
+        user.groups.add(group)
 
     def _get_seed_user(self):
         user = (
@@ -474,9 +506,23 @@ class Command(BaseCommand):
                     balances[(loc.id, sku.id)] = balances.get((loc.id, sku.id), 0) + qty
                     movements.append((loc, sku, qty))
 
-        # StockBalance を一括作成
+        # 各 movement に過去日時を事前割り当て（その最古日を StockBalance.first_received_at に使う）
+        movements_with_dates = [
+            (loc, sku, qty, self._random_past_datetime(min_days=1, max_days=60))
+            for loc, sku, qty in movements
+        ]
+        earliest_at = {}  # (loc_id, sku_id) -> earliest past datetime
+        for loc, sku, qty, past in movements_with_dates:
+            key = (loc.id, sku.id)
+            if key not in earliest_at or past < earliest_at[key]:
+                earliest_at[key] = past
+
+        # StockBalance を一括作成（FIFO 並び替え用に first_received_at もセット）
         bal_objs = [
-            StockBalance(location_id=loc_id, sku_id=sku_id, quantity=qty)
+            StockBalance(
+                location_id=loc_id, sku_id=sku_id, quantity=qty,
+                first_received_at=earliest_at[(loc_id, sku_id)],
+            )
             for (loc_id, sku_id), qty in balances.items()
         ]
         StockBalance.objects.bulk_create(bal_objs)
@@ -487,13 +533,11 @@ class Command(BaseCommand):
         # ないが、quantity_before / quantity_after を整合させる必要がある。
         # 個別の loc×sku ごとに段階的に積み上げる。
         loc_sku_running = {}  # (loc_id, sku_id) -> running quantity
-        # 各 movement に過去日時を割り当て（最近のものほど多くなりがち）
-        for loc, sku, qty in movements:
+        for loc, sku, qty, past in movements_with_dates:
             key = (loc.id, sku.id)
             before = loc_sku_running.get(key, 0)
             after = before + qty
             loc_sku_running[key] = after
-            past = self._random_past_datetime(min_days=1, max_days=60)
             m = StockMovement.objects.create(
                 movement_type=StockMovement.MovementType.IN,
                 location=loc,
@@ -554,7 +598,12 @@ class Command(BaseCommand):
                 )
                 before = bal.quantity
                 bal.quantity = before + qty
-                bal.save(update_fields=['quantity', 'updated_at'])
+                # 0 → 正への切り替えで first_received_at をリセット（FIFO 用）
+                update_fields = ['quantity', 'updated_at']
+                if before == 0:
+                    bal.first_received_at = past_dt + timedelta(hours=2)
+                    update_fields.append('first_received_at')
+                bal.save(update_fields=update_fields)
 
                 m = StockMovement.objects.create(
                     movement_type=StockMovement.MovementType.IN,

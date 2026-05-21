@@ -224,6 +224,17 @@ class OutboundOrderItem(models.Model):
     quantity_shipped = models.IntegerField(
         '実出荷数', default=0, validators=[MinValueValidator(0)]
     )
+    # 出荷検品の per-item コミット用。inspected_at に値が入っているとその明細は
+    # 検品完了済み（再入場時のフィルタに使う）。skip（picked=0）の明細も
+    # inspected_at をセットすることで「処理済み」を記録する。
+    inspected_at = models.DateTimeField('検品完了日時', null=True, blank=True)
+    inspected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='inspected_outbound_order_items',
+        verbose_name='検品担当者',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

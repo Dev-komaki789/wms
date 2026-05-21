@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, ProtectedError, Q, Sum
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -259,11 +259,11 @@ class OutboundOrderDeleteView(
 
 
 def _available_locations(sku, warehouse):
-    """SKU の引き当て可能な棚を「引き当て可能数の多い順」で返す。
+    """SKU の引き当て可能な棚を返す（並び順は呼び出し側で選ぶ）。
 
     引き当て可能数 = StockBalance.quantity − 有効な引き当て(active)の合計。
     呼び出し側のトランザクション内で StockBalance 行をロックする。
-    戻り値: [(Location, available_qty), ...]（available の多い順）
+    戻り値: [(Location, available_qty, first_received_at), ...]
     """
     balances = list(
         StockBalance.objects
@@ -284,9 +284,7 @@ def _available_locations(sku, warehouse):
     for b in balances:
         available = b.quantity - reserved_map.get(b.location_id, 0)
         if available > 0:
-            result.append((b.location, available))
-    # 在庫数の多い棚から引く（複数棚への分割を最小化）
-    result.sort(key=lambda pair: pair[1], reverse=True)
+            result.append((b.location, available, b.first_received_at))
     return result
 
 
@@ -348,11 +346,32 @@ def _try_launch_order(order, user):
     items = list(order.items.select_related('sku').all())
 
     # --- 1パス目: 全明細の引き当て計画を作る（1つでも在庫不足なら中断） ---
+    # 棚選択ロジック（ハイブリッド）:
+    #   - 単一の棚で需要を満たせる場合: 在庫数の多い棚を1つ選ぶ
+    #     （巡回棚数 1 で完結。1棚で足りる時に分割するのは作業効率上の損）
+    #   - 単一棚では足りず複数棚に分割する場合: first_received_at の古い棚から
+    #     順に取る（FIFO に近い動作。古い在庫の死蔵を防ぐ）
+    # 将来検討（実装保留）:
+    #   ① 純 FIFO: 単一棚で足りる場合も最古棚を優先（効率は落ちるが古い在庫を確実に減らす）
+    #   ② 滞留在庫モニタ画面: 一定期間動いていない (棚×SKU) を可視化
+    #     （StockBalance.first_received_at と現在日時の差で算出）
     plan = []  # [(item, [(location, qty), ...]), ...]
     for item in items:
         need = item.quantity_ordered
+        locations = _available_locations(item.sku, order.warehouse)
+        # 単一棚で需要を満たせるか
+        single_enough = max((avail for _, avail, _ in locations), default=0) >= need
+        if single_enough:
+            # 在庫数の多い棚を 1 つだけ使う（巡回棚数 1）
+            locations = sorted(locations, key=lambda t: t[1], reverse=True)
+        else:
+            # 分割が必要 → first_received_at 古い順（FIFO）。null は最後に
+            locations = sorted(
+                locations,
+                key=lambda t: (t[2] is None, t[2]),
+            )
         alloc = []
-        for location, available in _available_locations(item.sku, order.warehouse):
+        for location, available, _ in locations:
             if need <= 0:
                 break
             take = min(need, available)
@@ -692,10 +711,14 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
     """ピッキング作業（実ピッキング数の登録）画面 — handheld 端末用。
 
     ピッキング入口画面から遷移。ピッキングリストの明細を棚番順に1商品ずつ、棚番と
-    商品をスキャンで照合して実ピッキング数を入力する。「ピッキング完了」で各明細の
-    quantity_picked・status（picked/short）を保存し、リストを completed にする。
-    指示の全ピッキングリストが完了したら、出荷指示を picking_wait → inspection_wait
-    へ進める。在庫の減算は後工程「出荷検品」で行うため、この画面では在庫を動かさない。
+    商品をスキャンで照合して実ピッキング数を入力する。1明細ごとに
+    OutboundPickingItemView へ即時 POST（明細単位コミット = 中断耐性あり）。
+    全明細が完了したらリストを COMPLETED にし、指示の全ピッキングリストが
+    完了したら出荷指示を picking_wait → inspection_wait へ進める。
+    在庫の減算は後工程「出荷検品」で行うため、この画面では在庫を動かさない。
+
+    GET 時は picked_at がまだ未設定の明細のみを画面に出す（途中離脱後の
+    再入場で「続きから」できる）。確定済みは再編集不可。
     """
 
     template_name = 'a/outbound/handheld/picking_work.html'
@@ -738,111 +761,149 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
         guard = self._guard(request, picking_list)
         if guard:
             return guard
-        # 1商品ずつ処理する handheld ウィザード用に、明細を棚番順の JSON で渡す
-        items = [
-            {
+        # 1商品ずつ処理する handheld ウィザード用に、未ピッキング明細だけを
+        # 棚番順の JSON で渡す（picked_at が設定された明細は前セッションで処理済み）
+        items = []
+        done_count = 0
+        total = 0
+        for it in (picking_list.items
+                   .select_related('sku__product', 'location')
+                   .order_by('sort_order')):
+            total += 1
+            if it.picked_at is not None:
+                done_count += 1
+                continue
+            items.append({
                 'id': it.pk,
                 'location': it.location.location_code,
                 'sku': it.sku.sku_code,
                 'jan': it.sku.jan_code or '',
                 'name': it.sku.product.product_name,
                 'requested': it.quantity_requested,
-            }
-            for it in (picking_list.items
-                       .select_related('sku__product', 'location')
-                       .order_by('sort_order'))
-        ]
+            })
         return render(request, self.template_name, {
             'picking_list': picking_list,
             'items': items,
+            'done_count': done_count,
+            'total': total,
             'outbound_order': _order_of_picking_list(picking_list),
         })
 
+class OutboundPickingItemView(LoginRequiredMixin, View):
+    """ピッキングの 1 明細を即時確定する API（fetch 用）。
+
+    POST: quantity_picked (0 〜 quantity_requested) を受け取り、PickingListItem に
+    実ピッキング数・担当者・完了日時・status (picked/short) を記録する。
+    全明細が完了したら PickingList を COMPLETED に進め、さらに同指示の全
+    ピッキングリストが完了していれば OutboundOrder を picking_wait →
+    inspection_wait に進める。
+
+    レスポンス (JSON):
+      - ok=True  -> {'ok': True, 'all_done': bool, 'remaining': int}
+      - ok=False -> {'ok': False, 'error': str}
+    """
+
+    http_method_names = ['post']
+
+    def _scoped_lists(self, request):
+        qs = PickingList.objects.select_related(
+            'warehouse', 'area', 'assigned_to')
+        wh = get_current_warehouse(request)
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        return qs
+
     @staticmethod
     def _to_int(raw):
-        """POST 値を整数に変換。未入力・不正値は -1（検証で弾く）。"""
         try:
             return int((raw or '').strip())
         except ValueError:
             return -1
 
-    def post(self, request, pk, *args, **kwargs):
+    def post(self, request, list_pk, item_pk, *args, **kwargs):
+        picked = self._to_int(request.POST.get('quantity_picked'))
         with transaction.atomic():
-            # 確定対象のリスト行をロックして取得（同時確定の二重処理を防ぐ）
             picking_list = (
-                self._scoped_lists()
+                self._scoped_lists(request)
                 .select_for_update(of=('self',))
-                .filter(pk=pk)
+                .filter(pk=list_pk)
                 .first()
             )
-            guard = self._guard(request, picking_list)
-            if guard:
-                return guard
+            if picking_list is None:
+                return JsonResponse({
+                    'ok': False, 'error': 'ピッキングリストが見つかりません。',
+                })
+            if picking_list.status != PickingList.Status.IN_PROGRESS:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'ピッキングリスト {picking_list.picking_list_code} は'
+                             f'「{picking_list.get_status_display()}」のためピッキングできません。',
+                })
+            if (picking_list.assigned_to_id
+                    and picking_list.assigned_to_id != request.user.pk):
+                worker = (picking_list.assigned_to.display_name
+                          or picking_list.assigned_to.username)
+                return JsonResponse({
+                    'ok': False, 'error': f'{worker} がピッキング作業中です。',
+                })
 
-            items = list(
-                picking_list.items.select_related('sku').order_by('sort_order'))
+            item = (picking_list.items
+                    .select_related('sku').filter(pk=item_pk).first())
+            if item is None:
+                return JsonResponse({
+                    'ok': False, 'error': '対象の明細が見つかりません。',
+                })
+            if item.picked_at is not None:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'{item.sku.sku_code} は既にピッキング済みです。',
+                })
+            if picked < 0 or picked > item.quantity_requested:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'実ピッキング数は 0 〜 {item.quantity_requested} の範囲で入力してください。',
+                })
 
-            # 1パス目: 全明細の実ピッキング数を検証（0 〜 指示数量）
-            parsed = {}
-            for it in items:
-                val = self._to_int(request.POST.get(f'picked_{it.pk}'))
-                if val < 0 or val > it.quantity_requested:
-                    messages.error(
-                        request,
-                        f'実ピッキング数が未確認・不正な商品があります'
-                        f'（{it.sku.sku_code}）。ピッキング作業をやり直してください。',
-                    )
-                    return HttpResponseRedirect(reverse(
-                        'outbound:handheld_picking_work', args=[pk]))
-                parsed[it.pk] = val
-
-            # 2パス目: 明細を確定（指示数量どおり=picked / 不足=short）
             now = timezone.now()
-            for it in items:
-                picked = parsed[it.pk]
-                it.quantity_picked = picked
-                it.status = (
-                    PickingListItem.Status.PICKED
-                    if picked >= it.quantity_requested
-                    else PickingListItem.Status.SHORT
-                )
-                it.picked_by = request.user
-                it.picked_at = now
-                it.save()
+            item.quantity_picked = picked
+            item.status = (
+                PickingListItem.Status.PICKED
+                if picked >= item.quantity_requested
+                else PickingListItem.Status.SHORT
+            )
+            item.picked_by = request.user
+            item.picked_at = now
+            item.save()
 
-            picking_list.status = PickingList.Status.COMPLETED
-            picking_list.completed_at = now
-            picking_list.save()
+            # 全明細が picked_at を持ったらリストを COMPLETED に
+            remaining = picking_list.items.filter(picked_at__isnull=True).count()
+            all_done = (remaining == 0)
+            if all_done:
+                picking_list.status = PickingList.Status.COMPLETED
+                picking_list.completed_at = now
+                picking_list.save()
+                # 同一指示の別リスト同時完了でも取りこぼさないよう、先に指示行を
+                # ロックしてから「全リスト完了か」を判定する（既存ロジックと同じガード）
+                order = _order_of_picking_list(picking_list)
+                if order is not None:
+                    locked = (
+                        OutboundOrder.objects
+                        .select_for_update(of=('self',))
+                        .get(pk=order.pk)
+                    )
+                    unfinished = PickingList.objects.filter(
+                        items__outbound_order_item__outbound_order=order,
+                        status__in=[PickingList.Status.PENDING,
+                                    PickingList.Status.IN_PROGRESS],
+                    ).exists()
+                    if (not unfinished
+                            and locked.status == OutboundOrder.Status.PICKING_WAIT):
+                        locked.status = OutboundOrder.Status.INSPECTION_WAIT
+                        locked.save()
 
-            # 指示の全ピッキングリストが完了したら出荷検品工程へ進める。
-            # AGV/GTP 分は出荷起動時に completed 済みなのでブロックしない。
-            # 「全リスト完了か」の判定は、同一指示の別リストを同時に完了したとき
-            # 取りこぼさないよう、先に指示行をロックしてから行う（ロック前に判定
-            # すると、双方が相手の完了コミットを見られず指示が picking_wait の
-            # まま残る競合が起きる）。
-            order = _order_of_picking_list(picking_list)
-            if order is not None:
-                locked = (
-                    OutboundOrder.objects
-                    .select_for_update(of=('self',))
-                    .get(pk=order.pk)
-                )
-                unfinished = PickingList.objects.filter(
-                    items__outbound_order_item__outbound_order=order,
-                    status__in=[PickingList.Status.PENDING,
-                                PickingList.Status.IN_PROGRESS],
-                ).exists()
-                if (not unfinished
-                        and locked.status == OutboundOrder.Status.PICKING_WAIT):
-                    locked.status = OutboundOrder.Status.INSPECTION_WAIT
-                    locked.save()
-
-        messages.success(
-            request,
-            f'ピッキングリスト {picking_list.picking_list_code} の'
-            f'ピッキングが完了しました。',
-        )
-        return HttpResponseRedirect(reverse('outbound:handheld_picking'))
+        return JsonResponse({
+            'ok': True, 'all_done': all_done, 'remaining': remaining,
+        })
 
 
 def _picked_qty_map(order):
@@ -990,15 +1051,19 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
     """出荷検品・梱包作業（出荷確定）画面 — handheld 端末用。
 
     出荷検品画面から遷移。出荷する明細を1商品ずつ SKU スキャンで照合し、品番・員数を
-    最終確認する。「出荷検品完了」で実出荷数ぶんの StockMovement.OUT を発行して在庫を
-    減算、引き当て(StockReservation)を解放、出荷実績明細(ShipmentItem)を SKU 単位で
-    作成し、出荷指示を inspection_wait → shipped（出荷完了）へ進める。実出荷数は
-    ピッキング工程で確定済みの quantity_picked をそのまま用いる（検証のみ）。
+    最終確認する。1明細ごとに OutboundInspectionItemView へ即時 POST して、
+    在庫減算・StockMovement.OUT 発行・引き当て解放・inspected_at 設定までを
+    1トランザクションでコミット（中断耐性あり）。全明細の検品が終わったら
+    Shipment.SHIPPED / OutboundOrder.SHIPPED に進めて ShipmentItem を SKU 単位で
+    集約作成する。実出荷数はピッキング工程で確定済みの quantity_picked を用いる。
+
+    GET 時は inspected_at がまだ未設定の明細のみを画面に渡す（途中離脱後の再入場で
+    続きから）。確定済みは再編集不可（業務 WMS の慣習に従う）。
 
     【簡略化（意図的）】検品・梱包完了をもって「出荷完了(shipped)」とみなす。実工程は
     検品→梱包→送り状貼付→出荷待機→トラック積込→出発で、本来の出荷完了はトラック出発
     （carrier 引き渡し）の時点。本 MVP は出荷バース管理（積込・出発）をスコープ外とし、
-    検品完了を出荷確定とみなす。詳細は post() の出荷確定コメントを参照。
+    検品完了を出荷確定とみなす。
     """
 
     template_name = 'a/outbound/handheld/inspection_work.html'
@@ -1051,149 +1116,188 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
         guard = self._guard(request, order, shipment)
         if guard:
             return guard
-        # 1商品ずつ処理する handheld ウィザード用に、明細を JSON で渡す
-        items = _inspection_items(order, _picked_qty_map(order))
+        # 1商品ずつ処理する handheld ウィザード用に、未検品の明細だけを JSON で渡す
+        picked_map = _picked_qty_map(order)
+        rows = _inspection_items(order, picked_map)
+        items = []
+        done_count = 0
+        total = 0
+        for row, oo_item in zip(rows, order.items.order_by('sku__sku_code').all()):
+            total += 1
+            if oo_item.inspected_at is not None:
+                done_count += 1
+                continue
+            # JSON に出すのは未検品のものだけ
+            items.append(row)
         return render(request, self.template_name, {
             'order': order, 'shipment': shipment, 'items': items,
+            'done_count': done_count, 'total': total,
         })
 
-    def post(self, request, pk, *args, **kwargs):
+
+class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
+    """出荷検品の 1 明細を即時確定する API（fetch 用）。
+
+    POST: 明細単位で在庫減算・StockMovement.OUT 発行・引き当て解放・
+    inspected_at セットまでを 1 トランザクションで行う。
+    picked == 0（欠品で出荷対象外）の明細は在庫を動かさず inspected_at だけ
+    セットする（フロントから自動で skip 用に呼ばれる）。
+    全明細が inspected_at を持ったら、ShipmentItem を SKU 単位で集約作成し
+    Shipment.SHIPPED / OutboundOrder.SHIPPED に進める。
+
+    レスポンス (JSON):
+      - ok=True  -> {'ok': True, 'all_done': bool, 'remaining': int}
+      - ok=False -> {'ok': False, 'error': str}
+    """
+
+    http_method_names = ['post']
+
+    def _scoped_orders(self, request):
+        qs = OutboundOrder.objects.select_related('warehouse', 'customer')
+        wh = get_current_warehouse(request)
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        return qs
+
+    def post(self, request, order_pk, item_pk, *args, **kwargs):
         with transaction.atomic():
-            # 確定対象の指示・出荷実績の行をロックして取得（同時確定の二重処理を防ぐ）
             order = (
-                self._scoped_orders()
+                self._scoped_orders(request)
                 .select_for_update(of=('self',))
-                .filter(pk=pk)
+                .filter(pk=order_pk)
                 .first()
             )
-            shipment = None
-            if order is not None:
-                shipment = (
-                    Shipment.objects
-                    .select_for_update(of=('self',))
-                    .select_related('in_progress_by')
-                    .filter(outbound_order=order)
-                    .first()
-                )
-            guard = self._guard(request, order, shipment)
-            if guard:
-                return guard
+            if order is None:
+                return JsonResponse({
+                    'ok': False, 'error': '出荷指示が見つかりません。',
+                })
+            if order.status != OutboundOrder.Status.INSPECTION_WAIT:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'出荷指示 {order.outbound_order_code} は'
+                             f'「{order.get_status_display()}」のため検品できません。',
+                })
+            shipment = (
+                Shipment.objects
+                .select_for_update(of=('self',))
+                .select_related('in_progress_by')
+                .filter(outbound_order=order).first()
+            )
+            if shipment is None or shipment.in_progress_by_id != request.user.pk:
+                return JsonResponse({
+                    'ok': False,
+                    'error': '検品作業のロックが取れていません。先に「検品開始」を行ってください。',
+                })
+
+            item = (
+                order.items
+                .select_related('sku', 'location', 'reservation')
+                .filter(pk=item_pk).first()
+            )
+            if item is None:
+                return JsonResponse({
+                    'ok': False, 'error': '対象の明細が見つかりません。',
+                })
+            if item.inspected_at is not None:
+                return JsonResponse({
+                    'ok': False,
+                    'error': f'{item.sku.sku_code} は既に検品済みです。',
+                })
 
             picked_map = _picked_qty_map(order)
-            items = list(
-                order.items.select_related('sku', 'location')
-                .order_by('location_id', 'sku_id'))
+            picked = picked_map.get(item.pk, 0)
 
-            # 1パス目: 確認フラグ＋在庫を検証する。在庫不足等を見つけたら何も書き換える
-            # 前に中断する（在庫行はロックして 2パス目までそのまま保持する）。
-            plan = []  # [(item, picked, balance), ...]
-            for it in items:
-                picked = picked_map.get(it.pk, 0)
-                if picked > 0 and request.POST.get(f'confirmed_{it.pk}') != '1':
-                    messages.error(
-                        request,
-                        f'未確認の明細があります（{it.sku.sku_code}）。'
-                        f'出荷検品作業をやり直してください。',
-                    )
-                    return HttpResponseRedirect(reverse(
-                        'outbound:handheld_inspection_work', args=[pk]))
-                balance = None
-                if picked > 0:
-                    balance = (
-                        StockBalance.objects.select_for_update()
-                        .filter(location=it.location, sku=it.sku)
-                        .first()
-                    )
-                    on_hand = balance.quantity if balance else 0
-                    if picked > on_hand:
-                        loc = it.location.location_code if it.location else '—'
-                        messages.error(
-                            request,
-                            f'{it.sku.sku_code} は棚番 {loc} の在庫（{on_hand}）が'
-                            f'実出荷数（{picked}）に不足しています。在庫差異を'
-                            f'解消してから再度お試しください。',
-                        )
-                        return HttpResponseRedirect(reverse(
-                            'outbound:handheld_inspection_work', args=[pk]))
-                plan.append((it, picked, balance))
-
-            # 2パス目: 出庫（OUT 発行・在庫減算）。ShipmentItem は uk(shipment, sku)
-            # のため SKU 単位に集約する。
             now = timezone.now()
-            by_sku = {}
-            for it, picked, balance in plan:
-                it.quantity_shipped = picked
-                movement = None
-                if picked > 0:
-                    quantity_before = balance.quantity
-                    quantity_after = quantity_before - picked
-                    movement = StockMovement.objects.create(
-                        movement_type=StockMovement.MovementType.OUT,
-                        location=it.location, sku=it.sku,
-                        quantity=-picked,  # OUT なので負の値で記録
-                        quantity_before=quantity_before,
-                        quantity_after=quantity_after,
-                        reference_type=StockMovement.ReferenceType.OUTBOUND_ORDER,
-                        reference_id=order.pk,
-                        note='',
-                        created_by=request.user,
-                    )
-                    balance.quantity = quantity_after
-                    balance.save()
-                it.save()
-                agg = by_sku.setdefault(
-                    it.sku_id,
-                    {'sku': it.sku, 'ooi': it, 'qty': 0, 'movements': []})
-                agg['qty'] += picked
-                if movement is not None:
-                    agg['movements'].append(movement)
-
-            # 引き当て(StockReservation)を解放する
-            StockReservation.objects.filter(
-                order=order, status=StockReservation.Status.ACTIVE
-            ).update(status=StockReservation.Status.RELEASED, released_at=now)
-
-            # 出荷実績明細(ShipmentItem)を SKU 単位で作成（実出荷数 > 0 のみ）
-            for agg in by_sku.values():
-                if agg['qty'] <= 0:
-                    continue
-                ShipmentItem.objects.create(
-                    shipment=shipment,
-                    outbound_order_item=agg['ooi'],
-                    sku=agg['sku'],
-                    quantity_shipped=agg['qty'],
-                    # 複数ロケーションに分かれた SKU は出庫履歴が複数になるため、
-                    # 単独のときだけ紐づける
-                    stock_movement=(agg['movements'][0]
-                                    if len(agg['movements']) == 1 else None),
+            if picked > 0:
+                # 在庫不足ガード（select_for_update で行ロック）
+                balance = (
+                    StockBalance.objects.select_for_update()
+                    .filter(location=item.location, sku=item.sku)
+                    .first()
                 )
+                on_hand = balance.quantity if balance else 0
+                if picked > on_hand:
+                    loc = item.location.location_code if item.location else '—'
+                    return JsonResponse({
+                        'ok': False,
+                        'error': f'{item.sku.sku_code} は棚番 {loc} の在庫'
+                                 f'（{on_hand}）が実出荷数（{picked}）に不足しています。'
+                                 f'在庫差異を解消してから再度お試しください。',
+                    })
+                quantity_before = balance.quantity
+                quantity_after = quantity_before - picked
+                StockMovement.objects.create(
+                    movement_type=StockMovement.MovementType.OUT,
+                    location=item.location, sku=item.sku,
+                    quantity=-picked,  # OUT は負の値で記録
+                    quantity_before=quantity_before,
+                    quantity_after=quantity_after,
+                    reference_type=StockMovement.ReferenceType.OUTBOUND_ORDER,
+                    reference_id=order.pk,
+                    note='',
+                    created_by=request.user,
+                )
+                balance.quantity = quantity_after
+                balance.save()
+                item.quantity_shipped = picked
+                # この明細に紐づく引き当てを解放
+                if item.reservation_id and item.reservation.status == StockReservation.Status.ACTIVE:
+                    item.reservation.status = StockReservation.Status.RELEASED
+                    item.reservation.released_at = now
+                    item.reservation.save(update_fields=['status', 'released_at', 'updated_at'])
 
-            # --- 出荷確定 ---
-            # 【簡略化（意図的）】検品・梱包完了をもって「出荷完了(shipped)」とみなす。
-            # 実工程は 検品 → 梱包 → 送り状貼付 → 出荷待機 → トラック積込 → 出発 で、
-            # 本来の出荷完了はトラック出発（carrier 引き渡し）の時点。本 MVP は出荷バース
-            # 管理（積込・出発）をスコープ外とし、検品完了を出荷確定とみなしている。
-            # このため Shipment.Status.READY（出荷準備完了）は未使用で、shipped_at は
-            # 実質「出荷確定（梱包完了）日時」を指す。
-            shipment.status = Shipment.Status.SHIPPED
-            shipment.shipped_at = now
-            shipment.inspected_by = request.user
-            shipment.inspected_at = now
-            # 検品・梱包作業の担当者ロックを解除
-            shipment.in_progress_by = None
-            shipment.in_progress_at = None
-            shipment.save()
+            item.inspected_at = now
+            item.inspected_by = request.user
+            item.save()
 
-            order.status = OutboundOrder.Status.SHIPPED
-            order.shipped_at = now
-            order.save()
+            # 全明細が inspected_at を持ったら出荷確定（ShipmentItem 集約・Shipment / Order 遷移）
+            remaining = order.items.filter(inspected_at__isnull=True).count()
+            all_done = (remaining == 0)
+            if all_done:
+                self._finalize_shipment(order, shipment, request.user, now)
 
-        messages.success(
-            request,
-            f'出荷指示 {order.outbound_order_code} の出荷検品が完了しました。'
-            f'（出荷完了）',
-        )
-        return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
+        return JsonResponse({
+            'ok': True, 'all_done': all_done, 'remaining': remaining,
+        })
+
+    def _finalize_shipment(self, order, shipment, user, now):
+        """全明細検品完了時の最終処理: ShipmentItem 集約 + Shipment/Order 遷移。"""
+        # 念のため残っている ACTIVE 引き当ても解放（per-item で取り逃した分の保険）
+        StockReservation.objects.filter(
+            order=order, status=StockReservation.Status.ACTIVE,
+        ).update(status=StockReservation.Status.RELEASED, released_at=now)
+
+        # ShipmentItem は uk(shipment, sku) のため SKU 単位に集約する
+        by_sku = {}
+        for it in order.items.select_related('sku').all():
+            qty = it.quantity_shipped or 0
+            if qty <= 0:
+                continue
+            agg = by_sku.setdefault(
+                it.sku_id, {'sku': it.sku, 'ooi': it, 'qty': 0})
+            agg['qty'] += qty
+        for agg in by_sku.values():
+            if agg['qty'] <= 0:
+                continue
+            ShipmentItem.objects.create(
+                shipment=shipment,
+                outbound_order_item=agg['ooi'],
+                sku=agg['sku'],
+                quantity_shipped=agg['qty'],
+            )
+
+        # 出荷確定（簡略化: 検品完了 = 出荷完了。詳細は WorkView の docstring 参照）
+        shipment.status = Shipment.Status.SHIPPED
+        shipment.shipped_at = now
+        shipment.inspected_by = user
+        shipment.inspected_at = now
+        shipment.in_progress_by = None
+        shipment.in_progress_at = None
+        shipment.save()
+
+        order.status = OutboundOrder.Status.SHIPPED
+        order.shipped_at = now
+        order.save()
 
 
 # ---- 出荷指示 CSV 入出力 ----

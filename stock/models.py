@@ -8,7 +8,15 @@ from masters.models import Area, Location, Sku, Warehouse
 
 
 class StockBalance(models.Model):
-    """ロケーション×SKU の現在在庫数。入出庫のたびに加減算して更新。"""
+    """ロケーション×SKU の現在在庫数。入出庫のたびに加減算して更新。
+
+    `first_received_at` は「現在棚に乗っている在庫の最古入荷日時」。
+    複数棚に同 SKU がある時の引き当てで FIFO に近い順序を取るために使う
+    （詳細は outbound.views._try_launch_order 参照）。
+    棚の在庫が一旦 0 になった後で再充填されたタイミングでリセットする
+    （= "現在の在庫期間" の起点）。在庫が残っている棚への追加充填では
+    更新しない（古い在庫がまだ残っているため）。
+    """
 
     location = models.ForeignKey(
         Location, on_delete=models.PROTECT, verbose_name='ロケーション'
@@ -18,6 +26,11 @@ class StockBalance(models.Model):
         '在庫数',
         default=0,
         validators=[MinValueValidator(0)],
+    )
+    first_received_at = models.DateTimeField(
+        '現在在庫の最古入荷日時',
+        null=True, blank=True, db_index=True,
+        help_text='quantity が 0 → 正に切り替わった時刻。FIFO 引き当ての並び替えに使う。',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

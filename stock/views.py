@@ -324,7 +324,7 @@ class UnplannedStockInView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView
             quantity_before = balance.quantity
             quantity_after = quantity_before + quantity
 
-            StockMovement.objects.create(
+            movement = StockMovement.objects.create(
                 movement_type=StockMovement.MovementType.IN,
                 location=location,
                 sku=sku,
@@ -337,6 +337,9 @@ class UnplannedStockInView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView
                 created_by=self.request.user,
             )
             balance.quantity = quantity_after
+            # 0 → 正への切り替えで FIFO 用の最古入荷日時をリセットする
+            if quantity_before == 0:
+                balance.first_received_at = movement.moved_at
             balance.save()
 
         messages.success(
@@ -485,7 +488,7 @@ class StockTransferView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView):
             from_balance.save()
             # 移動先へ IN
             to_before = to_balance.quantity
-            StockMovement.objects.create(
+            to_movement = StockMovement.objects.create(
                 movement_type=StockMovement.MovementType.IN,
                 location=to_loc, sku=sku,
                 quantity=quantity,  # IN なので正の値
@@ -496,6 +499,13 @@ class StockTransferView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView):
                 note='', created_by=self.request.user,
             )
             to_balance.quantity = to_before + quantity
+            # 0 → 正への切り替えで FIFO 用の最古入荷日時をリセットする。
+            # 棚間移動は「元の棚で持っていた在庫が移っただけ」だが、移動先棚に
+            # 取って "現在在庫の最古入荷日時" は移動完了時刻が新たな起点となる
+            # （古い棚に在庫を持つ別の棚を優先したい時のロジックがブレないよう、
+            # 棚単位の時刻で統一する）。
+            if to_before == 0:
+                to_balance.first_received_at = to_movement.moved_at
             to_balance.save()
 
         messages.success(
@@ -824,6 +834,10 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
                     created_by=request.user,
                 )
                 balance.quantity = after
+                # 棚卸調整で在庫が 0 → 正になった棚は first_received_at をリセット
+                # （帳簿差異で発生した在庫は新たな入荷扱いで FIFO 起点とする）
+                if before == 0 and after > 0:
+                    balance.first_received_at = movement.moved_at
                 balance.save()
                 StocktakeAdjustment.objects.create(
                     stocktake_item=item, stock_movement=movement,

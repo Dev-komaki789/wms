@@ -18,6 +18,14 @@ urlpatterns = [
     # 実行系 (handheld) 画面群
     path('handheld/picking/', views.OutboundPickingView.as_view(), name='handheld_picking'),
     path('handheld/picking/<int:pk>/', views.OutboundPickingWorkView.as_view(), name='handheld_picking_work'),
+    # 1 明細ごとの即時コミット API（fetch から呼ばれる）。
+    # 全明細が確定したらリストを COMPLETED に進める。
+    path('handheld/picking/<int:list_pk>/item/<int:item_pk>/',
+         views.OutboundPickingItemView.as_view(), name='handheld_picking_item'),
     path('handheld/inspection/', views.OutboundInspectionView.as_view(), name='handheld_inspection'),
     path('handheld/inspection/<int:pk>/', views.OutboundInspectionWorkView.as_view(), name='handheld_inspection_work'),
+    # 1 明細ごとの即時コミット API（fetch から呼ばれる）。
+    # 全明細が確定したら ShipmentItem を作成して出荷確定する。
+    path('handheld/inspection/<int:order_pk>/item/<int:item_pk>/',
+         views.OutboundInspectionItemView.as_view(), name='handheld_inspection_item'),
 ]

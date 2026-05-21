@@ -38,27 +38,53 @@
   {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-light">
-  {# ========== トップナビバー ========== #}
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-    <div class="container-fluid">
-      <button class="btn btn-outline-light me-2" type="button"
+    <div class="container-fluid flex-nowrap">
+      {% if user.is_authenticated %}
+      <form method="post" action="/admin/logout/" class="d-inline d-md-none me-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-light btn-sm"
+                title="ログアウト" aria-label="ログアウト">
+          <i class="bi bi-box-arrow-right"></i>
+        </button>
+      </form>
+      {% endif %}
+      <button class="btn btn-outline-light me-2 d-none d-md-inline-flex" type="button"
               data-bs-toggle="offcanvas" data-bs-target="#sidebar"
               aria-controls="sidebar">
         <i class="bi bi-list"></i>
       </button>
       <a class="navbar-brand" href="{% url 'home' %}">WMS</a>
-      <a class="btn btn-outline-light btn-sm me-3" href="{% url 'home' %}" title="メニュー画面に戻る">
+      <a class="btn btn-outline-light btn-sm me-3 d-none d-md-inline-flex align-items-center"
+         href="{% url 'home' %}" title="メニュー画面に戻る">
         <i class="bi bi-grid-3x3-gap-fill me-1"></i>メニュー
       </a>
       {% if current_warehouse %}
-      <span class="badge bg-light text-primary fs-6 fw-normal me-3">
-        <i class="bi bi-building me-1"></i>{{ current_warehouse.warehouse_code }}：{{ current_warehouse.warehouse_name }}
+      <span class="badge bg-light text-primary fs-6 fw-normal me-3 d-inline-flex align-items-center text-truncate">
+        <i class="bi bi-building me-1"></i>
+        <span>{{ current_warehouse.warehouse_code }}<span class="d-none d-md-inline">：{{ current_warehouse.warehouse_name }}</span></span>
       </span>
       {% endif %}
-      <ul class="navbar-nav ms-auto align-items-center">
+      <ul class="navbar-nav ms-auto align-items-center flex-row gap-2">
         {% if user.is_authenticated %}
-          <li class="nav-item"><span class="text-white-50 me-3">{{ user.display_name|default:user.username }}</span></li>
-          <li class="nav-item"><a class="nav-link" href="/admin/logout/">ログアウト</a></li>
+          <li class="nav-item d-none d-md-inline">
+            <span class="text-white-50 me-3">{{ user.display_name|default:user.username }}</span>
+          </li>
+          <li class="nav-item d-inline d-md-none">
+            <a class="btn btn-outline-light btn-sm" href="{% url 'home' %}"
+               title="メニュー" aria-label="メニュー">
+              <i class="bi bi-grid-3x3-gap-fill"></i>
+            </a>
+          </li>
+          <li class="nav-item d-none d-md-inline">
+            <form method="post" action="/admin/logout/" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-light btn-sm"
+                      title="ログアウト" aria-label="ログアウト">
+                <i class="bi bi-box-arrow-right"></i><span class="ms-1">ログアウト</span>
+              </button>
+            </form>
+          </li>
         {% else %}
           <li class="nav-item"><a class="nav-link" href="/admin/login/">ログイン</a></li>
         {% endif %}
@@ -77,6 +103,8 @@
         <a href="{% url 'home' %}" class="list-group-item list-group-item-action fw-semibold">
           <i class="bi bi-grid-3x3-gap-fill me-2"></i>メニュー画面
         </a>
+
+        {% if not is_handheld_worker %}
         <div class="list-group-item bg-light fw-bold text-uppercase small text-muted">マスタ管理</div>
         <a href="{% url 'masters:master_inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-pin-map-fill me-2"></i>エリア・ロケーション照会
@@ -99,20 +127,14 @@
         <a href="{% url 'masters:customer_list' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-people me-2"></i>顧客
         </a>
+        {% endif %}
 
-        <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">在庫・入出庫</div>
-        <a href="{% url 'stock:inquiry' %}" class="list-group-item list-group-item-action">
-          <i class="bi bi-clipboard-data me-2"></i>在庫照会
-        </a>
-        <a href="{% url 'stock:movement_inquiry' %}" class="list-group-item list-group-item-action">
-          <i class="bi bi-clock-history me-2"></i>入出庫履歴照会
-        </a>
-        <a href="{% url 'stock:stocktake_inquiry' %}" class="list-group-item list-group-item-action">
-          <i class="bi bi-clipboard-check me-2"></i>棚卸照会
-        </a>
+        <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">入荷</div>
+        {% if not is_handheld_worker %}
         <a href="{% url 'inbound:order_inquiry' %}" class="list-group-item list-group-item-action">
-          <i class="bi bi-arrow-down-square me-2"></i>入荷指示
+          <i class="bi bi-clipboard-plus me-2"></i>入荷指示
         </a>
+        {% endif %}
         <a href="{% url 'inbound:handheld_arrival' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-box-arrow-in-right me-2"></i>入荷受け入れ
           <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
@@ -121,6 +143,41 @@
           <i class="bi bi-check2-square me-2"></i>入荷検品
           <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
         </a>
+        <a href="{% url 'inbound:handheld_putaway' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-box-seam me-2"></i>棚入れ
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
+
+        <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">出荷</div>
+        {% if not is_handheld_worker %}
+        <a href="{% url 'outbound:order_inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-clipboard-minus me-2"></i>出荷指示
+        </a>
+        <a href="{% url 'outbound:launch' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-rocket-takeoff me-2"></i>出荷起動
+        </a>
+        <a href="{% url 'outbound:picking_list_inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-printer me-2"></i>ピッキングリスト印刷
+        </a>
+        {% endif %}
+        <a href="{% url 'outbound:handheld_picking' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-hand-index-thumb me-2"></i>ピッキング
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
+        <a href="{% url 'outbound:handheld_inspection' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-shield-check me-2"></i>出荷検品
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
+
+        <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">在庫管理</div>
+        {% if not is_handheld_worker %}
+        <a href="{% url 'stock:inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-list-stars me-2"></i>在庫照会
+        </a>
+        <a href="{% url 'stock:movement_inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-clock-history me-2"></i>入出庫履歴照会
+        </a>
+        {% endif %}
         <a href="{% url 'stock:handheld_in' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-box-arrow-in-down me-2"></i>計画外入庫
           <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
@@ -129,18 +186,29 @@
           <i class="bi bi-box-arrow-up me-2"></i>計画外出庫
           <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
         </a>
+        <a href="{% url 'stock:handheld_transfer' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-left-right me-2"></i>棚間移動
+          <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
+        </a>
+        {% if not is_handheld_worker %}
+        <a href="{% url 'stock:stocktake_inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-clipboard-check me-2"></i>棚卸照会
+        </a>
+        {% endif %}
         <a href="{% url 'stock:handheld_stocktake' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-clipboard-check me-2"></i>棚卸カウント
           <span class="badge bg-info-subtle text-info-emphasis ms-1 small">ハンディ</span>
         </a>
-        <a href="#" class="list-group-item list-group-item-action disabled text-muted">
-          <i class="bi bi-arrow-up-square me-2"></i>出荷指示 <span class="badge bg-secondary ms-1">準備中</span>
-        </a>
 
+        {% if not is_handheld_worker %}
         <div class="list-group-item bg-light fw-bold text-uppercase small text-muted mt-2">システム</div>
-        <a href="/admin/" class="list-group-item list-group-item-action">
-          <i class="bi bi-gear-wide-connected me-2"></i>Django Admin
+        <a href="{% url 'core:error_log_inquiry' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-exclamation-triangle me-2"></i>エラーログ照会
         </a>
+        <a href="/admin/" class="list-group-item list-group-item-action">
+          <i class="bi bi-shield-lock me-2"></i>Django Admin
+        </a>
+        {% endif %}
       </div>
     </div>
   </div>
