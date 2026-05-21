@@ -83,10 +83,6 @@
       <div class="input-group input-group-lg">
         <input type="text" id="prod-scan" class="form-control hh-key"
                placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
-        <button class="btn btn-outline-primary" type="button" id="prod-confirm"
-                aria-label="照合">
-          <i class="bi bi-search"></i>
-        </button>
       </div>
       <div id="prod-result" class="mt-2"></div>
 
@@ -413,7 +409,6 @@
     e.stopPropagation();
     verifyProduct();
   });
-  document.getElementById('prod-confirm').addEventListener('click', verifyProduct);
 
   // 数量欄: 数字以外は入力時に除去。空欄でフォーカスを外したら 0 を補完
   qtyInput.addEventListener('input', function () {
