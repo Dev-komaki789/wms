@@ -33,6 +33,12 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()]
 
+# HTTPS ドメインからの POST(ログイン・登録 等)を CSRF で弾かれないよう許可する。
+# Django 4 以降は HTTPS では必須。例: DJANGO_CSRF_TRUSTED_ORIGINS=https://example.com,https://www.example.com
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()
+]
+
 
 # Application definition
 
@@ -58,6 +64,8 @@ AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise は SecurityMiddleware の直後に置く（本番で静的ファイルを配信する）
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -146,6 +154,24 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+# collectstatic が全アプリ＋STATICFILES_DIRS の静的ファイルを集約する先（本番で配信する単一フォルダ）。
+# 生成物なので .gitignore 済み。
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# 本番のみ WhiteNoise のハッシュ付き・圧縮配信を使う（キャッシュ最適化）。
+# 開発(DEBUG=True)で Manifest 方式にすると collectstatic 前に {% static %} がエラーになるため、
+# 開発では標準ストレージのまま（runserver が STATICFILES_DIRS から配信）にする。
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG
+            else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        ),
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -165,3 +191,21 @@ MESSAGE_TAGS = {
     message_constants.WARNING: 'warning',
     message_constants.ERROR: 'danger',
 }
+
+
+# === 本番（DEBUG=False）でのみ有効化するセキュリティ設定 ===
+# nginx が HTTPS を終端し、内部は HTTP で gunicorn に転送する構成を前提にする。
+# 開発(http://localhost)では無効のままにして手元で困らないようにする。
+if not DEBUG:
+    # nginx が付ける X-Forwarded-Proto ヘッダで「元リクエストが HTTPS だった」ことを判定する。
+    # これが無いと SSL リダイレクトが無限ループしたり secure cookie が送られない。
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # http:// で来たアクセスを https:// へ自動転送する
+    SECURE_SSL_REDIRECT = True
+    # セッション/CSRF cookie は HTTPS のときだけ送信する（盗聴によるセッション乗っ取り対策）
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # HSTS: ブラウザに一定期間 HTTPS を強制させる。まずは 1 日。安定後に伸ばす（例: 31536000=1年）。
+    SECURE_HSTS_SECONDS = 86400
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True

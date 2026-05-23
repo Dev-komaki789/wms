@@ -1,0 +1,26 @@
+# gunicorn を常駐させる systemd ユニット。
+# 配置先: /etc/systemd/system/gunicorn.service（下記コマンドでコピー）
+#   sudo cp deploy/gunicorn.service /etc/systemd/system/gunicorn.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now gunicorn
+# パス(/home/ubuntu/wms)とユーザー(ubuntu)は環境に合わせて変更すること。
+# 環境変数(.env)は settings.py の load_dotenv が WorkingDirectory 配下の .env を読むため、
+# ここでの EnvironmentFile 指定は不要。
+
+[Unit]
+Description=gunicorn daemon for WMS (Django)
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/wms
+# uv sync で作られる venv 内の gunicorn を直接起動する
+ExecStart=/home/ubuntu/wms/.venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    config.wsgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

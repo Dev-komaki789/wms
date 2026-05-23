@@ -16,6 +16,8 @@ wheels/
 db.sqlite3
 db.sqlite3-journal
 *.log
+# collectstatic の集約先（生成物。本番サーバで都度生成する）
+staticfiles/
 
 # 個人用メモ (備忘録)
 README.md
