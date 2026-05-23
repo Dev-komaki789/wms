@@ -1,0 +1,127 @@
+{% extends 'a/base.html' %}
+
+{% block title %}出荷明細書 {{ delivery_note.delivery_note_code }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .dn-barcode svg { width: 280px; height: auto; display: block; }
+  /* 印刷時はアプリのナビ等を隠し、帳票だけをきれいに出力する */
+  @media print {
+    .navbar, #sidebar { display: none !important; }
+    body { background: #fff !important; }
+    main.container { max-width: 100%; padding: 0; }
+    .dn-doc { border: none !important; box-shadow: none !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# 画面操作ボタン（印刷物には出さない） #}
+<div class="d-print-none mb-3 d-flex gap-2">
+  <button type="button" class="btn btn-primary" onclick="window.print()">
+    <i class="bi bi-printer"></i> 印刷
+  </button>
+  <a href="{% url 'outbound:order_detail' pk=outbound_order.pk %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 出荷指示へ戻る
+  </a>
+</div>
+
+<div class="dn-doc card shadow-sm">
+  <div class="card-body">
+    {# ヘッダー: タイトル + 出荷明細書番号 + 出荷指示バーコード #}
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+      <div>
+        <div class="text-muted small">出 荷 明 細 書</div>
+        <div class="fs-3 fw-bold font-monospace">{{ delivery_note.delivery_note_code }}</div>
+        <div class="text-muted small mt-1">
+          発行日 {{ delivery_note.issued_at|date:"Y年n月j日" }}
+        </div>
+      </div>
+      <div class="text-center">
+        {# 参照用の出荷指示番号バーコード（検品はピッキングリスト側で読み取る） #}
+        <div class="dn-barcode">{{ barcode_svg|safe }}</div>
+        <div class="font-monospace small mt-1">{{ outbound_order.outbound_order_code }}</div>
+        <div class="text-muted" style="font-size:.7rem">出荷指示番号</div>
+      </div>
+    </div>
+
+    {# 宛先・差出人 #}
+    <div class="row g-3 mb-3">
+      <div class="col-md-7">
+        <div class="text-muted small mb-1">お届け先</div>
+        <div class="fs-5 fw-bold">{{ delivery_note.customer.customer_name }} 御中</div>
+        {% if outbound_order.delivery_postal_code %}
+          <div class="small">〒{{ outbound_order.delivery_postal_code }}</div>
+        {% endif %}
+        {% if outbound_order.delivery_address %}
+          <div class="small">{{ outbound_order.delivery_address }}</div>
+        {% elif delivery_note.customer.address %}
+          <div class="small">{{ delivery_note.customer.address }}</div>
+        {% endif %}
+      </div>
+      <div class="col-md-5">
+        <div class="text-muted small mb-1">差出元</div>
+        <div class="fs-6 fw-bold">{{ outbound_order.warehouse.warehouse_name }}</div>
+        {% if outbound_order.warehouse.address %}
+          <div class="small">{{ outbound_order.warehouse.address }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# メタ情報 #}
+    <div class="row g-3 mb-3 small">
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">出荷指示</span>
+        <span class="font-monospace">{{ outbound_order.outbound_order_code }}</span>
+      </div>
+      {% if outbound_order.external_order_id %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">外部注文番号</span>
+        <span class="font-monospace">{{ outbound_order.external_order_id }}</span>
+      </div>
+      {% endif %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">ステータス</span>
+        {{ outbound_order.get_status_display }}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">出荷期限</span>
+        <span class="font-monospace">
+          {% if outbound_order.deadline_at %}{{ outbound_order.deadline_at|date:"Y/m/d H:i" }}
+          {% else %}—{% endif %}
+        </span>
+      </div>
+    </div>
+
+    {# 明細表（SKU 単位で集約済み） #}
+    <table class="table table-sm table-bordered align-middle mb-3">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center" style="width: 48px">#</th>
+          <th class="text-start">SKU</th>
+          <th class="text-start">商品名</th>
+          <th class="text-end" style="width: 90px">数量</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in line_items %}
+        <tr>
+          <td class="text-center">{{ forloop.counter }}</td>
+          <td class="text-start font-monospace">{{ it.sku_code }}</td>
+          <td class="text-start">{{ it.product_name }}</td>
+          <td class="text-end font-monospace">{{ it.quantity }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-3">明細がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {# 顧客向けの出荷明細書（箱に同梱） #}
+    <div class="small text-muted mt-3">
+      <i class="bi bi-info-circle me-1"></i>
+      上記の商品をお届けいたします。記載内容をご確認ください。
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -52,7 +52,9 @@
     {{ form.note }}
   </div>
 
-  <button type="submit" class="btn btn-primary btn-hh">
+  <button type="submit" class="btn btn-primary btn-hh"
+          data-confirm="この内容で計画外出庫を実行しますか？"
+          data-confirm-variant="danger" data-confirm-yes="実行する">
     <i class="bi bi-check-lg me-1"></i> 実行
   </button>
 </form>

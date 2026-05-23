@@ -5,11 +5,62 @@
 {% block back_url %}{% url 'outbound:handheld_picking' %}{% endblock %}
 
 {% block hh_content %}
+{% if mode == 'summary' %}
+{# ===== 完了サマリ: ピッキングリスト全体の最終結果を読み取り専用で表示 ===== #}
+<div class="card mb-3">
+  <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ picking_list.picking_list_code }}</span>
+    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>ピッキング完了</span>
+  </div>
+  <div class="px-3 py-2 small">
+    <div class="row g-1">
+      <div class="col-5 text-muted">出荷指示</div>
+      <div class="col-7 font-monospace">
+        {% if outbound_order %}{{ outbound_order.outbound_order_code }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">エリア</div>
+      <div class="col-7">{{ picking_list.area.area_name|default:picking_list.area.area_code }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="mb-2 small text-muted">
+  以下の内容でピッキングしました（{{ summary_items|length }} 商品）
+</div>
+<div class="list-group mb-3">
+  {% for it in summary_items %}
+  <div class="list-group-item py-2 {% if it.short > 0 %}list-group-item-warning{% else %}list-group-item-success{% endif %}">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <div class="font-monospace hh-cell">{{ it.location }}</div>
+        <div class="font-monospace text-muted hh-cell">{{ it.sku }}</div>
+        <div class="text-muted" style="font-size:.72rem">{{ it.name }}</div>
+      </div>
+      <div class="text-end small text-nowrap">
+        <span class="font-monospace fw-bold hh-cell">{{ it.picked }}</span>
+        <span class="text-muted">/ {{ it.requested }}</span>
+        {% if it.short > 0 %}
+        <div><span class="badge bg-danger">欠品 −{{ it.short }}</span></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<a href="{% url 'outbound:handheld_picking' %}" class="btn btn-success btn-hh">
+  <i class="bi bi-check-lg me-1"></i> 完了して入口に戻る
+</a>
+
+{% else %}
+{# ===== Wizard モード: per-item で入力 → 即時 commit ===== #}
 {{ items|json_script:"items-data" }}
 <div id="meta-data"
      data-list-pk="{{ picking_list.pk }}"
      data-csrf="{{ csrf_token }}"
      data-item-api-base="{% url 'outbound:handheld_picking_item' list_pk=picking_list.pk item_pk=0 %}"
+     data-work-url="{% url 'outbound:handheld_picking_work' pk=picking_list.pk %}"
      data-entry-url="{% url 'outbound:handheld_picking' %}"
      data-done-count="{{ done_count }}"
      data-total="{{ total }}"></div>
@@ -50,7 +101,7 @@
   <label class="form-label" for="scan-input">
     <i class="bi bi-upc-scan text-primary me-1"></i>棚番をスキャン
   </label>
-  <input type="text" id="scan-input" class="form-control hh-key"
+  <input type="text" id="scan-input" maxlength="15" class="form-control hh-key"
          placeholder="棚番をスキャン" autocomplete="off" inputmode="text">
   <div class="form-text" id="scan-msg">ピッキング元の棚番バーコードを読み取ってください</div>
 
@@ -84,7 +135,7 @@
         <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャンして照合
       </label>
       <div class="input-group input-group-lg">
-        <input type="text" id="prod-scan" class="form-control hh-key"
+        <input type="text" id="prod-scan" maxlength="13" class="form-control hh-key"
                placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
       </div>
       <div id="prod-result" class="mt-2"></div>
@@ -97,7 +148,7 @@
         <button class="btn btn-outline-secondary px-3" type="button" id="qty-minus" aria-label="減らす">
           <i class="bi bi-dash-lg"></i>
         </button>
-        <input type="text" id="pk-qty" inputmode="numeric" maxlength="6"
+        <input type="text" id="pk-qty" inputmode="numeric" maxlength="5"
                class="form-control hh-key text-center">
         <button class="btn btn-outline-secondary px-3" type="button" id="qty-plus" aria-label="増やす">
           <i class="bi bi-plus-lg"></i>
@@ -116,10 +167,11 @@
     <i class="bi bi-arrow-left me-1"></i>スキャンに戻る
   </button>
   <div class="text-muted small text-center mt-2">
-    <i class="bi bi-info-circle me-1"></i>実行すると即時に記録されます（途中離脱しても続きから再開できます）
+    <i class="bi bi-info-circle me-1"></i>実行すると即時に記録されます（全商品終わったら最終一覧が表示されます）
   </div>
 </div>
 
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -127,9 +179,11 @@
 (function () {
   'use strict';
   const meta = document.getElementById('meta-data');
+  if (!meta) return;  // summary モードでは script が走らない（wizard 用の DOM が無い）
   const LIST_PK = meta.dataset.listPk;
   const CSRF = meta.dataset.csrf;
   const ITEM_API_TPL = meta.dataset.itemApiBase;  // .../item/0/ を 0 → 実 pk に置換
+  const WORK_URL = meta.dataset.workUrl;          // 全明細確定後の遷移先（同 URL の summary モード）
   const ENTRY_URL = meta.dataset.entryUrl;
   const TOTAL = parseInt(meta.dataset.total, 10) || 0;
   let doneCount = parseInt(meta.dataset.doneCount, 10) || 0;
@@ -187,8 +241,8 @@
       b.className = 'list-group-item list-group-item-action py-2';
       b.innerHTML =
         '<div class="d-flex justify-content-between align-items-center">'
-        + '<span><span class="font-monospace small fw-bold">' + it.location + '</span>'
-        + '<div class="font-monospace text-muted" style="font-size:.72rem">' + it.sku + '</div>'
+        + '<span><span class="font-monospace hh-cell">' + it.location + '</span>'
+        + '<div class="font-monospace text-muted hh-cell">' + it.sku + '</div>'
         + '<div class="text-muted" style="font-size:.72rem">' + it.name + '</div></span>'
         + '<span class="small text-nowrap text-muted">指示 '
         + '<span class="font-monospace fw-bold">' + it.requested + '</span></span>'
@@ -331,8 +385,8 @@
         }
         done[current.id] = {picked: qty};
         if (data.all_done) {
-          window.location.href = ENTRY_URL
-            + '?completed=' + encodeURIComponent(LIST_PK);
+          // 全明細確定 → 同 URL に遷移すると summary モードで描画される
+          window.location.href = WORK_URL;
         } else {
           goScan();
         }

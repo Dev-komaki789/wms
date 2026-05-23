@@ -152,3 +152,28 @@
     new bootstrap.Modal(document.getElementById('confirmModal')).show();
   });
 })();
+
+// === ハンディ画面用: プログラム的に確認モーダルを表示するヘルパ ===
+// form submit ベースの data-confirm では対応できない fetch ベースの per-item
+// コミット（棚入れ・ピッキング・出荷検品）で使う。
+// 使い方: wmsConfirm('実行しますか？', {variant: 'primary', yesLabel: '実行'}, () => {...});
+window.wmsConfirm = function (message, opts, onYes) {
+  opts = opts || {};
+  if (typeof opts === 'function') { onYes = opts; opts = {}; }
+  const modalEl = document.getElementById('confirmModal');
+  if (!modalEl || typeof bootstrap === 'undefined') {
+    // モーダル基盤が無ければそのまま実行（degradation）
+    if (onYes) onYes();
+    return;
+  }
+  document.getElementById('confirmModalBody').textContent = message;
+  const yesBtn = document.getElementById('confirmModalYes');
+  yesBtn.className = 'btn btn-' + (opts.variant || 'primary') + ' px-4';
+  yesBtn.textContent = opts.yesLabel || '実行する';
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  yesBtn.onclick = function () {
+    modal.hide();
+    if (onYes) onYes();
+  };
+  modal.show();
+};

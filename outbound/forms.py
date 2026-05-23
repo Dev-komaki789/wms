@@ -8,6 +8,7 @@ OMS 連携の注文番号は external_order_id に別途記録する。
 import re
 
 from django import forms
+from django.core.validators import MaxValueValidator
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
 
@@ -42,7 +43,7 @@ class OutboundOrderForm(forms.ModelForm):
         widgets = {
             'outbound_order_code': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: OO-20260517-001',
-                       'autocomplete': 'off',
+                       'autocomplete': 'off', 'maxlength': '15',
                        'pattern': r'OO-\d{8}-\d{3}',
                        'title': 'OO-YYYYMMDD-NNN 形式'}
             ),
@@ -55,9 +56,10 @@ class OutboundOrderForm(forms.ModelForm):
                 attrs={**TEXT, 'type': 'datetime-local'},
                 format='%Y-%m-%dT%H:%M',
             ),
-            'priority': forms.NumberInput(attrs={**TEXT, 'min': '0'}),
+            'priority': forms.NumberInput(attrs={**TEXT, 'min': '0', 'max': '999'}),
             'delivery_postal_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 100-0001', 'autocomplete': 'off'}
+                attrs={**TEXT, 'placeholder': '例: 100-0001', 'autocomplete': 'off',
+                       'inputmode': 'numeric', 'maxlength': '8'}
             ),
             'delivery_address': forms.TextInput(attrs={**TEXT, 'autocomplete': 'off'}),
             'delivery_name': forms.TextInput(
@@ -83,8 +85,14 @@ class OutboundOrderForm(forms.ModelForm):
         self.fields['deadline_at'].input_formats = ['%Y-%m-%dT%H:%M']
         self.fields['deadline_at'].required = False
 
-        # 優先度: 0 を初期表示（数値が大きいほど優先）
+        # 優先度: 0 を初期表示（数値が大きいほど優先）。上限 999
         self.fields['priority'].initial = 0
+        self.fields['priority'].validators.append(MaxValueValidator(999))
+
+        # 桁数を実形式に絞る（model max_length の auto-maxlength を上書き）
+        # 出荷指示番号「OO-YYYYMMDD-NNN」= 15 桁、配送先郵便番号は 8 桁（例 100-0001）
+        self.fields['outbound_order_code'].widget.attrs['maxlength'] = '15'
+        self.fields['delivery_postal_code'].widget.attrs['maxlength'] = '8'
 
         if self.instance.pk:
             # 編集時は outbound_order_code を変更不可（伝票番号は文書の identity）
@@ -117,7 +125,7 @@ class OutboundOrderItemForm(forms.ModelForm):
 
     sku_code = forms.CharField(
         label='SKU',
-        max_length=50,
+        max_length=13,
         widget=forms.TextInput(attrs={
             'class': 'form-control form-control-sm font-monospace',
             'placeholder': 'SKU コード入力 or 🔍 で検索',
@@ -131,13 +139,15 @@ class OutboundOrderItemForm(forms.ModelForm):
         fields = ['quantity_ordered']
         widgets = {
             'quantity_ordered': forms.NumberInput(
-                attrs={**TEXT, 'min': '1', 'placeholder': '数量'}
+                attrs={**TEXT, 'min': '1', 'max': '99999', 'placeholder': '数量'}
             ),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._sku = None
+        # 出荷指示数は 5 桁まで（〜99,999）
+        self.fields['quantity_ordered'].validators.append(MaxValueValidator(99999))
         # 編集時: 既存 SKU のコードを pre-fill
         if self.instance.pk and self.instance.sku_id:
             self.fields['sku_code'].initial = self.instance.sku.sku_code

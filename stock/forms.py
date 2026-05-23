@@ -19,7 +19,7 @@ class _StockOperationForm(forms.Form):
 
     location_code = forms.CharField(
         label='ロケーション',
-        max_length=30,
+        max_length=15,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': '棚番をスキャン',
@@ -31,7 +31,7 @@ class _StockOperationForm(forms.Form):
     )
     sku_code = forms.CharField(
         label='SKU',
-        max_length=50,
+        max_length=13,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': 'SKU をスキャン',
@@ -43,10 +43,12 @@ class _StockOperationForm(forms.Form):
     quantity = forms.IntegerField(
         label='数量',
         min_value=1,
+        max_value=99999,
         widget=forms.NumberInput(attrs={
             'class': 'form-control hh-key text-end',
             'placeholder': '0',
             'inputmode': 'numeric',
+            'max': '99999',
         }),
     )
     note = forms.ChoiceField(
@@ -178,7 +180,7 @@ class StockTransferForm(forms.Form):
 
     from_location_code = forms.CharField(
         label='移動元ロケーション',
-        max_length=30,
+        max_length=15,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': '移動元の棚番をスキャン',
@@ -190,7 +192,7 @@ class StockTransferForm(forms.Form):
     )
     sku_code = forms.CharField(
         label='SKU',
-        max_length=50,
+        max_length=13,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': 'SKU をスキャン',
@@ -204,15 +206,17 @@ class StockTransferForm(forms.Form):
     quantity = forms.IntegerField(
         label='移動数',
         min_value=1,
+        max_value=99999,
         widget=forms.NumberInput(attrs={
             'class': 'form-control hh-key text-end',
             'placeholder': '0',
             'inputmode': 'numeric',
+            'max': '99999',
         }),
     )
     to_location_code = forms.CharField(
         label='移動先ロケーション',
-        max_length=30,
+        max_length=15,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': '移動先の棚番をスキャン',
@@ -367,7 +371,7 @@ class StocktakeCountForm(forms.Form):
 
     location_code = forms.CharField(
         label='ロケーション',
-        max_length=30,
+        max_length=15,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': '棚番をスキャン',
@@ -379,7 +383,7 @@ class StocktakeCountForm(forms.Form):
     )
     sku_code = forms.CharField(
         label='SKU',
-        max_length=50,
+        max_length=13,
         widget=forms.TextInput(attrs={
             'class': 'form-control hh-key',
             'placeholder': 'SKU をスキャン',
@@ -391,10 +395,12 @@ class StocktakeCountForm(forms.Form):
     counted_quantity = forms.IntegerField(
         label='実カウント数',
         min_value=0,
+        max_value=99999,
         widget=forms.NumberInput(attrs={
             'class': 'form-control hh-key text-end',
             'placeholder': '0',
             'inputmode': 'numeric',
+            'max': '99999',
         }),
     )
 

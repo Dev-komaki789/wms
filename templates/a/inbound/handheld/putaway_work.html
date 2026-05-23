@@ -5,11 +5,61 @@
 {% block back_url %}{% url 'inbound:handheld_putaway' %}{% endblock %}
 
 {% block hh_content %}
+{% if mode == 'summary' %}
+{# ===== 完了サマリ: 入荷指示全体の最終結果を読み取り専用で表示 ===== #}
+<div class="card mb-3">
+  <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ order.inbound_order_code }}</span>
+    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>入荷完了</span>
+  </div>
+  <div class="px-3 py-2 small">
+    <div class="row g-1">
+      <div class="col-5 text-muted">仕入先</div>
+      <div class="col-7">
+        {% if order.supplier %}{{ order.supplier.supplier_name }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">入荷予定日</div>
+      <div class="col-7 font-monospace">{{ order.expected_date|date:"Y/m/d"|default:"—" }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="mb-2 small text-muted">
+  以下の内容で棚入れしました（{{ summary_items|length }} 商品）
+</div>
+<div class="list-group mb-3">
+  {% for it in summary_items %}
+  <div class="list-group-item py-2 {% if it.skip %}list-group-item-secondary{% else %}list-group-item-success{% endif %}">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <div class="font-monospace hh-cell">{{ it.sku }}</div>
+        <div class="text-muted" style="font-size:.72rem">{{ it.name }}</div>
+      </div>
+      <div class="text-end small text-nowrap">
+        {% if it.skip %}
+          <span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>棚入れ対象外（不良のみ）</span>
+        {% else %}
+          <span class="font-monospace fw-bold hh-cell">{{ it.good }}</span> 個
+          <div class="font-monospace small">→ {{ it.location }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<a href="{% url 'inbound:handheld_putaway' %}" class="btn btn-success btn-hh">
+  <i class="bi bi-check-lg me-1"></i> 完了して入口に戻る
+</a>
+
+{% else %}
 {{ items|json_script:"items-data" }}
 <div id="meta-data" data-order="{{ order.pk }}"
      data-csrf="{{ csrf_token }}"
      data-loc-api="{% url 'masters:api_location_lookup' %}"
      data-item-api-base="{% url 'inbound:handheld_putaway_item' order_pk=order.pk item_pk=0 %}"
+     data-work-url="{% url 'inbound:handheld_putaway_work' pk=order.pk %}"
      data-entry-url="{% url 'inbound:handheld_putaway' %}"
      data-done-count="{{ done_count }}"
      data-total="{{ total }}"></div>
@@ -50,7 +100,7 @@
   <label class="form-label" for="jan-scan">
     <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャン
   </label>
-  <input type="text" id="jan-scan" class="form-control hh-key"
+  <input type="text" id="jan-scan" maxlength="13" class="form-control hh-key"
          placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
   <div class="form-text" id="scan-msg">商品のバーコードを読み取ってください</div>
 
@@ -80,7 +130,7 @@
       </label>
       <div class="mb-2" id="pa-area-hint"></div>
       <div class="input-group input-group-lg">
-        <input type="text" id="loc-scan" class="form-control hh-key"
+        <input type="text" id="loc-scan" maxlength="15" class="form-control hh-key"
                placeholder="棚番をスキャン" autocomplete="off" inputmode="text">
       </div>
       <div id="loc-result" class="mt-2"></div>
@@ -94,10 +144,11 @@
     <i class="bi bi-arrow-left me-1"></i>スキャンに戻る
   </button>
   <div class="text-muted small text-center mt-2">
-    <i class="bi bi-info-circle me-1"></i>実行すると即時に在庫加算されます（途中離脱しても続きから再開できます）
+    <i class="bi bi-info-circle me-1"></i>実行すると即時に在庫加算されます（全商品終わったら最終一覧が表示されます）
   </div>
 </div>
 
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -105,11 +156,13 @@
 (function () {
   'use strict';
   const meta = document.getElementById('meta-data');
+  if (!meta) return;  // summary モードでは wizard DOM が無いので何もしない
   const ORDER_PK = meta.dataset.order;
   const CSRF = meta.dataset.csrf;
   const LOC_API = meta.dataset.locApi;
   // item API は <int:item_pk> 部分を 0 で生成しておき、置換で組み立てる
   const ITEM_API_TPL = meta.dataset.itemApiBase;
+  const WORK_URL = meta.dataset.workUrl;
   const ENTRY_URL = meta.dataset.entryUrl;
   const TOTAL = parseInt(meta.dataset.total, 10) || 0;
   let doneCount = parseInt(meta.dataset.doneCount, 10) || 0;
@@ -168,7 +221,7 @@
       b.type = 'button';
       b.className = 'list-group-item list-group-item-action py-2';
       b.innerHTML = '<div class="d-flex justify-content-between align-items-center">'
-        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<span><span class="font-monospace hh-cell">' + it.sku + '</span>'
         + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
         + '<span class="small text-nowrap text-muted">計上 '
         + '<span class="font-monospace fw-bold">' + it.good + '</span></span>'
@@ -330,9 +383,8 @@
           ? {loc: currentLoc.code, locName: currentLoc.name, locArea: currentLoc.area}
           : {skip: true};
         if (data.all_done) {
-          // 全明細確定 → 入荷完了。入口画面に戻して成功表示は次画面に任せる
-          window.location.href = ENTRY_URL
-            + '?completed=' + encodeURIComponent(ORDER_PK);
+          // 全明細確定 → 同 URL に遷移すると summary モードで描画される
+          window.location.href = WORK_URL;
         } else {
           goScan();
         }

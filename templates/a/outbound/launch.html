@@ -24,12 +24,57 @@
   </div>
 </div>
 
+{# 検索バー（GET・独立フォーム。起動フォームとはネストできないため分離） #}
+<div class="card shadow-sm mb-3">
+  <div class="card-body py-2 bg-light">
+    <form method="get" id="launch-search-form" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">指示番号 / OMS注文番号 / 配送先</label>
+        <input type="text" name="q" class="form-control form-control-sm" maxlength="100"
+               placeholder="例: OO-20260517-001" value="{{ filters.q }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">顧客</label>
+        <input type="text" name="customer" class="form-control form-control-sm" maxlength="100"
+               placeholder="例: サンプル商事 / CUST-0001" value="{{ filters.customer }}">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">出荷元種別</label>
+        <select name="source_type" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for val, label in source_type_choices %}
+            <option value="{{ val }}" {% if filters.source_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">出荷期限 (から)</label>
+        <input type="date" name="deadline_from" class="form-control form-control-sm"
+               min="2000-01-01" max="2099-12-31" value="{{ filters.deadline_from }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">出荷期限 (まで)</label>
+        <input type="date" name="deadline_to" class="form-control form-control-sm"
+               min="2000-01-01" max="2099-12-31" value="{{ filters.deadline_to }}">
+      </div>
+      <div class="col-md-6 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-search"></i> 検索
+        </button>
+        <a href="{% url 'outbound:launch' %}" class="btn btn-outline-secondary btn-sm">クリア</a>
+      </div>
+    </form>
+  </div>
+</div>
+
 <form method="post">
   {% csrf_token %}
   <div class="card shadow-sm">
     <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
       <span class="text-muted small">
-        出荷起動待ち: <strong class="text-dark">{{ orders|length }}</strong> 件
+        {% if searched %}検索結果{% else %}出荷起動待ち{% endif %}:
+        <strong class="text-dark">{{ orders|length }}</strong> 件
       </span>
       {% if orders %}
       <button type="submit" class="btn btn-primary btn-sm"
@@ -85,7 +130,7 @@
     {% else %}
     <div class="text-center text-muted py-5">
       <i class="bi bi-check2-circle d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
-      出荷起動待ちの指示はありません
+      {% if searched %}条件に一致する出荷起動待ちの指示はありません{% else %}出荷起動待ちの指示はありません{% endif %}
     </div>
     {% endif %}
   </div>

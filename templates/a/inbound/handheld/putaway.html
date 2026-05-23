@@ -11,7 +11,7 @@
     <span class="text-danger">*</span>
   </label>
   <div class="input-group">
-    <input type="text" name="code" id="putaway-code"
+    <input type="text" name="code" id="putaway-code" maxlength="15"
            class="form-control hh-key"
            value="{{ code }}" placeholder="入荷指示番号をスキャン"
            autocomplete="off" autofocus required>
@@ -62,7 +62,7 @@
           {% if row.good is None %}
             <span class="text-muted">—</span>
           {% else %}
-            <span class="font-monospace fw-bold">{{ row.good }}</span>
+            <span class="font-monospace fw-bold hh-cell">{{ row.good }}</span>
             {% if row.defective %}
               <div class="text-danger" style="font-size:.7rem">不良 {{ row.defective }}</div>
             {% endif %}

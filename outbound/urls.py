@@ -9,6 +9,9 @@ urlpatterns = [
     path('launch/', views.OutboundLaunchView.as_view(), name='launch'),
     path('picking-lists/', views.PickingListInquiryView.as_view(), name='picking_list_inquiry'),
     path('picking-lists/<int:pk>/print/', views.PickingListPrintView.as_view(), name='picking_list_print'),
+    # 出荷明細書印刷（出荷検品完了時に実出荷数で発行された DeliveryNote の帳票印刷）。
+    # 箱に同梱して顧客へ届ける書類。
+    path('delivery-notes/<int:pk>/print/', views.DeliveryNotePrintView.as_view(), name='delivery_note_print'),
     path('orders/new/', views.OutboundOrderCreateView.as_view(), name='order_create'),
     path('orders/csv/export/', views.OutboundOrderCsvExportView.as_view(), name='order_csv_export'),
     path('orders/csv/import/', views.OutboundOrderCsvImportView.as_view(), name='order_csv_import'),

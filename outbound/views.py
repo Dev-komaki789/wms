@@ -20,6 +20,7 @@ from stock.models import StockBalance, StockMovement
 from .csv_io import OUTBOUND_ORDER_SPEC
 from .forms import OutboundOrderForm, OutboundOrderItemFormSet
 from .models import (
+    DeliveryNote, DeliveryNoteItem,
     OutboundOrder, OutboundOrderItem, PickingList, PickingListItem,
     Shipment, ShipmentItem, StockReservation,
 )
@@ -431,8 +432,57 @@ def _try_launch_order(order, user):
     else:
         order.status = OutboundOrder.Status.INSPECTION_WAIT
     order.save()
+
+    # 出荷明細書はここでは発行しない。出荷起動時点の数量は予定（引き当て）数量であり、
+    # ピッキング欠品などで実出荷数と異なりうるため、実出荷数が確定する出荷検品完了時
+    # （_finalize_shipment）に発行する。出荷検品の開始バーコードは、ピッキングリストに
+    # 印字した出荷指示番号を梱包エリアで読み取って用いる。
+
     return {'order': order, 'ok': True,
             'pl_count': pl_count, 'auto_count': auto_count}
+
+
+def _ensure_delivery_note(order):
+    """出荷検品完了時に出荷明細書（DeliveryNote + Items）を発行する（実出荷数で確定）。
+
+    既に発行済みなら何もしない（冪等）。明細は OutboundOrderItem を SKU 単位で
+    集約し、実出荷数(quantity_shipped)で数量化する（複数棚に分割された明細を
+    1 行にまとめ、欠品で出荷 0 の SKU は明細に含めない）。顧客が未設定の出荷指示
+    には出荷明細書を作らない。
+    """
+    if order.customer_id is None:
+        return None
+    if hasattr(order, 'deliverynote'):
+        return order.deliverynote
+    today = timezone.localdate()
+    # SKU 単位で集約。商品名・SKUコードはスナップショットとして保存。
+    by_sku = {}
+    for it in order.items.select_related('sku__product').all():
+        qty = it.quantity_shipped or 0
+        if qty <= 0:
+            continue
+        agg = by_sku.setdefault(it.sku_id, {
+            'sku': it.sku, 'ooi': it,
+            'product_name': it.sku.product.product_name,
+            'sku_code': it.sku.sku_code,
+            'qty': 0,
+        })
+        agg['qty'] += qty
+    delivery_note = create_with_retry(lambda: DeliveryNote.objects.create(
+        delivery_note_code=DeliveryNote.next_code(today),
+        outbound_order=order,
+        customer=order.customer,
+    ))
+    for agg in by_sku.values():
+        DeliveryNoteItem.objects.create(
+            delivery_note=delivery_note,
+            outbound_order_item=agg['ooi'],
+            sku=agg['sku'],
+            product_name=agg['product_name'],
+            sku_code=agg['sku_code'],
+            quantity=agg['qty'],
+        )
+    return delivery_note
 
 
 class OutboundLaunchView(LoginRequiredMixin, View):
@@ -446,22 +496,62 @@ class OutboundLaunchView(LoginRequiredMixin, View):
 
     template_name = 'a/outbound/launch.html'
 
-    def _candidates(self):
-        """出荷起動待ちの指示（現在倉庫スコープ、優先度順）。"""
+    SEARCH_KEYS = ('q', 'customer', 'source_type', 'deadline_from', 'deadline_to')
+
+    def _filters(self):
+        g = self.request.GET
+        return {
+            'q': g.get('q', '').strip(),
+            'customer': g.get('customer', '').strip(),
+            'source_type': g.get('source_type', ''),
+            'deadline_from': g.get('deadline_from', ''),
+            'deadline_to': g.get('deadline_to', ''),
+        }
+
+    def _candidates(self, f):
+        """出荷起動待ちの指示（現在倉庫スコープ、検索条件で絞り込み、優先度順）。"""
         qs = OutboundOrder.objects.filter(
             status=OutboundOrder.Status.ALLOCATION_WAIT
         ).select_related('customer')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
+        if f['q']:
+            qs = qs.filter(
+                Q(outbound_order_code__icontains=f['q'])
+                | Q(external_order_id__icontains=f['q'])
+                | Q(delivery_name__icontains=f['q'])
+            )
+        if f['customer']:
+            qs = qs.filter(
+                Q(customer__customer_name__icontains=f['customer'])
+                | Q(customer__customer_code__icontains=f['customer'])
+            )
+        if f['source_type']:
+            qs = qs.filter(source_type=f['source_type'])
+        deadline_from = parse_query_date(f['deadline_from'])
+        deadline_to = parse_query_date(f['deadline_to'])
+        if deadline_from:
+            qs = qs.filter(deadline_at__date__gte=deadline_from)
+        if deadline_to:
+            qs = qs.filter(deadline_at__date__lte=deadline_to)
         return qs.annotate(
             item_count=Count('items'),
             total_ordered=Sum('items__quantity_ordered'),
         ).order_by('-priority', 'deadline_at', 'outbound_order_code')
 
     def get(self, request, *args, **kwargs):
-        return render(request, self.template_name,
-                      {'orders': self._candidates()})
+        f = self._filters()
+        return render(request, self.template_name, {
+            'orders': self._candidates(f),
+            'filters': f,
+            'searched': any(f[k] for k in self.SEARCH_KEYS),
+            # 返品出荷は画面スコープ外のため出さない（出荷指示照会と同じ規約）
+            'source_type_choices': [
+                c for c in OutboundOrder.SourceType.choices
+                if c[0] != OutboundOrder.SourceType.RETURN
+            ],
+        })
 
     def post(self, request, *args, **kwargs):
         ids = [i for i in request.POST.getlist('order_ids') if i.isdigit()]
@@ -584,9 +674,47 @@ class PickingListPrintView(
         items = list(self.object.items.all())
         ctx['line_items'] = items
         # 当システムのピッキングリストは「出荷指示 × エリア」単位なので 1リスト=1指示
-        ctx['outbound_order'] = (
-            items[0].outbound_order_item.outbound_order if items else None
+        order = items[0].outbound_order_item.outbound_order if items else None
+        ctx['outbound_order'] = order
+        # 出荷検品はこの出荷指示番号バーコードを梱包エリアで読み取って開始する。
+        # 出荷明細書は検品完了後に発行されるため、検品開始時点ではまだ存在しない。
+        ctx['order_barcode_svg'] = (
+            code39_svg(order.outbound_order_code) if order else None
         )
+        return ctx
+
+
+class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
+    """出荷明細書印刷ビュー（帳票表示）。
+
+    1 出荷指示に紐づく出荷明細書を帳票レイアウトで表示する。出荷明細書は出荷検品完了後に
+    実出荷数で発行され、箱に同梱して顧客へ届ける書類。参照用に出荷指示番号を
+    バーコード（Code39）でも印字する。ブラウザの印刷機能（window.print）で
+    実プリンタ印刷・PDF 保存ができる。
+    """
+
+    model = DeliveryNote
+    template_name = 'a/outbound/delivery_note_print.html'
+    context_object_name = 'delivery_note'
+
+    def get_queryset(self):
+        items_qs = DeliveryNoteItem.objects.select_related(
+            'sku__product', 'outbound_order_item__location',
+        ).order_by('sku_code')
+        return (
+            super().get_queryset()
+            .select_related('outbound_order__warehouse', 'customer')
+            .prefetch_related(Prefetch('items', queryset=items_qs))
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        order = self.object.outbound_order
+        # 参照用に出荷指示番号（業務的にも external_order_id でなく order_code を
+        # 主キーに使う）でバーコードを生成する。
+        ctx['barcode_svg'] = code39_svg(order.outbound_order_code)
+        ctx['outbound_order'] = order
+        ctx['line_items'] = list(self.object.items.all())
         return ctx
 
 
@@ -758,6 +886,31 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
 
     def get(self, request, pk, *args, **kwargs):
         picking_list = self._scoped_lists().filter(pk=pk).first()
+        if picking_list is None:
+            messages.error(request, 'ピッキングリストが見つかりません。')
+            return HttpResponseRedirect(reverse('outbound:handheld_picking'))
+        # COMPLETED の場合は最終結果サマリを読み取り専用で表示
+        if picking_list.status == PickingList.Status.COMPLETED:
+            summary_items = [
+                {
+                    'location': it.location.location_code,
+                    'sku': it.sku.sku_code,
+                    'name': it.sku.product.product_name,
+                    'requested': it.quantity_requested,
+                    'picked': it.quantity_picked,
+                    'short': max(0, it.quantity_requested - it.quantity_picked),
+                }
+                for it in (picking_list.items
+                           .select_related('sku__product', 'location')
+                           .order_by('sort_order'))
+            ]
+            return render(request, self.template_name, {
+                'mode': 'summary',
+                'picking_list': picking_list,
+                'summary_items': summary_items,
+                'outbound_order': _order_of_picking_list(picking_list),
+            })
+        # 以降は IN_PROGRESS のみ
         guard = self._guard(request, picking_list)
         if guard:
             return guard
@@ -1107,12 +1260,22 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
 
     def get(self, request, pk, *args, **kwargs):
         order = self._scoped_orders().filter(pk=pk).first()
-        shipment = None
-        if order is not None:
-            shipment = (
-                Shipment.objects.select_related('in_progress_by')
-                .filter(outbound_order=order).first()
-            )
+        if order is None:
+            messages.error(request, '出荷指示が見つかりません。')
+            return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
+        shipment = (
+            Shipment.objects.select_related('in_progress_by')
+            .filter(outbound_order=order).first()
+        )
+        # SHIPPED の場合は最終結果サマリを読み取り専用で表示
+        if order.status == OutboundOrder.Status.SHIPPED:
+            summary_items = _inspection_items(order, _picked_qty_map(order))
+            return render(request, self.template_name, {
+                'mode': 'summary',
+                'order': order,
+                'shipment': shipment,
+                'summary_items': summary_items,
+            })
         guard = self._guard(request, order, shipment)
         if guard:
             return guard
@@ -1267,7 +1430,7 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             order=order, status=StockReservation.Status.ACTIVE,
         ).update(status=StockReservation.Status.RELEASED, released_at=now)
 
-        # ShipmentItem は uk(shipment, sku) のため SKU 単位に集約する
+        # ShipmentItem は SKU 単位に集約する（出荷明細書は _ensure_delivery_note で別途集約）
         by_sku = {}
         for it in order.items.select_related('sku').all():
             qty = it.quantity_shipped or 0
@@ -1285,6 +1448,11 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
                 sku=agg['sku'],
                 quantity_shipped=agg['qty'],
             )
+
+        # 出荷明細書を発行する（実出荷数で確定）。出荷起動時点では予定数量しか分からず
+        # 実出荷数と異なりうるため、確定値が出るこの工程で発行する。明細は
+        # _ensure_delivery_note 内で quantity_shipped を SKU 単位に集約する。
+        _ensure_delivery_note(order)
 
         # 出荷確定（簡略化: 検品完了 = 出荷完了。詳細は WorkView の docstring 参照）
         shipment.status = Shipment.Status.SHIPPED

@@ -121,7 +121,7 @@
   </div>
 </div>
 
-<div class="d-flex gap-2">
+<div class="d-flex gap-2 flex-wrap">
   <a href="{% url 'outbound:order_inquiry' %}" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left"></i> 出荷指示照会へ戻る
   </a>
@@ -129,6 +129,14 @@
     {# 出荷起動前（出荷起動待ち）のときのみ編集可（一覧と同じ条件） #}
     <a href="{% url 'outbound:order_update' order.pk %}" class="btn btn-outline-primary">
       <i class="bi bi-pencil"></i> 編集
+    </a>
+  {% endif %}
+  {# 出荷明細書印刷: 出荷検品完了時に実出荷数で発行される。存在する場合のみ表示 #}
+  {% if order.deliverynote %}
+    <a href="{% url 'outbound:delivery_note_print' pk=order.deliverynote.pk %}"
+       target="_blank" class="btn btn-outline-success">
+      <i class="bi bi-file-earmark-text"></i> 出荷明細書印刷
+      <span class="text-muted small ms-1 font-monospace">{{ order.deliverynote.delivery_note_code }}</span>
     </a>
   {% endif %}
 </div>

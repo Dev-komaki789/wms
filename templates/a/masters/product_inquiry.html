@@ -39,7 +39,7 @@
     <form method="get" id="inquiry-search-form" class="row g-2 align-items-end">
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">商品コード / 商品名</label>
-        <input type="text" name="p_q" class="form-control form-control-sm"
+        <input type="text" name="p_q" class="form-control form-control-sm" maxlength="100"
                placeholder="例: PRD-00001 / インパクト" value="{{ filters.p_q }}">
       </div>
       <div class="col-md-3">
@@ -53,7 +53,7 @@
       </div>
       <div class="col-md-2">
         <label class="form-label small text-muted mb-1">メーカー</label>
-        <input type="text" name="p_manufacturer" class="form-control form-control-sm"
+        <input type="text" name="p_manufacturer" class="form-control form-control-sm" maxlength="100"
                placeholder="例: マキタ / MAKITA" value="{{ filters.p_manufacturer }}">
       </div>
       <div class="col-md-2">

@@ -41,7 +41,7 @@
   <label class="form-label" for="jan-scan">
     <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャン
   </label>
-  <input type="text" id="jan-scan" class="form-control hh-key"
+  <input type="text" id="jan-scan" maxlength="13" class="form-control hh-key"
          placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
   <div class="form-text" id="scan-msg">商品のバーコードを読み取ってください</div>
 
@@ -75,7 +75,7 @@
         <button class="btn btn-outline-secondary px-3" type="button" id="qty-minus" aria-label="減らす">
           <i class="bi bi-dash-lg"></i>
         </button>
-        <input type="text" id="qty-value" inputmode="numeric" maxlength="6"
+        <input type="text" id="qty-value" inputmode="numeric" maxlength="5"
                class="form-control hh-key text-center">
         <button class="btn btn-outline-secondary px-3" type="button" id="qty-plus" aria-label="増やす">
           <i class="bi bi-plus-lg"></i>
@@ -163,7 +163,7 @@
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'list-group-item list-group-item-action py-2';
-      b.innerHTML = '<span class="font-monospace small fw-bold">' + it.sku + '</span>'
+      b.innerHTML = '<span class="font-monospace hh-cell">' + it.sku + '</span>'
         + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div>';
       b.addEventListener('click', () => goQty(it));
       remainList.appendChild(b);
@@ -181,7 +181,7 @@
       b.className = 'list-group-item list-group-item-action list-group-item-success py-2';
       b.innerHTML =
         '<div class="d-flex justify-content-between align-items-center">'
-        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<span><span class="font-monospace hh-cell">' + it.sku + '</span>'
         + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
         + '<span class="small text-nowrap"><i class="bi bi-check-circle-fill text-success me-1"></i>'
         + '<span class="text-muted">実数</span> '
@@ -241,7 +241,7 @@
           + (diff > 0 ? '+' : '') + diff + '</span>';
       }
       row.innerHTML =
-        '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        '<span><span class="font-monospace hh-cell">' + it.sku + '</span>'
         + '<div class="text-muted" style="font-size:.7rem">' + it.name + '</div></span>'
         + '<span class="text-end small"><span class="text-muted">実数 </span>'
         + right + '</span>';

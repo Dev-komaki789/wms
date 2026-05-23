@@ -34,12 +34,12 @@
       {# Row 1 #}
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">指示番号 / 発注番号 / 納品書番号</label>
-        <input type="text" name="q" class="form-control form-control-sm"
+        <input type="text" name="q" class="form-control form-control-sm" maxlength="100"
                placeholder="例: IO-20260514-001 / PO-..." value="{{ filters.q }}">
       </div>
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">仕入先</label>
-        <input type="text" name="supplier" class="form-control form-control-sm"
+        <input type="text" name="supplier" class="form-control form-control-sm" maxlength="100"
                placeholder="例: アスクル / ASKUL" value="{{ filters.supplier }}">
       </div>
       <div class="col-md-3">

@@ -7,6 +7,7 @@ import itertools
 import re
 
 from django import forms
+from django.core.validators import MaxValueValidator
 
 from .models import Area, Category, Customer, Location, Manufacturer, Product, Sku, Supplier, Warehouse
 from .utils import get_current_warehouse
@@ -376,7 +377,7 @@ class CategoryForm(forms.ModelForm):
                 attrs={**TEXT, 'placeholder': '例: 研削工具'}
             ),
             'description': forms.Textarea(attrs={**TEXT, 'rows': '3'}),
-            'sort_order': forms.NumberInput(attrs={**TEXT, 'min': '1'}),
+            'sort_order': forms.NumberInput(attrs={**TEXT, 'min': '1', 'max': '9999'}),
             'is_leaf': forms.RadioSelect(
                 choices=[
                     (False, 'いいえ — さらに子カテゴリで分類する'),
@@ -388,6 +389,8 @@ class CategoryForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # 表示順は 4 桁まで（並べ替え用の番号なので大きな値は不要）
+        self.fields['sort_order'].validators.append(MaxValueValidator(9999))
         # 親カテゴリ候補: 末端でなく、最大深度未満で、自分自身と子孫を除く
         qs = Category.objects.filter(is_leaf=False)
         if self.instance.pk:
@@ -543,7 +546,7 @@ class SkuForm(forms.ModelForm):
             'product': forms.Select(attrs=SELECT),
             'jan_code': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 4901234567890',
-                       'maxlength': '20', 'autocomplete': 'off',
+                       'maxlength': '13', 'autocomplete': 'off',
                        'inputmode': 'numeric'}
             ),
             'size_info': forms.TextInput(
@@ -552,13 +555,17 @@ class SkuForm(forms.ModelForm):
             'color_info': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: ブラック / 赤'}
             ),
-            'quantity_per_unit': forms.NumberInput(attrs={**TEXT, 'min': '1'}),
+            'quantity_per_unit': forms.NumberInput(attrs={**TEXT, 'min': '1', 'max': '99999'}),
             'picking_type': forms.RadioSelect,
             'is_active': StatusToggleWidget(),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # 入数は 5 桁まで（〜99,999）
+        self.fields['quantity_per_unit'].validators.append(MaxValueValidator(99999))
+        # JAN は 13 桁まで（model max_length=20 が widget へ付ける auto-maxlength を上書き）
+        self.fields['jan_code'].widget.attrs['maxlength'] = '13'
         # 商品: 有効なものだけ。編集時は現在の商品が無効化されていても残す
         product_qs = (
             Product.objects.filter(is_active=True)
@@ -607,20 +614,28 @@ class SupplierForm(forms.ModelForm):
                 attrs={**TEXT, 'placeholder': '例: 山田太郎'}
             ),
             'phone_number': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 03-1234-5678', 'inputmode': 'tel'}
+                attrs={**TEXT, 'placeholder': '例: 03-1234-5678', 'inputmode': 'tel',
+                       'maxlength': '15'}
             ),
             'email': forms.EmailInput(
                 attrs={**TEXT, 'placeholder': 'example@supplier.co.jp'}
             ),
             'postal_code': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 100-0001',
-                       'inputmode': 'numeric', 'autocomplete': 'postal-code'}
+                       'inputmode': 'numeric', 'autocomplete': 'postal-code',
+                       'maxlength': '8'}
             ),
             'address': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}
             ),
             'is_active': StatusToggleWidget(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 実形式に合わせて桁数を絞る（model max_length の auto-maxlength を上書き）
+        self.fields['postal_code'].widget.attrs['maxlength'] = '8'   # 例 100-0001
+        self.fields['phone_number'].widget.attrs['maxlength'] = '15'
 
 
 class CustomerForm(forms.ModelForm):
@@ -646,10 +661,16 @@ class CustomerForm(forms.ModelForm):
             ),
             'postal_code': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 100-0001',
-                       'inputmode': 'numeric', 'autocomplete': 'postal-code'}
+                       'inputmode': 'numeric', 'autocomplete': 'postal-code',
+                       'maxlength': '8'}
             ),
             'address': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}
             ),
             'is_active': StatusToggleWidget(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 郵便番号は実形式の 8 桁まで（model max_length の auto-maxlength を上書き）
+        self.fields['postal_code'].widget.attrs['maxlength'] = '8'   # 例 100-0001

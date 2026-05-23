@@ -262,7 +262,7 @@ class PickingList(models.Model):
         ZONE = 'zone', 'ゾーンピッキング'
 
     class Status(models.TextChoices):
-        PENDING = 'pending', '未生成'
+        PENDING = 'pending', '未着手'
         IN_PROGRESS = 'in_progress', '作業中'
         COMPLETED = 'completed', '完了'
         CANCELLED = 'cancelled', '取消'
@@ -334,7 +334,7 @@ class PickingListItem(models.Model):
     """ピッキングリスト明細。"""
 
     class Status(models.TextChoices):
-        PENDING = 'pending', '未生成'
+        PENDING = 'pending', '未着手'
         PICKING = 'picking', '作業中'
         PICKED = 'picked', '完了'
         SHORT = 'short', '欠品'
@@ -510,9 +510,19 @@ class ShipmentItem(models.Model):
 
 
 class DeliveryNote(models.Model):
-    """納品書（1出荷指示=1納品書）。"""
+    """出荷明細書（1出荷指示=1出荷明細書）。
 
-    delivery_note_code = models.CharField('納品書番号', max_length=30, unique=True)
+    出荷検品完了時に実出荷数で発行する（出荷起動時点では予定数量しか分からず、
+    ピッキング欠品などで実出荷数と異なりうるため）。発行した出荷明細書は箱に同梱して
+    顧客へ届ける書類。出荷検品の開始バーコードはピッキングリストに印字した
+    出荷指示番号を用いる（出荷明細書は検品完了後に発行されるため開始時には存在しない）。
+
+    ※「対顧客の納品書（金額入り）」は OMS/基幹側の責務。本書は WMS が実出荷数を
+    確定して発行する出荷明細（金額なし・梱包同梱用）。クラス名 DeliveryNote は
+    内部の歴史的名称として残置（テーブル/コードは流用）。
+    """
+
+    delivery_note_code = models.CharField('出荷明細書番号', max_length=30, unique=True)
     outbound_order = models.OneToOneField(
         OutboundOrder, on_delete=models.PROTECT, verbose_name='出荷指示'
     )
@@ -524,21 +534,34 @@ class DeliveryNote(models.Model):
 
     class Meta:
         db_table = 'delivery_notes'
-        verbose_name = '納品書'
-        verbose_name_plural = '納品書'
+        verbose_name = '出荷明細書'
+        verbose_name_plural = '出荷明細書'
 
     def __str__(self):
         return self.delivery_note_code
 
+    @classmethod
+    def next_code(cls, date):
+        """次の出荷明細書番号（DN-YYYYMMDD-NNN）を生成する。"""
+        prefix = f'DN-{date.strftime("%Y%m%d")}-'
+        max_n = 0
+        for code in cls.objects.filter(
+            delivery_note_code__startswith=prefix
+        ).values_list('delivery_note_code', flat=True):
+            m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f'{prefix}{max_n + 1:03d}'
+
 
 class DeliveryNoteItem(models.Model):
-    """納品書明細。商品名・SKUコードはスナップショット保存。"""
+    """出荷明細書の明細行。商品名・SKUコードはスナップショット保存。"""
 
     delivery_note = models.ForeignKey(
         DeliveryNote,
         on_delete=models.PROTECT,
         related_name='items',
-        verbose_name='納品書',
+        verbose_name='出荷明細書',
     )
     outbound_order_item = models.OneToOneField(
         OutboundOrderItem, on_delete=models.PROTECT, verbose_name='出荷指示明細'
@@ -553,8 +576,8 @@ class DeliveryNoteItem(models.Model):
 
     class Meta:
         db_table = 'delivery_note_items'
-        verbose_name = '納品書明細'
-        verbose_name_plural = '納品書明細'
+        verbose_name = '出荷明細書明細'
+        verbose_name_plural = '出荷明細書明細'
 
     def __str__(self):
         return f'{self.delivery_note.delivery_note_code} / {self.sku_code}'

@@ -6,6 +6,7 @@
 import re
 
 from django import forms
+from django.core.validators import MaxValueValidator
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
 
@@ -40,7 +41,7 @@ class InboundOrderForm(forms.ModelForm):
         widgets = {
             'inbound_order_code': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: IO-20260514-001',
-                       'autocomplete': 'off',
+                       'autocomplete': 'off', 'maxlength': '15',
                        'pattern': rf'({_CODE_PREFIX_ALT})-\d{{8}}-\d{{3}}',
                        'title': 'IO-YYYYMMDD-NNN（通常）または RT-YYYYMMDD-NNN（返品）形式'}
             ),
@@ -63,6 +64,9 @@ class InboundOrderForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # 入荷指示番号は「{prefix}-YYYYMMDD-NNN」= 15 桁固定（model max_length=30 の
+        # auto-maxlength を上書き）
+        self.fields['inbound_order_code'].widget.attrs['maxlength'] = '15'
         # 仕入先: 有効なものだけ。編集時に現在の仕入先が無効化されていても残す
         sup_qs = Supplier.objects.filter(is_active=True).order_by('supplier_code')
         if self.instance.pk and self.instance.supplier_id:
@@ -134,7 +138,7 @@ class InboundOrderItemForm(forms.ModelForm):
 
     sku_code = forms.CharField(
         label='SKU',
-        max_length=50,
+        max_length=13,
         widget=forms.TextInput(attrs={
             'class': 'form-control form-control-sm font-monospace',
             'placeholder': 'SKU コード入力 or 🔍 で検索',
@@ -148,7 +152,7 @@ class InboundOrderItemForm(forms.ModelForm):
         fields = ['quantity_expected', 'is_crossdock']
         widgets = {
             'quantity_expected': forms.NumberInput(
-                attrs={**TEXT, 'min': '1', 'placeholder': '数量'}
+                attrs={**TEXT, 'min': '1', 'max': '99999', 'placeholder': '数量'}
             ),
             'is_crossdock': forms.CheckboxInput(
                 attrs={'class': 'form-check-input'}
@@ -158,6 +162,8 @@ class InboundOrderItemForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._sku = None
+        # 入荷予定数は 5 桁まで（〜99,999）
+        self.fields['quantity_expected'].validators.append(MaxValueValidator(99999))
         # 編集時: 既存 SKU のコードを pre-fill（label_from_instance 的な動き）
         if self.instance.pk and self.instance.sku_id:
             self.fields['sku_code'].initial = self.instance.sku.sku_code

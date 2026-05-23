@@ -5,11 +5,68 @@
 {% block back_url %}{% url 'outbound:handheld_inspection' %}{% endblock %}
 
 {% block hh_content %}
+{% if mode == 'summary' %}
+{# ===== 完了サマリ: 出荷指示全体の最終結果を読み取り専用で表示 ===== #}
+<div class="card mb-3">
+  <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center py-2">
+    <span class="font-monospace fw-bold">{{ order.outbound_order_code }}</span>
+    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>出荷完了</span>
+  </div>
+  <div class="px-3 py-2 small">
+    <div class="row g-1">
+      <div class="col-5 text-muted">顧客</div>
+      <div class="col-7">
+        {% if order.customer %}{{ order.customer.customer_name }}
+        {% else %}<span class="text-muted">—</span>{% endif %}
+      </div>
+      <div class="col-5 text-muted">出荷番号</div>
+      <div class="col-7 font-monospace">{{ shipment.shipment_code }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="mb-2 small text-muted">
+  以下の内容で出荷しました（{{ summary_items|length }} 商品）
+</div>
+<div class="list-group mb-3">
+  {% for it in summary_items %}
+  <div class="list-group-item py-2 {% if it.picked == 0 %}list-group-item-secondary{% elif it.short > 0 %}list-group-item-warning{% else %}list-group-item-success{% endif %}">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <div class="font-monospace hh-cell">{{ it.sku }}</div>
+        <div class="text-muted" style="font-size:.72rem">{{ it.name }}</div>
+        {% if it.location %}
+          <div class="font-monospace text-muted hh-cell">出庫元: {{ it.location }}</div>
+        {% endif %}
+      </div>
+      <div class="text-end small text-nowrap">
+        {% if it.picked == 0 %}
+          <span class="badge bg-secondary">欠品・出荷対象外</span>
+        {% else %}
+          <span class="text-muted">出荷 </span>
+          <span class="font-monospace fw-bold hh-cell">{{ it.picked }}</span>
+          <span class="text-muted">/ {{ it.ordered }}</span>
+          {% if it.short > 0 %}
+            <div><span class="badge bg-danger">欠品 −{{ it.short }}</span></div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<a href="{% url 'outbound:handheld_inspection' %}" class="btn btn-success btn-hh">
+  <i class="bi bi-check-lg me-1"></i> 完了して入口に戻る
+</a>
+
+{% else %}
 {{ items|json_script:"items-data" }}
 <div id="meta-data"
      data-order-pk="{{ order.pk }}"
      data-csrf="{{ csrf_token }}"
      data-item-api-base="{% url 'outbound:handheld_inspection_item' order_pk=order.pk item_pk=0 %}"
+     data-work-url="{% url 'outbound:handheld_inspection_work' pk=order.pk %}"
      data-entry-url="{% url 'outbound:handheld_inspection' %}"
      data-done-count="{{ done_count }}"
      data-total="{{ total }}"></div>
@@ -50,7 +107,7 @@
   <label class="form-label" for="scan-input">
     <i class="bi bi-upc-scan text-primary me-1"></i>商品をスキャン
   </label>
-  <input type="text" id="scan-input" class="form-control hh-key"
+  <input type="text" id="scan-input" maxlength="13" class="form-control hh-key"
          placeholder="JAN / SKU をスキャン" autocomplete="off" inputmode="text">
   <div class="form-text" id="scan-msg">出荷する商品のバーコードを読み取ってください</div>
 
@@ -67,9 +124,9 @@
       <div class="text-muted small">出荷する商品</div>
       <div class="hh-key" id="cf-sku"></div>
       <div class="text-muted small mb-2" id="cf-name"></div>
-      <div class="d-flex justify-content-between align-items-center small">
-        <span class="text-muted"><i class="bi bi-pin-map me-1"></i>ピッキング元 棚番</span>
-        <span class="font-monospace" id="cf-loc"></span>
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="text-muted small"><i class="bi bi-pin-map me-1"></i>ピッキング元 棚番</span>
+        <span class="hh-key text-primary" id="cf-loc"></span>
       </div>
       <hr class="my-2">
 
@@ -97,10 +154,11 @@
     <i class="bi bi-arrow-left me-1"></i>スキャンに戻る
   </button>
   <div class="text-muted small text-center mt-2">
-    <i class="bi bi-info-circle me-1"></i>実行すると即時に在庫が引き落とされます（途中離脱しても続きから再開できます）
+    <i class="bi bi-info-circle me-1"></i>実行すると即時に在庫が引き落とされます（全商品終わったら最終一覧が表示されます）
   </div>
 </div>
 
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -108,9 +166,11 @@
 (function () {
   'use strict';
   const meta = document.getElementById('meta-data');
+  if (!meta) return;  // summary モードでは wizard DOM が無い
   const ORDER_PK = meta.dataset.orderPk;
   const CSRF = meta.dataset.csrf;
   const ITEM_API_TPL = meta.dataset.itemApiBase;
+  const WORK_URL = meta.dataset.workUrl;
   const ENTRY_URL = meta.dataset.entryUrl;
   const TOTAL = parseInt(meta.dataset.total, 10) || 0;
   let doneCount = parseInt(meta.dataset.doneCount, 10) || 0;
@@ -170,7 +230,7 @@
       }
       b.innerHTML =
         '<div class="d-flex justify-content-between align-items-center">'
-        + '<span><span class="font-monospace small fw-bold">' + it.sku + '</span>'
+        + '<span><span class="font-monospace hh-cell">' + it.sku + '</span>'
         + '<div class="text-muted" style="font-size:.75rem">' + it.name + '</div></span>'
         + '<span class="small text-nowrap">' + right + '</span>'
         + '</div>';
@@ -210,9 +270,14 @@
     }
     cfError.classList.add('d-none');
     const willComplete = remainingCount() <= 1;
-    execBtn.innerHTML = willComplete
-      ? '<i class="bi bi-check-lg me-1"></i> 実行（出荷検品完了へ）'
-      : '<i class="bi bi-check-lg me-1"></i> 実行（次の商品へ）';
+    if (willComplete) {
+      // 最終明細 = 出荷確定（不可逆）なのでボタンを danger 色 + 文言で強調
+      execBtn.className = 'btn btn-danger btn-hh';
+      execBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> 確定する（出荷完了へ）';
+    } else {
+      execBtn.className = 'btn btn-primary btn-hh';
+      execBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> 確定する（次の商品へ）';
+    }
     updateProgress();
     show('confirm');
     execBtn.focus();
@@ -231,12 +296,14 @@
     }).then(res => res.json());
   }
 
+  // 既存の state-confirm が「最終的な内容の画面」そのものなので、
+  // 「実行」ボタンは確認モーダルを挟まず直接コミットする
   function commitCurrent() {
     if (committing) return;
     if (!current) return;
+    cfError.classList.add('d-none');
     committing = true;
     execBtn.disabled = true;
-    cfError.classList.add('d-none');
     commitItem(current.id)
       .then(data => {
         if (!data.ok) {
@@ -246,8 +313,8 @@
         }
         done[current.id] = {picked: current.picked};
         if (data.all_done) {
-          window.location.href = ENTRY_URL
-            + '?completed=' + encodeURIComponent(ORDER_PK);
+          // 全明細確定 → 同 URL に遷移すると summary モードで描画される
+          window.location.href = WORK_URL;
         } else {
           goScan();
         }
@@ -308,9 +375,8 @@
       }
     }
     if (allFinishedAfterSkips || (items.length > 0 && remainingCount() === 0)) {
-      // 全部が skip だった → 即出荷確定の通知へ
-      window.location.href = ENTRY_URL
-        + '?completed=' + encodeURIComponent(ORDER_PK);
+      // 全部が skip だった → summary モードに遷移
+      window.location.href = WORK_URL;
       return;
     }
     if (items.length === 0) {

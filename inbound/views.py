@@ -863,6 +863,30 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
 
     def get(self, request, pk, *args, **kwargs):
         order = self._scoped_orders().filter(pk=pk).first()
+        if order is None:
+            messages.error(request, '入荷指示が見つかりません。')
+            return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
+        # COMPLETED の場合は最終結果サマリを読み取り専用で表示
+        if order.status == InboundOrder.Status.COMPLETED:
+            summary_items = []
+            for it in order.items.select_related(
+                    'sku__product', 'inboundreceipt').all():
+                receipt = _receipt_of(it)
+                if receipt is None:
+                    continue
+                summary_items.append({
+                    'sku': it.sku.sku_code,
+                    'name': it.sku.product.product_name,
+                    'good': receipt.quantity_good,
+                    'location': (receipt.location.location_code
+                                 if receipt.location else ''),
+                    'skip': receipt.quantity_good <= 0,
+                })
+            return render(request, self.template_name, {
+                'mode': 'summary',
+                'order': order,
+                'summary_items': summary_items,
+            })
         guard = self._guard(request, order)
         if guard:
             return guard

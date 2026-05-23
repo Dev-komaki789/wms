@@ -7,14 +7,17 @@
 {# 出荷指示番号を読み取って指示内容を呼び出す（GET 照会） #}
 <form method="get" id="inspection-lookup-form" class="mb-3">
   <label class="form-label" for="inspection-code">
-    <i class="bi bi-upc-scan text-primary me-1"></i>出荷指示番号
+    <i class="bi bi-upc-scan text-primary me-1"></i>出荷指示バーコード
     <span class="text-danger">*</span>
   </label>
   <div class="input-group">
-    <input type="text" name="code" id="inspection-code"
+    <input type="text" name="code" id="inspection-code" maxlength="15"
            class="form-control hh-key"
-           value="{{ code }}" placeholder="出荷指示番号をスキャン"
+           value="{{ code }}" placeholder="ピッキングリストの出荷指示バーコードをスキャン"
            autocomplete="off" autofocus required>
+  </div>
+  <div class="form-text">
+    <i class="bi bi-info-circle me-1"></i>梱包エリアに届いたピッキングリストの出荷指示バーコード（出荷指示番号）を読み取ってください
   </div>
 </form>
 
@@ -55,16 +58,16 @@
       {% for row in item_rows %}
       <tr>
         <td class="ps-3">
-          <div class="font-monospace small fw-bold">{{ row.sku }}</div>
+          <div class="font-monospace hh-cell">{{ row.sku }}</div>
           <div class="text-muted" style="font-size:.75rem">{{ row.name }}</div>
-          <div class="font-monospace text-muted" style="font-size:.72rem">
+          <div class="font-monospace text-muted hh-cell">
             <i class="bi bi-pin-map me-1"></i>{{ row.location|default:"—" }}
           </div>
         </td>
         <td class="text-end pe-3 align-middle text-nowrap">
           <span class="text-muted small">{{ row.ordered }}</span>
           <span class="text-muted">/</span>
-          <span class="font-monospace fw-bold">{{ row.picked }}</span>
+          <span class="font-monospace fw-bold hh-cell">{{ row.picked }}</span>
           {% if row.short %}
             <div class="text-danger" style="font-size:.7rem">欠品 −{{ row.short }}</div>
           {% endif %}

@@ -4,7 +4,7 @@
 
 {% block extra_css %}
 <style>
-  .pl-barcode svg { width: 240px; height: auto; display: block; }
+  .pl-barcode svg { width: 220px; height: auto; display: block; }
   /* 印刷時はアプリのナビ等を隠し、帳票だけをきれいに出力する */
   @media print {
     .navbar, #sidebar { display: none !important; }
@@ -28,15 +28,25 @@
 
 <div class="pl-doc card shadow-sm">
   <div class="card-body">
-    {# ヘッダー: タイトル + リスト番号 + バーコード #}
+    {# ヘッダー: タイトル + リスト番号 + バーコード（右上に横並び） #}
     <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
       <div>
         <div class="text-muted small">ピッキングリスト</div>
         <div class="fs-3 fw-bold font-monospace">{{ picking_list.picking_list_code }}</div>
       </div>
-      <div class="text-center">
-        <div class="pl-barcode">{{ barcode_svg|safe }}</div>
-        <div class="font-monospace small mt-1">{{ picking_list.picking_list_code }}</div>
+      <div class="d-flex gap-4 text-center">
+        {% if order_barcode_svg %}
+        <div>
+          <div class="text-muted small">出荷指示</div>
+          <div class="pl-barcode">{{ order_barcode_svg|safe }}</div>
+          <div class="font-monospace small">{{ outbound_order.outbound_order_code }}</div>
+        </div>
+        {% endif %}
+        <div>
+          <div class="text-muted small">ピッキングリスト</div>
+          <div class="pl-barcode">{{ barcode_svg|safe }}</div>
+          <div class="font-monospace small">{{ picking_list.picking_list_code }}</div>
+        </div>
       </div>
     </div>
 

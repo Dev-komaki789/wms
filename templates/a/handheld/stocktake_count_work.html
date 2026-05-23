@@ -36,7 +36,8 @@
     {% if form.counted_quantity.errors %}<div class="text-danger small mt-1">{{ form.counted_quantity.errors }}</div>{% endif %}
   </div>
 
-  <button type="submit" class="btn btn-primary btn-hh">
+  <button type="submit" class="btn btn-primary btn-hh"
+          data-confirm="この内容でカウントを記録しますか？" data-confirm-yes="記録する">
     <i class="bi bi-check2"></i> カウント記録
   </button>
 </form>
