@@ -303,17 +303,18 @@ class Command(BaseCommand):
                     self.leaf_categories.append(child)
 
     def _create_manufacturers(self):
+        # すべて架空のメーカー名（実在企業・ブランドは使用しない）
         names = [
-            ('MFR-001', 'ミスミ'),
-            ('MFR-002', 'ナチ'),
-            ('MFR-003', 'OSG'),
-            ('MFR-004', '京セラ'),
-            ('MFR-005', '不二越'),
-            ('MFR-006', 'NTN'),
-            ('MFR-007', 'NSK'),
-            ('MFR-008', 'KOYO'),
-            ('MFR-009', 'SMC'),
-            ('MFR-010', 'CKD'),
+            ('MFR-001', 'ハルナ精工'),
+            ('MFR-002', 'トキワ工機'),
+            ('MFR-003', 'ミハタ精密'),
+            ('MFR-004', 'アラタ製作所'),
+            ('MFR-005', 'ヌマタ工業'),
+            ('MFR-006', 'セオト機器'),
+            ('MFR-007', 'コトネ部品'),
+            ('MFR-008', 'ヤヅル精工'),
+            ('MFR-009', 'タチバナ機工'),
+            ('MFR-010', 'シノギ製作所'),
         ]
         self.manufacturers = [
             Manufacturer.objects.create(
@@ -415,15 +416,16 @@ class Command(BaseCommand):
             yield items[i % len(items)]
 
     def _create_suppliers(self):
+        # すべて架空の仕入先名（実在企業は使用しない）。担当者名は一般的な仮名
         rows = [
-            ('SUP-001', 'アスクル', '担当 山田', '03-1111-0001'),
-            ('SUP-002', 'モノタロウ', '担当 鈴木', '06-2222-0002'),
-            ('SUP-003', 'トラスコ中山', '担当 佐藤', '06-3333-0003'),
-            ('SUP-004', 'ミスミ部材', '担当 高橋', '03-4444-0004'),
-            ('SUP-005', '大同工業', '担当 中村', '052-5555-0005'),
-            ('SUP-006', '山田部品商会', '担当 小林', '048-6666-0006'),
-            ('SUP-007', '東京工具センター', '担当 加藤', '03-7777-0007'),
-            ('SUP-008', '関西資材ロジ', '担当 吉田', '06-8888-0008'),
+            ('SUP-001', 'アオゾラ資材', '担当 山田', '03-1111-0001'),
+            ('SUP-002', 'ミドリ商事', '担当 鈴木', '06-2222-0002'),
+            ('SUP-003', 'ホクト工機商会', '担当 佐藤', '06-3333-0003'),
+            ('SUP-004', 'サカエ部品センター', '担当 高橋', '03-4444-0004'),
+            ('SUP-005', 'ニシキ産業', '担当 中村', '052-5555-0005'),
+            ('SUP-006', 'トウメイ部品商会', '担当 小林', '048-6666-0006'),
+            ('SUP-007', 'イズミ工具センター', '担当 加藤', '03-7777-0007'),
+            ('SUP-008', 'カンナミ資材ロジ', '担当 吉田', '06-8888-0008'),
         ]
         self.suppliers = [
             Supplier.objects.create(
@@ -434,23 +436,23 @@ class Command(BaseCommand):
         ]
 
     def _create_customers(self):
-        # 法人 13, 個人事業主 1, 一般個人 1
+        # 法人 13, 個人事業主 1, 一般個人 1。すべて架空の顧客名（実在企業・個人は使用しない）
         rows = [
-            ('CUST-0001', 'サンプル商事', Customer.Type.CORPORATE, '製造業'),
-            ('CUST-0002', '富士工業', Customer.Type.CORPORATE, '製造業'),
-            ('CUST-0003', 'ABC機械', Customer.Type.CORPORATE, '機械'),
-            ('CUST-0004', '東邦精機', Customer.Type.CORPORATE, '精密機械'),
-            ('CUST-0005', '京浜エンジニアリング', Customer.Type.CORPORATE, 'エンジニアリング'),
-            ('CUST-0006', '北関東物流', Customer.Type.CORPORATE, '物流'),
-            ('CUST-0007', '中部メタル', Customer.Type.CORPORATE, '金属加工'),
-            ('CUST-0008', '関西エレクトロニクス', Customer.Type.CORPORATE, '電子'),
-            ('CUST-0009', '九州オートパーツ', Customer.Type.CORPORATE, '自動車部品'),
-            ('CUST-0010', '北海道機材', Customer.Type.CORPORATE, '建機'),
-            ('CUST-0011', 'マルイチ商会', Customer.Type.CORPORATE, '卸売'),
-            ('CUST-0012', '大宮テクノ', Customer.Type.CORPORATE, '製造業'),
-            ('CUST-0013', '横浜資材センター', Customer.Type.CORPORATE, '建設資材'),
-            ('CUST-0014', '個人事業主・山田太郎', Customer.Type.SOLE_PROPRIETOR, '電装'),
-            ('CUST-0015', '田中花子（個人）', Customer.Type.INDIVIDUAL, ''),
+            ('CUST-0001', 'アルファ商事', Customer.Type.CORPORATE, '製造業'),
+            ('CUST-0002', 'ベルダ工業', Customer.Type.CORPORATE, '製造業'),
+            ('CUST-0003', 'カイト機械', Customer.Type.CORPORATE, '機械'),
+            ('CUST-0004', 'ソレイユ精機', Customer.Type.CORPORATE, '精密機械'),
+            ('CUST-0005', 'みなとエンジニアリング', Customer.Type.CORPORATE, 'エンジニアリング'),
+            ('CUST-0006', 'さくら物流', Customer.Type.CORPORATE, '物流'),
+            ('CUST-0007', 'まつば金属', Customer.Type.CORPORATE, '金属加工'),
+            ('CUST-0008', 'ひので電子', Customer.Type.CORPORATE, '電子'),
+            ('CUST-0009', 'つばさオートパーツ', Customer.Type.CORPORATE, '自動車部品'),
+            ('CUST-0010', 'ゆきぐに機材', Customer.Type.CORPORATE, '建機'),
+            ('CUST-0011', 'まるみ商会', Customer.Type.CORPORATE, '卸売'),
+            ('CUST-0012', 'こだまテクノ', Customer.Type.CORPORATE, '製造業'),
+            ('CUST-0013', 'みらい資材センター', Customer.Type.CORPORATE, '建設資材'),
+            ('CUST-0014', '個人事業主・架空太郎', Customer.Type.SOLE_PROPRIETOR, '電装'),
+            ('CUST-0015', '見本花子（個人）', Customer.Type.INDIVIDUAL, ''),
         ]
         self.customers = [
             Customer.objects.create(

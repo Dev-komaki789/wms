@@ -133,7 +133,7 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_expected=Sum('items__quantity_expected'),
-            ).order_by('-expected_date', '-inbound_order_code')
+            ).order_by('-created_at', '-inbound_order_code')
             page = paginate(self.request, qs)
             ctx['orders'] = page
             ctx['page_obj'] = page

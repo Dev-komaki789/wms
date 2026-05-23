@@ -128,7 +128,7 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_ordered=Sum('items__quantity_ordered'),
-            ).order_by('-priority', 'deadline_at', '-outbound_order_code')
+            ).order_by('-created_at', '-outbound_order_code')
             page = paginate(self.request, qs)
             ctx['orders'] = page
             ctx['page_obj'] = page

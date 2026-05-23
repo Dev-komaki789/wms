@@ -454,10 +454,10 @@ class ManufacturerForm(forms.ModelForm):
         labels = {'is_active': STATUS_LABEL}
         widgets = {
             'manufacturer_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: MAKITA', 'autocomplete': 'off'}
+                attrs={**TEXT, 'placeholder': '例: HARUNA', 'autocomplete': 'off'}
             ),
             'manufacturer_name': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 株式会社マキタ'}
+                attrs={**TEXT, 'placeholder': '例: 株式会社ハルナ精工'}
             ),
             'url': forms.URLInput(attrs={**TEXT, 'placeholder': 'https://...'}),
             'is_active': StatusToggleWidget(),
@@ -605,10 +605,10 @@ class SupplierForm(forms.ModelForm):
         labels = {'is_active': STATUS_LABEL}
         widgets = {
             'supplier_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: ASKUL', 'autocomplete': 'off'}
+                attrs={**TEXT, 'placeholder': '例: AOZORA', 'autocomplete': 'off'}
             ),
             'supplier_name': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: アスクル株式会社'}
+                attrs={**TEXT, 'placeholder': '例: アオゾラ資材株式会社'}
             ),
             'contact_person': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 山田太郎'}
