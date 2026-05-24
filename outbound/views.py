@@ -542,9 +542,10 @@ class OutboundLaunchView(LoginRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         f = self._filters()
-        searched = any(f[k] for k in self.SEARCH_KEYS)
-        # 出荷起動待ちは大量になりうるため、検索条件未指定では一覧を出さない
-        # （初期表示なし）。条件を指定して検索したときだけ候補を表示する。
+        # 「検索フォームが送信されたか」で判定する（他の照会画面と同じ規約）。
+        # GET にキーが存在すれば送信済み＝空欄検索でも一覧を出す。初期表示
+        # （メニューから遷移、クエリ無し）では一覧を出さない（大量データ対策）。
+        searched = any(k in request.GET for k in self.SEARCH_KEYS)
         orders = self._candidates(f) if searched else OutboundOrder.objects.none()
         return render(request, self.template_name, {
             'orders': orders,
