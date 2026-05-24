@@ -83,6 +83,13 @@
   let lastValue = '';     // 同じ値を連発しないためのデバウンス
   let lastValueAt = 0;
 
+  // 誤読対策の合議（コンセンサス）。Code39 はチェックデジットを持たないため、
+  // 1 フレームの読み取りを即採用すると「もっともらしい誤読」がそのまま入って
+  // しまう。同じ値が連続 REQUIRED_HITS 回読めて初めて確定する。
+  const REQUIRED_HITS = 2;
+  let candidate = '';     // 連続一致を数えている候補値
+  let candidateHits = 0;
+
   function ensureModal() {
     if (modal) return;
     modal = document.createElement('div');
@@ -116,6 +123,8 @@
   async function openScanner(input) {
     ensureModal();
     currentInput = input;
+    candidate = '';
+    candidateHits = 0;
     setStatus('カメラを起動中…');
     modal.classList.add('open');
     document.body.classList.add('hh-cam-open');
@@ -151,8 +160,12 @@
   function startDetection() {
     if (!detector) {
       detector = new window.BarcodeDetector({
-        // SKU / 棚番 / 指示番号は Code 128 想定、JAN は EAN-13、念のため一通り
-        formats: ['code_128', 'ean_13', 'code_39', 'qr_code', 'code_93', 'ean_8'],
+        // このアプリが印刷するバーコードは Code39 のみ（ピッキングリスト・
+        // 出荷明細書の指示番号など）。検出フォーマットを実際に印刷するものだけに
+        // 絞ることが誤読対策の要。EAN-13/EAN-8/Code93 等を併用すると Code39 の
+        // 縞を別フォーマットとして偽検出し、ゴミ値が返る。
+        // 将来 JAN(EAN-13) ラベルを印刷・スキャンするなら 'ean_13' を足す。
+        formats: ['code_39'],
       });
     }
     let busy = false;
@@ -165,7 +178,7 @@
           const results = await detector.detect(video);
           if (results && results.length > 0) {
             const value = (results[0].rawValue || '').trim();
-            if (value) onDetected(value);
+            if (value) registerCandidate(value);
           }
         } catch (e) {
           // 検出途中の一時エラーは無視（連続検出で吸収される）
@@ -175,6 +188,22 @@
       rafHandle = requestAnimationFrame(loop);
     };
     rafHandle = requestAnimationFrame(loop);
+  }
+
+  // 1 フレーム分の読み取り値を受け取り、同じ値が連続したら確定する。
+  // 値が変わったら数え直し（誤読は連続しにくいので弾ける）。
+  function registerCandidate(value) {
+    if (value === candidate) {
+      candidateHits += 1;
+    } else {
+      candidate = value;
+      candidateHits = 1;
+    }
+    if (candidateHits < REQUIRED_HITS) {
+      setStatus('読み取り中… (' + candidateHits + '/' + REQUIRED_HITS + ')');
+      return;
+    }
+    onDetected(value);
   }
 
   function onDetected(text) {
@@ -220,6 +249,8 @@
     currentInput = null;
     lastValue = '';
     lastValueAt = 0;
+    candidate = '';
+    candidateHits = 0;
   }
 
   // 端末の戻るボタン・Esc でも閉じる
