@@ -24,7 +24,7 @@ from .models import (
     OutboundOrder, OutboundOrderItem, PickingList, PickingListItem,
     Shipment, ShipmentItem, StockReservation,
 )
-from .utils import code39_svg, create_with_retry
+from .utils import code128_svg, create_with_retry
 
 
 class CurrentWarehouseScopedMixin:
@@ -648,7 +648,7 @@ class PickingListPrintView(
     """ピッキングリスト印刷ビュー（帳票表示）。
 
     1枚のピッキングリストを帳票レイアウトで表示する。ピッキングリスト番号は
-    バーコード（Code39）でも表示。ブラウザの印刷機能（window.print）で実プリンタ
+    バーコード（Code128）でも表示。ブラウザの印刷機能（window.print）で実プリンタ
     印刷・PDF保存ができる。
     """
 
@@ -670,7 +670,7 @@ class PickingListPrintView(
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['barcode_svg'] = code39_svg(self.object.picking_list_code)
+        ctx['barcode_svg'] = code128_svg(self.object.picking_list_code)
         items = list(self.object.items.all())
         ctx['line_items'] = items
         # 当システムのピッキングリストは「出荷指示 × エリア」単位なので 1リスト=1指示
@@ -679,7 +679,7 @@ class PickingListPrintView(
         # 出荷検品はこの出荷指示番号バーコードを梱包エリアで読み取って開始する。
         # 出荷明細書は検品完了後に発行されるため、検品開始時点ではまだ存在しない。
         ctx['order_barcode_svg'] = (
-            code39_svg(order.outbound_order_code) if order else None
+            code128_svg(order.outbound_order_code) if order else None
         )
         return ctx
 
@@ -689,7 +689,7 @@ class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
 
     1 出荷指示に紐づく出荷明細書を帳票レイアウトで表示する。出荷明細書は出荷検品完了後に
     実出荷数で発行され、箱に同梱して顧客へ届ける書類。参照用に出荷指示番号を
-    バーコード（Code39）でも印字する。ブラウザの印刷機能（window.print）で
+    バーコード（Code128）でも印字する。ブラウザの印刷機能（window.print）で
     実プリンタ印刷・PDF 保存ができる。
     """
 
@@ -712,7 +712,7 @@ class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
         order = self.object.outbound_order
         # 参照用に出荷指示番号（業務的にも external_order_id でなく order_code を
         # 主キーに使う）でバーコードを生成する。
-        ctx['barcode_svg'] = code39_svg(order.outbound_order_code)
+        ctx['barcode_svg'] = code128_svg(order.outbound_order_code)
         ctx['outbound_order'] = order
         ctx['line_items'] = list(self.object.items.all())
         return ctx
