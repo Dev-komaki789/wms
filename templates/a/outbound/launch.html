@@ -73,12 +73,11 @@
   <div class="card shadow-sm">
     <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
       <span class="text-muted small">
-        {% if searched %}検索結果{% else %}出荷起動待ち{% endif %}:
-        <strong class="text-dark">{{ orders|length }}</strong> 件
+        {% if searched %}検索結果: <strong class="text-dark">{{ orders|length }}</strong> 件{% else %}条件を指定して出荷起動待ちの指示を検索してください{% endif %}
       </span>
       {% if orders %}
       <button type="submit" class="btn btn-primary btn-sm"
-              data-confirm="選択した出荷指示を起動しますか？在庫引き当てとピッキングリスト生成を実行します。"
+              data-confirm="選択した出荷指示を出荷起動しますか？&#10;在庫引き当てとピッキングリスト生成を実行します。"
               data-confirm-yes="出荷起動する">
         <i class="bi bi-rocket-takeoff"></i> 選択した指示を出荷起動
       </button>
@@ -129,8 +128,13 @@
     </div>
     {% else %}
     <div class="text-center text-muted py-5">
-      <i class="bi bi-check2-circle d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
-      {% if searched %}条件に一致する出荷起動待ちの指示はありません{% else %}出荷起動待ちの指示はありません{% endif %}
+      {% if searched %}
+        <i class="bi bi-check2-circle d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+        条件に一致する出荷起動待ちの指示はありません
+      {% else %}
+        <i class="bi bi-search d-block mb-3" style="font-size: 2.5rem; opacity: .35"></i>
+        条件を指定して「検索」を押してください
+      {% endif %}
     </div>
     {% endif %}
   </div>

@@ -542,10 +542,14 @@ class OutboundLaunchView(LoginRequiredMixin, View):
 
     def get(self, request, *args, **kwargs):
         f = self._filters()
+        searched = any(f[k] for k in self.SEARCH_KEYS)
+        # 出荷起動待ちは大量になりうるため、検索条件未指定では一覧を出さない
+        # （初期表示なし）。条件を指定して検索したときだけ候補を表示する。
+        orders = self._candidates(f) if searched else OutboundOrder.objects.none()
         return render(request, self.template_name, {
-            'orders': self._candidates(f),
+            'orders': orders,
             'filters': f,
-            'searched': any(f[k] for k in self.SEARCH_KEYS),
+            'searched': searched,
             # 返品出荷は画面スコープ外のため出さない（出荷指示照会と同じ規約）
             'source_type_choices': [
                 c for c in OutboundOrder.SourceType.choices

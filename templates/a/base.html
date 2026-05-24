@@ -41,6 +41,10 @@
       box-shadow: 0 .25rem .75rem rgba(0,0,0,.08) !important;
     }
     .menu-card-disabled { opacity: .55; cursor: not-allowed; }
+
+    /* 確認モーダルの本文: data-confirm 内の改行(&#10;)を尊重しつつ、長い行は
+       自然に折り返し・行長を均す。日本語が変な位置で改行されるのを防ぐ。 */
+    #confirmModalBody { white-space: pre-line; text-wrap: balance; }
   </style>
   {% block extra_css %}{% endblock %}
 </head>
