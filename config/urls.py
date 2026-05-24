@@ -3,6 +3,12 @@ from django.urls import include, path
 
 from masters.views import HomeView
 
+# ログイン画面(/admin/login/)や管理サイトの見出しを「倉庫管理システム」に変更する
+# （既定の「Django 管理サイト」表記を上書き）
+admin.site.site_header = '倉庫管理システム'
+admin.site.site_title = '倉庫管理システム'
+admin.site.index_title = '倉庫管理システム'
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('masters/', include('masters.urls')),

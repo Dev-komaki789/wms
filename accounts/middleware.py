@@ -1,8 +1,11 @@
-"""ハンディ作業者の URL アクセスを制限するミドルウェア。
+"""アクセス制限ミドルウェア（ハンディ作業者の制限 ＋ 非superuserの管理サイト遮断）。
 
-ハンディ作業者（Group: handheld_workers）が PC 業務 URL（マスタ管理・指示
-照会・在庫照会など）へ直接アクセスしようとしたら、メニュー（home）へ
-リダイレクトする。
+1) 非 superuser が Django 管理サイト(/admin/。login/logout 除く)へ来たら
+   メニュー(home)へ戻す。業務ユーザー（demo 等）がログイン後に管理サイトの
+   トップへ着地するのを防ぎ、メニュー画面へ誘導する。
+2) ハンディ作業者（Group: handheld_workers）が PC 業務 URL（マスタ管理・指示
+   照会・在庫照会など）へ直接アクセスしようとしたら、メニュー（home）へ
+   リダイレクトする。
 
 許可される URL:
   - `/`                         メニュー画面（ハブ）
@@ -30,8 +33,22 @@ class HandheldOnlyMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        user = getattr(request, 'user', None)
+        # 非 superuser が Django 管理サイト(/admin/)に来たらメニュー(home)へ戻す。
+        # 業務ユーザー（demo・ハンディ作業者など）はログイン(/admin/login/)後に
+        # 管理サイトのトップへ着地してしまうため、メニュー画面へ誘導する。
+        # superuser のみ管理サイトを使える。ログイン/ログアウトは対象外。
         if (
-            is_handheld_worker(getattr(request, 'user', None))
+            user is not None
+            and getattr(user, 'is_authenticated', False)
+            and not user.is_superuser
+            and request.path.startswith('/admin/')
+            and not request.path.startswith(('/admin/login/', '/admin/logout/'))
+        ):
+            return redirect('home')
+        # ハンディ作業者は PC 業務 URL に来たらメニュー(home)へ戻す
+        if (
+            is_handheld_worker(user)
             and request.path != '/'
             and not request.path.startswith(self.ALLOWED_PREFIXES)
         ):
