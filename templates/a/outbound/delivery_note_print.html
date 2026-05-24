@@ -12,6 +12,8 @@
     body { background: #fff !important; }
     main.container { max-width: 100%; padding: 0; }
     .dn-doc { border: none !important; box-shadow: none !important; }
+    /* 紙はベクターで鮮明なので小さくても読める。印刷時はコンパクトに。 */
+    .dn-barcode svg { width: 240px; }
   }
 </style>
 {% endblock %}

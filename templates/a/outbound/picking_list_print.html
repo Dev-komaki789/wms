@@ -13,6 +13,9 @@
     body { background: #fff !important; }
     main.container { max-width: 100%; padding: 0; }
     .pl-doc { border: none !important; box-shadow: none !important; }
+    /* 紙はベクターで鮮明なので小さくても読める。2 つのバーコードが A4 幅で
+       折り返してヘッダーが崩れないよう、印刷時はコンパクトにする。 */
+    .pl-barcode svg { width: 190px; }
   }
 </style>
 {% endblock %}
