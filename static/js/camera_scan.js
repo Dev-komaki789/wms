@@ -82,6 +82,11 @@
   let rafHandle = null;
   let lastValue = '';     // 同じ値を連発しないためのデバウンス
   let lastValueAt = 0;
+  // 起動世代トークン。getUserMedia は数秒かかることがあり、その間に閉じる/
+  // 再起動されると、後から解決したストリームがカメラを掴みっぱなしになる
+  // （次回起動時に黒画面）。openScanner / closeScanner で採番し、解決時に
+  // 自分が最新世代でなければ取得済みストリームを即停止して破棄する。
+  let openToken = 0;
 
   // 誤読対策の合議（コンセンサス）。Code128 はチェックデジット内蔵で誤読は
   // デコーダが弾くが、ブレや隣接バーコードの一瞬の混入に備え、同じ値が連続
@@ -129,9 +134,10 @@
     modal.classList.add('open');
     document.body.classList.add('hh-cam-open');
 
+    const myToken = ++openToken;
     try {
       // 背面カメラ優先（無ければ前面でも可）。解像度はオートにブラウザに任せる
-      stream = await navigator.mediaDevices.getUserMedia({
+      const s = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1280 },
@@ -139,11 +145,22 @@
         },
         audio: false,
       });
+      // 起動待ちの間に閉じられた/別起動が始まっていたら、取得したストリームを
+      // 即停止して破棄（カメラを掴みっぱなしにしない）。
+      if (myToken !== openToken) {
+        s.getTracks().forEach(function (t) { t.stop(); });
+        return;
+      }
+      stream = s;
       video.srcObject = stream;
       await video.play();
+      // play() 待ちの間に閉じられた場合も後始末する。
+      if (myToken !== openToken) { closeScanner(); return; }
       setStatus('バーコードを枠内に映してください');
       startDetection();
     } catch (err) {
+      // 閉じた後に届いたエラー（AbortError 等）は無視する。
+      if (myToken !== openToken) return;
       const name = err && err.name ? err.name : '';
       let msg = 'カメラを起動できませんでした';
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
@@ -237,6 +254,8 @@
   }
 
   function closeScanner() {
+    // 起動中(getUserMedia 待ち)があれば無効化して、解決後に自己停止させる。
+    openToken++;
     if (rafHandle) { cancelAnimationFrame(rafHandle); rafHandle = null; }
     if (stream) {
       stream.getTracks().forEach(function (t) { t.stop(); });
@@ -258,6 +277,16 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && modal && modal.classList.contains('open')) {
       e.preventDefault();
+      closeScanner();
+    }
+  });
+
+  // ページ離脱・別アプリへの切替/画面ロックでカメラを確実に解放する。
+  // モーダルを開いたままリロード/遷移すると closeScanner が呼ばれず、カメラを
+  // 掴んだままになって次回起動時に黒画面になるのを防ぐ。
+  window.addEventListener('pagehide', closeScanner);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && modal && modal.classList.contains('open')) {
       closeScanner();
     }
   });
