@@ -45,6 +45,13 @@
     /* 確認モーダルの本文: data-confirm 内の改行(&#10;)を尊重しつつ、長い行は
        自然に折り返し・行長を均す。日本語が変な位置で改行されるのを防ぐ。 */
     #confirmModalBody { white-space: pre-line; text-wrap: balance; }
+    /* タイトルも本文・ボタンと揃えて中央寄せ。閉じる×は右端に固定する。 */
+    #confirmModal .modal-header { justify-content: center; position: relative; }
+    #confirmModal .modal-title { text-align: center; }
+    #confirmModal .modal-header .btn-close {
+      position: absolute; right: 1rem; top: 50%;
+      transform: translateY(-50%); margin: 0;
+    }
   </style>
   {% block extra_css %}{% endblock %}
 </head>
