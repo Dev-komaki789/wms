@@ -60,7 +60,7 @@
         <td class="text-start">{{ l.location_name|default:"—" }}</td>
         <td class="text-center">
           {% if l.area.location_type == 'storage' %}
-            <span class="badge bg-primary">通常棚</span>
+            <span class="badge bg-primary">AGV</span>
           {% elif l.area.location_type == 'large_item' %}
             <span class="badge bg-warning text-dark">大型・長物</span>
           {% endif %}

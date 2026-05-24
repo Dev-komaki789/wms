@@ -265,7 +265,7 @@ class LocationBulkCreateForm(forms.Form):
         empty_label='— エリアを選択 —',
         widget=forms.Select(attrs=SELECT),
     )
-    # 通常棚の 列(通路)・連(ラック)・段 は2桁まで。大型・長物の連番は3桁
+    # AGVの 列(通路)・連(ラック)・段 は2桁まで。大型・長物の連番は3桁
     aisle_from = _bulk_range_field('通路（開始）', 2)
     aisle_to = _bulk_range_field('通路（終了）', 2)
     rack_from = _bulk_range_field('ラック（開始）', 2)

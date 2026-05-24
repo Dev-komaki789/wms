@@ -83,7 +83,7 @@
       </div>
       <div class="col py-2 border-end">
         <div class="fs-5 fw-bold text-primary">{{ loc_stats.storage }}</div>
-        <div class="small text-muted">通常棚</div>
+        <div class="small text-muted">AGV</div>
       </div>
       <div class="col py-2 border-end">
         <div class="fs-5 fw-bold text-warning">{{ loc_stats.large_item }}</div>
@@ -134,7 +134,7 @@
           <td class="text-start"><span class="font-monospace fw-bold text-primary">{{ l.location_code }}</span></td>
           <td class="text-center">
             {% if l.area.location_type == 'storage' %}
-              <span class="badge bg-primary">通常棚</span>
+              <span class="badge bg-primary">AGV</span>
             {% elif l.area.location_type == 'large_item' %}
               <span class="badge bg-warning text-dark">大型・長物</span>
             {% endif %}

@@ -61,11 +61,7 @@
               aria-controls="sidebar">
         <i class="bi bi-list"></i>
       </button>
-      <a class="navbar-brand" href="{% url 'home' %}">WMS</a>
-      <a class="btn btn-outline-light btn-sm me-3 d-none d-md-inline-flex align-items-center"
-         href="{% url 'home' %}" title="メニュー画面に戻る">
-        <i class="bi bi-grid-3x3-gap-fill me-1"></i>メニュー
-      </a>
+      <a class="navbar-brand" href="{% url 'home' %}">倉庫管理システム</a>
       {% if current_warehouse %}
       <span class="badge bg-light text-primary fs-6 fw-normal me-3 d-inline-flex align-items-center text-truncate">
         <i class="bi bi-building me-1"></i>
@@ -74,6 +70,12 @@
       {% endif %}
       <ul class="navbar-nav ms-auto align-items-center flex-row gap-2">
         {% if user.is_authenticated %}
+          <li class="nav-item d-none d-md-inline">
+            <a class="btn btn-outline-light btn-sm d-inline-flex align-items-center"
+               href="{% url 'home' %}" title="メニュー画面に戻る">
+              <i class="bi bi-grid-3x3-gap-fill me-1"></i>メニュー
+            </a>
+          </li>
           <li class="nav-item d-none d-md-inline">
             <span class="text-white-50 me-3">{{ user.display_name|default:user.username }}</span>
           </li>

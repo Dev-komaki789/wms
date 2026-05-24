@@ -192,8 +192,8 @@ class Command(BaseCommand):
             address='千葉県市川市原木中山5-12-3',
         )
 
-        # WH01: A,B = 通常棚, L = 大型・長物
-        # WH02: D,E = 通常棚, M = 大型・長物
+        # WH01: A,B = AGV, L = 大型・長物
+        # WH02: D,E = AGV, M = 大型・長物
         # area_code は warehouse 内ユニークだが、別倉庫でも分けておくと location_code が
         # 衝突せず見やすい
         self.area_a = Area.objects.create(
@@ -325,7 +325,7 @@ class Command(BaseCommand):
         ]
 
     def _create_products_and_skus(self):
-        # 通常 SKU 80件 (TOTAL = 種まき方式 = 通常棚)
+        # 通常 SKU 80件 (TOTAL = 種まき方式 = AGV)
         # 大型 SKU 20件 (ORDER = オーダーピッキング = 大型・長物)
         # 商品名生成用の語彙
         normal_words = [

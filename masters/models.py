@@ -29,11 +29,11 @@ class Warehouse(models.Model):
 
 class Area(models.Model):
     class LocationType(models.TextChoices):
-        STORAGE = 'storage', '通常棚'
+        STORAGE = 'storage', 'AGV'
         LARGE_ITEM = 'large_item', '大型・長物'
 
     # 区分ごとの棚番セグメント定義: (key, label, digits)
-    # 通常棚: area_code + 通路 + ラック + 段 → 'A-01-02-03'
+    # AGV: area_code + 通路 + ラック + 段 → 'A-01-02-03'
     # 大型・長物: area_code + 連番 → 'L-001'
     LOCATION_CODE_SEGMENTS = {
         LocationType.STORAGE: [
@@ -135,7 +135,7 @@ class Location(models.Model):
     def position_summary(self):
         """一覧画面で表示する位置情報の要約。
 
-        通常棚: '通路01 / ラック03 / 2段目'
+        AGV: '通路01 / ラック03 / 2段目'
         大型・長物: '連番管理'
         """
         parsed = self.area.parse_location_code(self.location_code)
@@ -315,7 +315,7 @@ class Sku(models.Model):
         ORDER = 'order', 'オーダーピッキング（大型・長物）'
 
     # ピッキング種別ごとの格納先エリア区分の対応。
-    # 種まき方式（AGV/GTP）は通常棚、オーダーピッキング（大型・長物）は
+    # 種まき方式（AGV/GTP）はAGV、オーダーピッキング（大型・長物）は
     # 大型・長物エリアに格納する。棚入れ時の格納先チェックに使う。
     PICKING_TYPE_TO_LOCATION_TYPE = {
         PickingType.TOTAL: Area.LocationType.STORAGE,

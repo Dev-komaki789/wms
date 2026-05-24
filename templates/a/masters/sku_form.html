@@ -99,7 +99,7 @@
             <span class="form-check-label fw-bold">{{ radio.choice_label }}</span>
           </div>
           <div class="text-muted small ms-4 mt-1">
-            {% if radio.choice_value == 'total' %}通常棚に格納。AGV/GTP で集中（種まき）ピッキング{% elif radio.choice_value == 'order' %}大型・長物エリアに格納。1 オーダーずつ巡回ピッキング{% endif %}
+            {% if radio.choice_value == 'total' %}AGVエリアに格納。AGV/GTP で集中（種まき）ピッキング{% elif radio.choice_value == 'order' %}大型・長物エリアに格納。1 オーダーずつ巡回ピッキング{% endif %}
           </div>
         </label>
         {% endfor %}
