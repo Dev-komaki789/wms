@@ -112,7 +112,7 @@
         <tr>
           <th class="text-start text-nowrap">移動日時</th>
           <th class="text-center text-nowrap">種別</th>
-          <th class="text-start">棚番コード</th>
+          <th class="text-start text-nowrap">棚番コード</th>
           <th class="text-start">SKUコード</th>
           <th class="text-start">商品</th>
           <th class="text-end text-nowrap">数量</th>
@@ -136,7 +136,7 @@
             {% endif %}
           </td>
           <td class="text-start">
-            <span class="font-monospace fw-bold text-primary">{{ m.location.location_code }}</span>
+            <span class="font-monospace fw-bold text-primary text-nowrap">{{ m.location.location_code }}</span>
             {% if m.location.location_name %}
               <span class="text-muted small d-block">{{ m.location.location_name }}</span>
             {% endif %}
