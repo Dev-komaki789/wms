@@ -198,12 +198,12 @@ class Command(BaseCommand):
         # 衝突せず見やすい
         self.area_a = Area.objects.create(
             warehouse=self.wh1, area_code='A',
-            area_name='Aエリア（常温・標準）',
+            area_name='Aエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_b = Area.objects.create(
             warehouse=self.wh1, area_code='B',
-            area_name='Bエリア（常温・標準）',
+            area_name='Bエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_l = Area.objects.create(
@@ -213,12 +213,12 @@ class Command(BaseCommand):
         )
         self.area_d = Area.objects.create(
             warehouse=self.wh2, area_code='D',
-            area_name='Dエリア（常温・標準）',
+            area_name='Dエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_e = Area.objects.create(
             warehouse=self.wh2, area_code='E',
-            area_name='Eエリア（常温・標準）',
+            area_name='Eエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_m = Area.objects.create(
