@@ -8,6 +8,10 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
+    /* 全体の文字を少しだけ大きく（既定16px→17px）。Bootstrap は rem 基準なので
+       本文・見出し・余白・各コンポーネントが比例して少し大きくなる。 */
+    html { font-size: 17px; }
+
     /* 大画面（1920想定）では Bootstrap 既定の container(最大1320px)だと左右が
        余りすぎるので、コンテンツ幅を広げて一覧テーブル等に横スペースを与える。
        印刷時(@media print で max-width:100%)・ハンディ筐体(独自幅)には影響しない。 */

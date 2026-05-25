@@ -124,19 +124,21 @@
       <div class="text-muted small">出荷する商品</div>
       <div class="hh-key" id="cf-sku"></div>
       <div class="text-muted small mb-2" id="cf-name"></div>
-      <div class="d-flex justify-content-between align-items-center">
-        <span class="text-muted small"><i class="bi bi-pin-map me-1"></i>ピッキング元 棚番</span>
-        <span class="hh-key text-primary" id="cf-loc"></span>
+      {# ピッキング元棚番は検品段階では参照情報。控えめに小さく表示する #}
+      <div class="d-flex justify-content-between align-items-center small">
+        <span class="text-muted"><i class="bi bi-pin-map me-1"></i>ピッキング元 棚番</span>
+        <span class="font-monospace text-muted" id="cf-loc"></span>
       </div>
       <hr class="my-2">
 
       <div class="d-flex justify-content-between align-items-center small">
         <span class="text-muted">指示数量</span>
-        <span class="hh-key" id="cf-ordered"></span>
+        <span class="hh-cell" id="cf-ordered"></span>
       </div>
-      <div class="d-flex justify-content-between align-items-center mt-1">
+      {# 実出荷数は作業者が最も確認すべき数字。特大表示する #}
+      <div class="d-flex justify-content-between align-items-center mt-2">
         <span class="text-muted">実出荷数</span>
-        <span class="hh-key text-primary" id="cf-picked"></span>
+        <span class="hh-xl text-primary" id="cf-picked"></span>
       </div>
       <div class="mt-2 text-center">
         <span class="badge bg-danger d-none" id="cf-short"></span>
