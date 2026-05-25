@@ -1,4 +1,5 @@
 {% extends 'a/base.html' %}
+{% load wms_sort %}
 
 {% block title %}商品マスタ照会{% endblock %}
 
@@ -104,12 +105,12 @@
     <table class="table table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
-          <th class="text-start">商品コード</th>
-          <th class="text-start">商品名</th>
-          <th class="text-start">カテゴリ</th>
-          <th class="text-start">メーカー</th>
-          <th class="text-center">ステータス</th>
-          <th class="text-end">更新日時</th>
+          {% sort_th '商品コード' 'code' sort dir align='start' %}
+          {% sort_th '商品名' 'name' sort dir align='start' %}
+          {% sort_th 'カテゴリ' 'category' sort dir align='start' %}
+          {% sort_th 'メーカー' 'maker' sort dir align='start' %}
+          {% sort_th 'ステータス' 'status' sort dir align='center' %}
+          {% sort_th '更新日時' 'updated' sort dir align='end' %}
           <th class="text-center" style="width: 160px">操作</th>
         </tr>
       </thead>

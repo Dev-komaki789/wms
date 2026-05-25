@@ -11,7 +11,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView, T
 from django.views.generic.edit import FormView
 
 from core.models import ErrorLog
-from core.utils import PAGE_SIZE, GetPageMixin, paginate
+from core.utils import PAGE_SIZE, GetPageMixin, apply_ordering, paginate
 
 from .csv_io import DELIMITERS, MASTER_SPECS, build_csv, column_guide, import_csv
 from .forms import (
@@ -129,6 +129,10 @@ class FilterableListMixin(GetPageMixin):
 
     search_fields = []
     paginate_by = PAGE_SIZE
+    # 見出しクリックの並び替え（任意）。sortable を定義したサブクラスで有効化。
+    sortable = None
+    default_sort = None
+    default_dir = 'asc'
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -143,6 +147,10 @@ class FilterableListMixin(GetPageMixin):
             qs = qs.filter(is_active=True)
         elif status == 'inactive':
             qs = qs.filter(is_active=False)
+        if self.sortable:
+            qs, self._sort, self._dir = apply_ordering(
+                self.request, qs, self.sortable,
+                self.default_sort, self.default_dir)
         return qs
 
     def get_context_data(self, **kwargs):
@@ -151,6 +159,9 @@ class FilterableListMixin(GetPageMixin):
             'q': self.request.GET.get('q', '').strip(),
             'status': self.request.GET.get('status', ''),
         }
+        if self.sortable:
+            ctx['sort'] = getattr(self, '_sort', self.default_sort)
+            ctx['dir'] = getattr(self, '_dir', self.default_dir)
         return ctx
 
 
@@ -242,12 +253,26 @@ class AreaListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin
     context_object_name = 'areas'
     paginate_by = PAGE_SIZE
 
+    SORTABLE = {
+        'warehouse': ['warehouse__warehouse_code', 'area_code'],
+        'code': ['area_code'],
+        'name': ['area_name'],
+        'type': ['location_type'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+
     def get_queryset(self):
-        return (
-            super().get_queryset()
-            .select_related('warehouse')
-            .order_by('warehouse__warehouse_code', 'area_code')
-        )
+        qs = super().get_queryset().select_related('warehouse')
+        qs, self._sort, self._dir = apply_ordering(
+            self.request, qs, self.SORTABLE, 'warehouse', 'asc')
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['sort'] = getattr(self, '_sort', 'warehouse')
+        ctx['dir'] = getattr(self, '_dir', 'asc')
+        return ctx
 
 
 class AreaCreateView(LoginRequiredMixin, CreateView):
@@ -284,12 +309,27 @@ class LocationListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredM
     context_object_name = 'locations'
     paginate_by = PAGE_SIZE
 
+    SORTABLE = {
+        'warehouse': ['warehouse__warehouse_code', 'area__area_code', 'location_code'],
+        'area': ['area__area_code'],
+        'code': ['location_code'],
+        'name': ['location_name'],
+        'type': ['area__location_type'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+
     def get_queryset(self):
-        return (
-            super().get_queryset()
-            .select_related('warehouse', 'area')
-            .order_by('warehouse__warehouse_code', 'area__area_code', 'location_code')
-        )
+        qs = super().get_queryset().select_related('warehouse', 'area')
+        qs, self._sort, self._dir = apply_ordering(
+            self.request, qs, self.SORTABLE, 'warehouse', 'asc')
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['sort'] = getattr(self, '_sort', 'warehouse')
+        ctx['dir'] = getattr(self, '_dir', 'asc')
+        return ctx
 
 
 class LocationCreateView(LocationFormContextMixin, LoginRequiredMixin, CreateView):
@@ -548,6 +588,14 @@ class ManufacturerListView(FilterableListMixin, LoginRequiredMixin, ListView):
     context_object_name = 'manufacturers'
     ordering = ['manufacturer_code']
     search_fields = ['manufacturer_code', 'manufacturer_name']
+    sortable = {
+        'code': ['manufacturer_code'],
+        'name': ['manufacturer_name'],
+        'url': ['url'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+    default_sort = 'code'
 
 
 class ManufacturerCreateView(LoginRequiredMixin, CreateView):
@@ -582,6 +630,15 @@ class ProductInquiryView(LoginRequiredMixin, TemplateView):
 
     SEARCH_KEYS = ('p_q', 'p_category', 'p_manufacturer', 'p_status')
 
+    SORTABLE = {
+        'code': ['product_code'],
+        'name': ['product_name'],
+        'category': ['category__category_name'],
+        'maker': ['manufacturer__manufacturer_name'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -610,7 +667,8 @@ class ProductInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(is_active=True)
             elif p_status == 'inactive':
                 qs = qs.filter(is_active=False)
-            qs = qs.order_by('product_code')
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'code', 'asc')
             page = paginate(self.request, qs)
             ctx['products'] = page
             ctx['page_obj'] = page
@@ -678,6 +736,17 @@ class SkuInquiryView(LoginRequiredMixin, TemplateView):
 
     SEARCH_KEYS = ('s_q', 's_product', 's_picking', 's_status')
 
+    SORTABLE = {
+        'code': ['sku_code'],
+        'product': ['product__product_name'],
+        'jan': ['jan_code'],
+        'size': ['size_info'],
+        'qpu': ['quantity_per_unit'],
+        'ptype': ['picking_type'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -707,7 +776,8 @@ class SkuInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(is_active=True)
             elif s_status == 'inactive':
                 qs = qs.filter(is_active=False)
-            qs = qs.order_by('sku_code')
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'code', 'asc')
             page = paginate(self.request, qs)
             ctx['skus'] = page
             ctx['page_obj'] = page
@@ -766,6 +836,16 @@ class SupplierListView(FilterableListMixin, LoginRequiredMixin, ListView):
     context_object_name = 'suppliers'
     ordering = ['supplier_code']
     search_fields = ['supplier_code', 'supplier_name', 'contact_person']
+    sortable = {
+        'code': ['supplier_code'],
+        'name': ['supplier_name'],
+        'contact': ['contact_person'],
+        'phone': ['phone_number'],
+        'email': ['email'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+    default_sort = 'code'
 
 
 class SupplierCreateView(LoginRequiredMixin, CreateView):
@@ -796,6 +876,16 @@ class CustomerListView(FilterableListMixin, LoginRequiredMixin, ListView):
     context_object_name = 'customers'
     ordering = ['customer_code']
     search_fields = ['customer_code', 'customer_name']
+    sortable = {
+        'code': ['customer_code'],
+        'name': ['customer_name'],
+        'ctype': ['customer_type'],
+        'industry': ['industry_type'],
+        'address': ['address'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+    default_sort = 'code'
 
     def get_queryset(self):
         qs = super().get_queryset()
