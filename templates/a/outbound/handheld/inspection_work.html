@@ -135,8 +135,7 @@
         <span class="text-muted">指示数量</span>
         <span class="hh-cell" id="cf-ordered"></span>
       </div>
-      {# 実出荷数は作業者が確認・補正する入力欄（既定=ピッキング実績、上限=同値）。
-         破損・欠品があればこの場で下方修正する。大きく入力しやすく表示する。 #}
+      {# 実出荷数: 確認・補正用の入力欄（既定=ピッキング実績、上限=同値、破損/欠品はここで下方修正） #}
       <div class="d-flex justify-content-between align-items-center mt-2">
         <label class="text-muted mb-0" for="cf-picked">実出荷数</label>
         <input type="number" id="cf-picked" inputmode="numeric" min="0"
