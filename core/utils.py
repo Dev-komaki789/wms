@@ -36,6 +36,28 @@ def paginate(request, queryset, per_page=PAGE_SIZE):
     return Paginator(queryset, per_page).get_page(request.GET.get('page'))
 
 
+def apply_ordering(request, queryset, sortable, default_key, default_dir='asc'):
+    """?sort=&dir= に応じて queryset を並べ替える（見出しクリックの並び替え用）。
+
+    sortable: {sort_key: [orm_field, ...]} の許可リスト。並べ替え対象を限定して
+              任意フィールドでの order_by 注入を防ぐ。先頭が主キー、以降は同値時の
+              副キー。direction（asc/desc）は各フィールドに適用する。
+    default_key / default_dir: ?sort= 未指定時の既定。
+    戻り値: (並べ替え済み queryset, 採用した sort_key, 'asc'|'desc')。
+            sort_key/dir はテンプレートの見出し（sort_th）に渡して矢印表示に使う。
+    """
+    key = request.GET.get('sort') or default_key
+    direction = request.GET.get('dir') or default_dir
+    if key not in sortable:
+        key, direction = default_key, default_dir
+    if direction not in ('asc', 'desc'):
+        direction = 'asc'
+    prefix = '-' if direction == 'desc' else ''
+    order_args = [f'{prefix}{f}' for f in sortable[key]]
+    order_args.append('pk')  # 安定ソートの最終副キー
+    return queryset.order_by(*order_args), key, direction
+
+
 class GetPageMixin:
     """ListView の ?page= が不正値・範囲外でも 404 にせずフォールバックさせる。
 

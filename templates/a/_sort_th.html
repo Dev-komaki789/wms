@@ -1,0 +1,6 @@
+{# 並び替え可能なテーブル見出し。core.templatetags.wms_sort.sort_th が描画。 #}
+<th class="text-{{ align }} text-nowrap"{% if width %} style="width: {{ width }}"{% endif %}>
+  <a href="{{ href }}" class="text-reset text-decoration-none">
+    {{ label }}{% if is_active %}{% if current_dir == 'asc' %}<i class="bi bi-caret-up-fill small ms-1"></i>{% else %}<i class="bi bi-caret-down-fill small ms-1"></i>{% endif %}{% else %}<i class="bi bi-arrow-down-up small ms-1 text-muted opacity-50"></i>{% endif %}
+  </a>
+</th>
