@@ -1237,7 +1237,8 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
     在庫減算・StockMovement.OUT 発行・引き当て解放・inspected_at 設定までを
     1トランザクションでコミット（中断耐性あり）。全明細の検品が終わったら
     Shipment.SHIPPED / OutboundOrder.SHIPPED に進めて ShipmentItem を SKU 単位で
-    集約作成する。実出荷数はピッキング工程で確定済みの quantity_picked を用いる。
+    集約作成する。実出荷数は既定でピッキング実績(quantity_picked)を表示し、検品で
+    破損・欠品があれば 0〜picked の範囲で下方修正できる（入力値で出庫・出荷確定）。
 
     GET 時は inspected_at がまだ未設定の明細のみを画面に渡す（途中離脱後の再入場で
     続きから）。確定済みは再編集不可（業務 WMS の慣習に従う）。
@@ -1296,9 +1297,12 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             Shipment.objects.select_related('in_progress_by')
             .filter(outbound_order=order).first()
         )
-        # SHIPPED の場合は最終結果サマリを読み取り専用で表示
+        # SHIPPED の場合は最終結果サマリを読み取り専用で表示。
+        # サマリは実際に出荷した数(quantity_shipped)で表示する（検品で下方修正された
+        # 場合もそのまま反映）。
         if order.status == OutboundOrder.Status.SHIPPED:
-            summary_items = _inspection_items(order, _picked_qty_map(order))
+            shipped_map = {it.pk: it.quantity_shipped for it in order.items.all()}
+            summary_items = _inspection_items(order, shipped_map)
             return render(request, self.template_name, {
                 'mode': 'summary',
                 'order': order,
@@ -1399,8 +1403,23 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             picked_map = _picked_qty_map(order)
             picked = picked_map.get(item.pk, 0)
 
+            # 実出荷数は作業者の入力値（既定=ピッキング実績、上限=同値）。検品で破損・
+            # 欠品があればこの場で下方修正する。picked==0（欠品で出荷対象外）は入力不要で
+            # 0 とみなす（フロントが自動 skip で呼ぶ）。残り(picked-shipped)は在庫に戻る。
+            if picked <= 0:
+                shipped = 0
+            else:
+                raw = (request.POST.get('quantity_shipped') or '').strip()
+                if not raw.isdigit() or int(raw) > picked:
+                    return JsonResponse({
+                        'ok': False,
+                        'error': f'実出荷数は 0〜{picked}（ピッキング実績）で入力してください。',
+                    })
+                shipped = int(raw)
+
             now = timezone.now()
-            if picked > 0:
+            item.quantity_shipped = shipped
+            if shipped > 0:
                 # 在庫不足ガード（select_for_update で行ロック）
                 balance = (
                     StockBalance.objects.select_for_update()
@@ -1408,20 +1427,20 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
                     .first()
                 )
                 on_hand = balance.quantity if balance else 0
-                if picked > on_hand:
+                if shipped > on_hand:
                     loc = item.location.location_code if item.location else '—'
                     return JsonResponse({
                         'ok': False,
                         'error': f'{item.sku.sku_code} は棚番 {loc} の在庫'
-                                 f'（{on_hand}）が実出荷数（{picked}）に不足しています。'
+                                 f'（{on_hand}）が実出荷数（{shipped}）に不足しています。'
                                  f'在庫差異を解消してから再度お試しください。',
                     })
                 quantity_before = balance.quantity
-                quantity_after = quantity_before - picked
+                quantity_after = quantity_before - shipped
                 StockMovement.objects.create(
                     movement_type=StockMovement.MovementType.OUT,
                     location=item.location, sku=item.sku,
-                    quantity=-picked,  # OUT は負の値で記録
+                    quantity=-shipped,  # OUT は負の値で記録
                     quantity_before=quantity_before,
                     quantity_after=quantity_after,
                     reference_type=StockMovement.ReferenceType.OUTBOUND_ORDER,
@@ -1431,12 +1450,13 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
                 )
                 balance.quantity = quantity_after
                 balance.save()
-                item.quantity_shipped = picked
-                # この明細に紐づく引き当てを解放
-                if item.reservation_id and item.reservation.status == StockReservation.Status.ACTIVE:
-                    item.reservation.status = StockReservation.Status.RELEASED
-                    item.reservation.released_at = now
-                    item.reservation.save(update_fields=['status', 'released_at', 'updated_at'])
+
+            # 引き当ては検品確定で解放（出荷ぶんは出庫、残りは在庫に戻る）。
+            # shipped==0（全数破損等）でも確定として解放する。
+            if item.reservation_id and item.reservation.status == StockReservation.Status.ACTIVE:
+                item.reservation.status = StockReservation.Status.RELEASED
+                item.reservation.released_at = now
+                item.reservation.save(update_fields=['status', 'released_at', 'updated_at'])
 
             item.inspected_at = now
             item.inspected_by = request.user

@@ -135,11 +135,15 @@
         <span class="text-muted">指示数量</span>
         <span class="hh-cell" id="cf-ordered"></span>
       </div>
-      {# 実出荷数は作業者が最も確認すべき数字。特大表示する #}
+      {# 実出荷数は作業者が確認・補正する入力欄（既定=ピッキング実績、上限=同値）。
+         破損・欠品があればこの場で下方修正する。大きく入力しやすく表示する。 #}
       <div class="d-flex justify-content-between align-items-center mt-2">
-        <span class="text-muted">実出荷数</span>
-        <span class="hh-xl text-primary" id="cf-picked"></span>
+        <label class="text-muted mb-0" for="cf-picked">実出荷数</label>
+        <input type="number" id="cf-picked" inputmode="numeric" min="0"
+               class="form-control text-primary text-end fw-bold"
+               style="font-size:2.2rem; max-width:8.5rem; padding:.3rem .6rem;">
       </div>
+      <div class="form-text text-end" id="cf-picked-hint"></div>
       <div class="mt-2 text-center">
         <span class="badge bg-danger d-none" id="cf-short"></span>
       </div>
@@ -262,14 +266,12 @@
     cfName.textContent = it.name;
     cfLoc.textContent = it.location || '—';
     cfOrdered.textContent = it.ordered;
-    cfPicked.textContent = it.picked;
-    if (it.short > 0) {
-      cfShort.textContent = '欠品 −' + it.short + '（指示 ' + it.ordered
-        + ' / 実出荷 ' + it.picked + '）';
-      cfShort.classList.remove('d-none');
-    } else {
-      cfShort.classList.add('d-none');
-    }
+    // 実出荷数は既定でピッキング実績。上限も同値（採った員数より多くは出せない）。
+    cfPicked.value = it.picked;
+    cfPicked.max = it.picked;
+    document.getElementById('cf-picked-hint').textContent =
+      'ピッキング実績 ' + it.picked + '（0〜' + it.picked + 'で修正可）';
+    updateShort();
     cfError.classList.add('d-none');
     const willComplete = remainingCount() <= 1;
     if (willComplete) {
@@ -285,9 +287,25 @@
     execBtn.focus();
   }
 
-  function commitItem(itemId) {
+  // 入力した実出荷数に応じて「指示との差異」をライブ更新する
+  function updateShort() {
+    if (!current) return;
+    const v = parseInt(cfPicked.value, 10);
+    const ship = isNaN(v) ? 0 : v;
+    const short = Math.max(0, current.ordered - ship);
+    if (short > 0) {
+      cfShort.textContent = '欠品 −' + short + '（指示 ' + current.ordered
+        + ' / 実出荷 ' + ship + '）';
+      cfShort.classList.remove('d-none');
+    } else {
+      cfShort.classList.add('d-none');
+    }
+  }
+
+  function commitItem(itemId, qty) {
     const body = new URLSearchParams();
     body.append('csrfmiddlewaretoken', CSRF);
+    if (qty !== undefined && qty !== null) body.append('quantity_shipped', qty);
     return fetch(itemApiUrl(itemId), {
       method: 'POST',
       headers: {
@@ -304,16 +322,26 @@
     if (committing) return;
     if (!current) return;
     cfError.classList.add('d-none');
+    // 実出荷数の検証（0〜ピッキング実績）。
+    const max = current.picked;
+    const shipped = parseInt(cfPicked.value, 10);
+    if (isNaN(shipped) || shipped < 0 || shipped > max) {
+      cfError.textContent = '実出荷数は 0〜' + max + ' で入力してください。';
+      cfError.classList.remove('d-none');
+      cfPicked.focus();
+      cfPicked.select();
+      return;
+    }
     committing = true;
     execBtn.disabled = true;
-    commitItem(current.id)
+    commitItem(current.id, shipped)
       .then(data => {
         if (!data.ok) {
           cfError.textContent = data.error || '確定に失敗しました。';
           cfError.classList.remove('d-none');
           return;
         }
-        done[current.id] = {picked: current.picked};
+        done[current.id] = {picked: shipped};
         if (data.all_done) {
           // 全明細確定 → 同 URL に遷移すると summary モードで描画される
           window.location.href = WORK_URL;
@@ -355,6 +383,7 @@
   });
 
   execBtn.addEventListener('click', commitCurrent);
+  cfPicked.addEventListener('input', updateShort);
   document.getElementById('cf-back').addEventListener('click', goScan);
 
   // 初期化:
