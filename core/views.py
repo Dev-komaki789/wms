@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
 from .models import ErrorLog
-from .utils import paginate, parse_query_date
+from .utils import apply_ordering, paginate, parse_query_date
 
 
 class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
@@ -20,6 +20,15 @@ class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
     template_name = 'a/core/error_log_inquiry.html'
 
     SEARCH_KEYS = ('q', 'error_type', 'resolved', 'date_from', 'date_to')
+
+    SORTABLE = {
+        'occurred': ['occurred_at'],
+        'type': ['error_type'],
+        'summary': ['summary'],
+        'source': ['source'],
+        'user': ['user__username'],
+        'resolved': ['is_resolved'],
+    }
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -64,7 +73,9 @@ class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
                     'id', filter=Q(error_type=ErrorLog.ErrorType.IMPORT)),
                 unresolved=Count('id', filter=Q(is_resolved=False)),
             )
-            page = paginate(self.request, qs.order_by('-occurred_at'))
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'occurred', 'desc')
+            page = paginate(self.request, qs)
             ctx['logs'] = page
             ctx['page_obj'] = page
             ctx['stats'] = {
