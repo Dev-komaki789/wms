@@ -143,7 +143,6 @@
                class="form-control text-primary text-end fw-bold"
                style="font-size:2.2rem; max-width:8.5rem; padding:.3rem .6rem;">
       </div>
-      <div class="form-text text-end" id="cf-picked-hint"></div>
       <div class="mt-2 text-center">
         <span class="badge bg-danger d-none" id="cf-short"></span>
       </div>
@@ -269,8 +268,6 @@
     // 実出荷数は既定でピッキング実績。上限も同値（採った員数より多くは出せない）。
     cfPicked.value = it.picked;
     cfPicked.max = it.picked;
-    document.getElementById('cf-picked-hint').textContent =
-      'ピッキング実績 ' + it.picked + '（0〜' + it.picked + 'で修正可）';
     updateShort();
     cfError.classList.add('d-none');
     const willComplete = remainingCount() <= 1;
