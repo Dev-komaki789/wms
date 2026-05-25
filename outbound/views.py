@@ -509,7 +509,7 @@ class OutboundLaunchView(LoginRequiredMixin, View):
         }
 
     def _candidates(self, f):
-        """出荷起動待ちの指示（現在倉庫スコープ、検索条件で絞り込み、優先度順）。"""
+        """出荷起動待ちの指示（現在倉庫スコープ、検索条件で絞り込み、出荷期限順）。"""
         qs = OutboundOrder.objects.filter(
             status=OutboundOrder.Status.ALLOCATION_WAIT
         ).select_related('customer')
@@ -538,7 +538,7 @@ class OutboundLaunchView(LoginRequiredMixin, View):
         return qs.annotate(
             item_count=Count('items'),
             total_ordered=Sum('items__quantity_ordered'),
-        ).order_by('-priority', 'deadline_at', 'outbound_order_code')
+        ).order_by('deadline_at', 'outbound_order_code')
 
     def get(self, request, *args, **kwargs):
         f = self._filters()
@@ -575,8 +575,8 @@ class OutboundLaunchView(LoginRequiredMixin, View):
             wh = get_current_warehouse(request)
             if wh is not None:
                 qs = qs.filter(warehouse=wh)
-            # 優先度の高い指示から引き当て（限られた在庫を先に確保）
-            for order in qs.order_by('-priority', 'deadline_at',
+            # 出荷期限の早い指示から引き当て（限られた在庫を先に確保）
+            for order in qs.order_by('deadline_at',
                                      'outbound_order_code'):
                 result = _try_launch_order(order, request.user)
                 (launched if result['ok'] else skipped).append(result)

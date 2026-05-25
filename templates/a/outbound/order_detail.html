@@ -40,9 +40,6 @@
       <dt class="col-sm-3">出荷期限</dt>
       <dd class="col-sm-9 font-monospace small">{{ order.deadline_at|date:"Y/m/d H:i"|default:"—" }}</dd>
 
-      <dt class="col-sm-3">優先度</dt>
-      <dd class="col-sm-9 font-monospace">{{ order.priority }}</dd>
-
       <dt class="col-sm-3">配送先</dt>
       <dd class="col-sm-9">
         {% if order.delivery_name or order.delivery_address or order.delivery_postal_code %}

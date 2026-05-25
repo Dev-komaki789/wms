@@ -833,7 +833,6 @@ class Command(BaseCommand):
                 external_order_id=external,
                 status=OutboundOrder.Status.ALLOCATION_WAIT,
                 source_type=st,
-                priority=random.choice([0, 0, 0, 5, 10]),
                 deadline_at=deadline_dt,
                 delivery_name=f'{customer.customer_name} 御中',
                 delivery_address=customer.address,

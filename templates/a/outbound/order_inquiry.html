@@ -119,7 +119,6 @@
           <th class="text-start text-nowrap">指示番号</th>
           <th class="text-start">顧客</th>
           <th class="text-center text-nowrap">出荷元</th>
-          <th class="text-end text-nowrap">優先度</th>
           <th class="text-center text-nowrap">出荷期限</th>
           <th class="text-center text-nowrap">ステータス</th>
           <th class="text-end text-nowrap">明細</th>
@@ -147,7 +146,6 @@
             {% elif o.source_type == 'return' %}<span class="badge bg-danger">返品</span>
             {% endif %}
           </td>
-          <td class="text-end text-nowrap font-monospace small">{{ o.priority }}</td>
           <td class="text-center text-nowrap small font-monospace">{{ o.deadline_at|date:"Y/m/d H:i"|default:"—" }}</td>
           <td class="text-center text-nowrap">
             {% include 'a/outbound/_status_badge.html' with status=o.status %}
@@ -168,7 +166,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="10" class="text-center text-muted py-4">条件に一致する出荷指示が見つかりませんでした</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-4">条件に一致する出荷指示が見つかりませんでした</td></tr>
         {% endfor %}
       </tbody>
     </table>

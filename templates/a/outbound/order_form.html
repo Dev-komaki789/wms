@@ -71,14 +71,6 @@
           <div class="form-text">この日時までに出荷したい期限</div>
           {% if form.deadline_at.errors %}<div class="invalid-feedback d-block">{{ form.deadline_at.errors|join:" " }}</div>{% endif %}
         </div>
-        <div class="col-md-4 mb-3">
-          <label class="form-label d-block" for="{{ form.priority.id_for_label }}">
-            {{ form.priority.label }}
-          </label>
-          {{ form.priority }}
-          <div class="form-text">数値が大きいほど優先（通常は 0）</div>
-          {% if form.priority.errors %}<div class="invalid-feedback d-block">{{ form.priority.errors|join:" " }}</div>{% endif %}
-        </div>
       </div>
 
       <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">配送先</h6>

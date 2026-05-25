@@ -27,7 +27,6 @@ class OutboundOrderAdmin(admin.ModelAdmin):
         'customer',
         'status',
         'source_type',
-        'priority',
         'deadline_at',
         'shipped_at',
         'created_by',

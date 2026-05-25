@@ -34,7 +34,6 @@ class OutboundOrderForm(forms.ModelForm):
             'customer',
             'external_order_id',
             'deadline_at',
-            'priority',
             'delivery_postal_code',
             'delivery_address',
             'delivery_name',
@@ -56,7 +55,6 @@ class OutboundOrderForm(forms.ModelForm):
                 attrs={**TEXT, 'type': 'datetime-local'},
                 format='%Y-%m-%dT%H:%M',
             ),
-            'priority': forms.NumberInput(attrs={**TEXT, 'min': '0', 'max': '999'}),
             'delivery_postal_code': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: 100-0001', 'autocomplete': 'off',
                        'inputmode': 'numeric', 'maxlength': '8'}
@@ -84,10 +82,6 @@ class OutboundOrderForm(forms.ModelForm):
         # 出荷期限: datetime-local 入力。任意（OMS 連携では設定されるが手動登録では空可）
         self.fields['deadline_at'].input_formats = ['%Y-%m-%dT%H:%M']
         self.fields['deadline_at'].required = False
-
-        # 優先度: 0 を初期表示（数値が大きいほど優先）。上限 999
-        self.fields['priority'].initial = 0
-        self.fields['priority'].validators.append(MaxValueValidator(999))
 
         # 桁数を実形式に絞る（model max_length の auto-maxlength を上書き）
         # 出荷指示番号「OO-YYYYMMDD-NNN」= 15 桁、配送先郵便番号は 8 桁（例 100-0001）

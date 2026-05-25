@@ -62,7 +62,6 @@ class OutboundOrder(models.Model):
         choices=SourceType.choices,
         default=SourceType.OMS,
     )
-    priority = models.IntegerField('優先度', default=0, validators=[MinValueValidator(0)])
     deadline_at = models.DateTimeField('出荷期限', null=True, blank=True)
     shipped_at = models.DateTimeField('出荷日時', null=True, blank=True)
     cancelled_at = models.DateTimeField('取消日時', null=True, blank=True)

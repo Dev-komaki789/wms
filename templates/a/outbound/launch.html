@@ -94,7 +94,6 @@
           </th>
           <th class="text-start text-nowrap">指示番号</th>
           <th class="text-start">顧客</th>
-          <th class="text-end text-nowrap">優先度</th>
           <th class="text-center text-nowrap">出荷期限</th>
           <th class="text-end text-nowrap">明細</th>
           <th class="text-end text-nowrap">指示数量</th>
@@ -116,7 +115,6 @@
             {% if o.customer %}{{ o.customer.customer_name }}
             {% else %}<span class="text-muted">—</span>{% endif %}
           </td>
-          <td class="text-end text-nowrap font-monospace small">{{ o.priority }}</td>
           <td class="text-center text-nowrap small font-monospace">{{ o.deadline_at|date:"Y/m/d H:i"|default:"—" }}</td>
           <td class="text-end text-nowrap font-monospace small">{{ o.item_count|default:0 }}</td>
           <td class="text-end text-nowrap font-monospace small">{{ o.total_ordered|default:0 }}</td>

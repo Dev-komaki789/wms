@@ -40,7 +40,6 @@ OUTBOUND_ORDER_SPEC = OrderCsvSpec(
                 required=True, active_only=True, note='顧客のコードで参照（必須）'),
         Field('OMS注文番号', 'external_order_id'),
         Field('出荷期限', 'deadline_at', kind='datetime'),
-        Field('優先度', 'priority', kind='int', default=0),
         Field('配送先郵便番号', 'delivery_postal_code'),
         Field('配送先住所', 'delivery_address'),
         Field('配送先名称', 'delivery_name'),
