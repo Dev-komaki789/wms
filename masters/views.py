@@ -178,6 +178,16 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
 
     SEARCH_KEYS = ('loc_q', 'loc_warehouse', 'loc_area', 'loc_type', 'loc_status')
 
+    SORTABLE = {
+        'warehouse': ['warehouse__warehouse_code', 'area__area_code', 'location_code'],
+        'area': ['area__area_code'],
+        'code': ['location_code'],
+        'type': ['area__location_type'],
+        'name': ['location_name'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -206,9 +216,8 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
                 loc_qs = loc_qs.filter(is_active=True)
             elif loc_status == 'inactive':
                 loc_qs = loc_qs.filter(is_active=False)
-            loc_qs = loc_qs.order_by(
-                'warehouse__warehouse_code', 'area__area_code', 'location_code'
-            )
+            loc_qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, loc_qs, self.SORTABLE, 'warehouse', 'asc')
             page = paginate(self.request, loc_qs)
             ctx['locations'] = page
             ctx['page_obj'] = page

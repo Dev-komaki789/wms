@@ -1,4 +1,5 @@
 {% extends 'a/base.html' %}
+{% load wms_sort %}
 
 {% block title %}エリア・ロケーション照会{% endblock %}
 
@@ -109,14 +110,14 @@
     <table class="table table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
-          <th class="text-start">倉庫</th>
-          <th class="text-start">エリア</th>
-          <th class="text-start">棚番コード</th>
-          <th class="text-center">区分</th>
+          {% sort_th '倉庫' 'warehouse' sort dir align='start' %}
+          {% sort_th 'エリア' 'area' sort dir align='start' %}
+          {% sort_th '棚番コード' 'code' sort dir align='start' %}
+          {% sort_th '区分' 'type' sort dir align='center' %}
           <th class="text-start">位置</th>
-          <th class="text-start">表示名</th>
-          <th class="text-center">ステータス</th>
-          <th class="text-end">更新日時</th>
+          {% sort_th '表示名' 'name' sort dir align='start' %}
+          {% sort_th 'ステータス' 'status' sort dir align='center' %}
+          {% sort_th '更新日時' 'updated' sort dir align='end' %}
           <th class="text-center" style="width: 160px">操作</th>
         </tr>
       </thead>
