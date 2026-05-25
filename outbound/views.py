@@ -693,9 +693,9 @@ class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
     """出荷明細書印刷ビュー（帳票表示）。
 
     1 出荷指示に紐づく出荷明細書を帳票レイアウトで表示する。出荷明細書は出荷検品完了後に
-    実出荷数で発行され、箱に同梱して顧客へ届ける書類。参照用に出荷指示番号を
-    バーコード（Code128）でも印字する。ブラウザの印刷機能（window.print）で
-    実プリンタ印刷・PDF 保存ができる。
+    実出荷数で発行され、箱に同梱して顧客へ届ける書類。社内ID（出荷指示番号・
+    ステータス等）は載せず、顧客が照合できる「ご注文番号」(external_order_id)を
+    表示する。ブラウザの印刷機能（window.print）で実プリンタ印刷・PDF 保存ができる。
     """
 
     model = DeliveryNote
@@ -715,9 +715,6 @@ class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         order = self.object.outbound_order
-        # 参照用に出荷指示番号（業務的にも external_order_id でなく order_code を
-        # 主キーに使う）でバーコードを生成する。
-        ctx['barcode_svg'] = code128_svg(order.outbound_order_code)
         ctx['outbound_order'] = order
         ctx['line_items'] = list(self.object.items.all())
         return ctx

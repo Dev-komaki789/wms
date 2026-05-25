@@ -4,16 +4,12 @@
 
 {% block extra_css %}
 <style>
-  /* 画面スキャンでもバーが解像できるよう大きめに表示する（Code128・高密度） */
-  .dn-barcode svg { width: 300px; max-width: 100%; height: auto; display: block; }
   /* 印刷時はアプリのナビ等を隠し、帳票だけをきれいに出力する */
   @media print {
     .navbar, #sidebar { display: none !important; }
     body { background: #fff !important; }
     main.container { max-width: 100%; padding: 0; }
     .dn-doc { border: none !important; box-shadow: none !important; }
-    /* 紙はベクターで鮮明なので小さくても読める。印刷時はコンパクトに。 */
-    .dn-barcode svg { width: 240px; }
   }
 </style>
 {% endblock %}
@@ -31,7 +27,7 @@
 
 <div class="dn-doc card shadow-sm">
   <div class="card-body">
-    {# ヘッダー: タイトル + 出荷明細書番号 + 出荷指示バーコード #}
+    {# ヘッダー: タイトル + 出荷明細書番号/発行日 + ご注文番号 #}
     <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
       <div>
         <div class="text-muted small">出 荷 明 細 書</div>
@@ -40,12 +36,12 @@
           発行日 {{ delivery_note.issued_at|date:"Y年n月j日" }}
         </div>
       </div>
-      <div class="text-center">
-        {# 参照用の出荷指示番号バーコード（検品はピッキングリスト側で読み取る） #}
-        <div class="dn-barcode">{{ barcode_svg|safe }}</div>
-        <div class="font-monospace small mt-1">{{ outbound_order.outbound_order_code }}</div>
-        <div class="text-muted" style="font-size:.7rem">出荷指示番号</div>
+      {% if outbound_order.external_order_id %}
+      <div class="text-end">
+        <div class="text-muted small">ご注文番号</div>
+        <div class="fs-6 fw-bold font-monospace">{{ outbound_order.external_order_id }}</div>
       </div>
+      {% endif %}
     </div>
 
     {# 宛先・差出人 #}
@@ -68,31 +64,6 @@
         {% if outbound_order.warehouse.address %}
           <div class="small">{{ outbound_order.warehouse.address }}</div>
         {% endif %}
-      </div>
-    </div>
-
-    {# メタ情報 #}
-    <div class="row g-3 mb-3 small">
-      <div class="col-6 col-md-3">
-        <span class="text-muted d-block">出荷指示</span>
-        <span class="font-monospace">{{ outbound_order.outbound_order_code }}</span>
-      </div>
-      {% if outbound_order.external_order_id %}
-      <div class="col-6 col-md-3">
-        <span class="text-muted d-block">外部注文番号</span>
-        <span class="font-monospace">{{ outbound_order.external_order_id }}</span>
-      </div>
-      {% endif %}
-      <div class="col-6 col-md-3">
-        <span class="text-muted d-block">ステータス</span>
-        {{ outbound_order.get_status_display }}
-      </div>
-      <div class="col-6 col-md-3">
-        <span class="text-muted d-block">出荷期限</span>
-        <span class="font-monospace">
-          {% if outbound_order.deadline_at %}{{ outbound_order.deadline_at|date:"Y/m/d H:i" }}
-          {% else %}—{% endif %}
-        </span>
       </div>
     </div>
 
