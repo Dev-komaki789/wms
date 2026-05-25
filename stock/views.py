@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.edit import FormView
 
-from core.utils import paginate, parse_query_date
+from core.utils import apply_ordering, paginate, parse_query_date
 from inbound.models import InboundOrder
 from masters.models import Area, Location, Sku
 from masters.utils import get_current_warehouse
@@ -37,6 +37,19 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
     template_name = 'a/stock/inquiry.html'
 
     SEARCH_KEYS = ('q', 'product', 'location', 'area_type', 'state')
+
+    SORTABLE = {
+        'location': ['location__location_code'],
+        'area_type': ['location__area__location_type'],
+        'sku': ['sku__sku_code'],
+        'product': ['sku__product__product_name'],
+        'jan': ['sku__jan_code'],
+        'size': ['sku__size_info'],
+        'qty': ['quantity'],
+        'reserved': ['reserved'],
+        'available': ['available'],
+        'updated': ['updated_at'],
+    }
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -76,7 +89,6 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(quantity__gt=0)
             elif f['state'] == 'zero':
                 qs = qs.filter(quantity=0)
-            qs = qs.order_by('location__location_code', 'sku__sku_code')
             # 引き当て数 = この (ロケーション × SKU) に紐づく active な
             # StockReservation の合計。出荷可能数 = 在庫数 − 引き当て数。
             reserved_subquery = (
@@ -97,6 +109,8 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
             ).annotate(
                 available=F('quantity') - F('reserved'),
             )
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'location', 'asc')
             # サマリーは検索結果の全件を集計（ページ送りしても合計は全体ベース）
             agg = qs.aggregate(
                 rows=Count('id'),
@@ -176,6 +190,19 @@ class StockMovementInquiryView(LoginRequiredMixin, TemplateView):
     SEARCH_KEYS = ('q', 'product', 'location', 'movement_type',
                    'reference_type', 'date_from', 'date_to')
 
+    SORTABLE = {
+        'moved': ['moved_at'],
+        'type': ['movement_type'],
+        'location': ['location__location_code'],
+        'sku': ['sku__sku_code'],
+        'product': ['sku__product__product_name'],
+        'qty': ['quantity'],
+        'after': ['quantity_after'],
+        'reference': ['reference_type'],
+        'user': ['created_by__username'],
+        'note': ['note'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -221,7 +248,8 @@ class StockMovementInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(moved_at__date__gte=date_from)
             if date_to:
                 qs = qs.filter(moved_at__date__lte=date_to)
-            qs = qs.order_by('-moved_at', '-id')
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'moved', 'desc')
 
             # サマリーは検索結果の全件を集計（ページ送りしても合計は全体ベース）。
             agg = qs.aggregate(
@@ -576,6 +604,17 @@ class StocktakeInquiryView(LoginRequiredMixin, TemplateView):
 
     SEARCH_KEYS = ('q', 'status', 'stocktake_type', 'planned_from', 'planned_to')
 
+    SORTABLE = {
+        'code': ['session_code'],
+        'type': ['stocktake_type'],
+        'target': ['area__area_code'],
+        'planned': ['planned_at'],
+        'status': ['status'],
+        'progress': ['counted_count'],
+        'started': ['started_at'],
+        'completed': ['completed_at'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -615,7 +654,9 @@ class StocktakeInquiryView(LoginRequiredMixin, TemplateView):
                         StocktakeItem.Status.ADJUSTED,
                     ]),
                 ),
-            ).order_by('-planned_at', '-session_code')
+            )
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'planned', 'desc')
             ctx['stats'] = {
                 'total': qs.count(),
                 'planning': qs.filter(status=StocktakeSession.Status.PLANNING).count(),

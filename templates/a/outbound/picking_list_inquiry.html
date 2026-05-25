@@ -1,4 +1,5 @@
 {% extends 'a/base.html' %}
+{% load wms_sort %}
 
 {% block title %}ピッキングリスト印刷{% endblock %}
 
@@ -61,14 +62,14 @@
   <table class="table table-hover align-middle mb-0">
     <thead class="table-light">
       <tr>
-        <th class="text-start text-nowrap">リスト番号</th>
-        <th class="text-start">エリア</th>
-        <th class="text-start text-nowrap">ピッキング種別</th>
-        <th class="text-center text-nowrap">ステータス</th>
-        <th class="text-end text-nowrap">明細</th>
-        <th class="text-end text-nowrap">指示数量</th>
-        <th class="text-start text-nowrap">担当者</th>
-        <th class="text-end text-nowrap">生成日時</th>
+        {% sort_th 'リスト番号' 'code' sort dir align='start' %}
+        {% sort_th 'エリア' 'area' sort dir align='start' %}
+        {% sort_th 'ピッキング種別' 'ptype' sort dir align='start' %}
+        {% sort_th 'ステータス' 'status' sort dir align='center' %}
+        {% sort_th '明細' 'items' sort dir align='end' %}
+        {% sort_th '指示数量' 'qty' sort dir align='end' %}
+        {% sort_th '担当者' 'assignee' sort dir align='start' %}
+        {% sort_th '生成日時' 'created' sort dir align='end' %}
       </tr>
     </thead>
     <tbody>

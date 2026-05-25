@@ -14,7 +14,7 @@ from django.views.generic import (
 )
 
 from core.order_csv import OrderCsvExportView, OrderCsvImportView
-from core.utils import paginate, parse_query_date
+from core.utils import apply_ordering, paginate, parse_query_date
 from masters.models import Location
 from stock.views import StocktakeLockGuardMixin
 from masters.utils import get_current_warehouse
@@ -87,6 +87,17 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
     SEARCH_KEYS = ('q', 'supplier', 'status', 'source_type',
                    'expected_from', 'expected_to')
 
+    SORTABLE = {
+        'code': ['inbound_order_code'],
+        'supplier': ['supplier__supplier_name'],
+        'source': ['source_type'],
+        'expected': ['expected_date'],
+        'status': ['status'],
+        'items': ['item_count'],
+        'qty': ['total_expected'],
+        'created': ['created_at'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -133,7 +144,9 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_expected=Sum('items__quantity_expected'),
-            ).order_by('-created_at', '-inbound_order_code')
+            )
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'created', 'desc')
             page = paginate(self.request, qs)
             ctx['orders'] = page
             ctx['page_obj'] = page

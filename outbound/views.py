@@ -633,6 +633,17 @@ class PickingListInquiryView(LoginRequiredMixin, TemplateView):
 
     template_name = 'a/outbound/picking_list_inquiry.html'
 
+    SORTABLE = {
+        'code': ['picking_list_code'],
+        'area': ['area__area_code'],
+        'ptype': ['picking_type'],
+        'status': ['status'],
+        'items': ['item_count'],
+        'qty': ['total_qty'],
+        'assignee': ['assigned_to__username'],
+        'created': ['created_at'],
+    }
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         g = self.request.GET
@@ -649,7 +660,9 @@ class PickingListInquiryView(LoginRequiredMixin, TemplateView):
         qs = qs.annotate(
             item_count=Count('items'),
             total_qty=Sum('items__quantity_requested'),
-        ).order_by('-created_at', '-picking_list_code')
+        )
+        qs, ctx['sort'], ctx['dir'] = apply_ordering(
+            self.request, qs, self.SORTABLE, 'created', 'desc')
 
         ctx['picking_lists'] = qs
         ctx['status_choices'] = PickingList.Status.choices
