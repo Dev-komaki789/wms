@@ -152,7 +152,8 @@ class InboundOrderItemForm(forms.ModelForm):
         fields = ['quantity_expected', 'is_crossdock']
         widgets = {
             'quantity_expected': forms.NumberInput(
-                attrs={**TEXT, 'min': '1', 'max': '99999', 'placeholder': '数量'}
+                attrs={**TEXT, 'class': 'form-control text-end',
+                       'min': '1', 'max': '99999', 'placeholder': '数量'}
             ),
             'is_crossdock': forms.CheckboxInput(
                 attrs={'class': 'form-check-input'}

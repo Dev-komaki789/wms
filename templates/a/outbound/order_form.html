@@ -154,6 +154,8 @@
                   <i class="bi bi-search"></i>
                 </button>
               </div>
+              <div class="text-muted small mt-1 sku-name-display"
+                   data-for="{{ item_form.sku_code.id_for_label }}">{% if item_form.instance.pk and item_form.instance.sku_id %}{{ item_form.instance.sku.product.product_name }}{% endif %}</div>
               {% if item_form.sku_code.errors %}<div class="invalid-feedback d-block small">{{ item_form.sku_code.errors|join:" " }}</div>{% endif %}
             </td>
             <td class="text-end">
@@ -201,6 +203,8 @@
             <i class="bi bi-search"></i>
           </button>
         </div>
+        <div class="text-muted small mt-1 sku-name-display"
+             data-for="{{ ef.sku_code.id_for_label }}"></div>
       </td>
       <td class="text-end">{{ ef.quantity_ordered }}</td>
       <td class="text-center">
@@ -356,6 +360,27 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
+
+  // ===== SKUコード入力 → 商品名表示の連動 =====
+  // SKUコードが変わった（手入力後のblur、モーダルでの選択）タイミングで
+  // SKUルックアップAPIを叩き、同じ行の .sku-name-display に商品名を表示する。
+  const SKU_LOOKUP_URL = '{% url "masters:api_sku_lookup" %}';
+  function updateSkuName(input) {
+    const disp = document.querySelector('.sku-name-display[data-for="' + input.id + '"]');
+    if (!disp) return;
+    const code = (input.value || '').trim();
+    if (!code) { disp.textContent = ''; return; }
+    fetch(SKU_LOOKUP_URL + '?code=' + encodeURIComponent(code))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        disp.textContent = data.found ? data.product_name : '';
+      })
+      .catch(function () { /* ネットワークエラーは無視（保存時にサーバで再検証） */ });
+  }
+  document.addEventListener('change', function (e) {
+    const t = e.target;
+    if (t && t.name && t.name.endsWith('-sku_code')) updateSkuName(t);
+  });
 })();
 </script>
 {% endblock %}

@@ -133,7 +133,8 @@ class OutboundOrderItemForm(forms.ModelForm):
         fields = ['quantity_ordered']
         widgets = {
             'quantity_ordered': forms.NumberInput(
-                attrs={**TEXT, 'min': '1', 'max': '99999', 'placeholder': '数量'}
+                attrs={**TEXT, 'class': 'form-control text-end',
+                       'min': '1', 'max': '99999', 'placeholder': '数量'}
             ),
         }
 
