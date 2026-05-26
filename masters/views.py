@@ -998,6 +998,8 @@ class SkuLookupAPIView(LoginRequiredMixin, View):
             'sku_code': sku.sku_code,
             'jan_code': sku.jan_code,
             'product_name': sku.product.product_name,
+            'size_info': sku.size_info,
+            'color_info': sku.color_info,
         })
 
 

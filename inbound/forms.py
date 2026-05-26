@@ -140,8 +140,8 @@ class InboundOrderItemForm(forms.ModelForm):
         label='SKU',
         max_length=13,
         widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm font-monospace',
-            'placeholder': 'SKU コード入力 or 🔍 で検索',
+            'class': 'form-control font-monospace',
+            'placeholder': 'SKU コード',
             'autocomplete': 'off',
         }),
     )

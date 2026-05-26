@@ -145,17 +145,21 @@
           <tr class="item-row">
             <td class="text-start">
               {{ item_form.id }}
-              <div class="input-group input-group-sm">
-                {{ item_form.sku_code }}
-                <button type="button" class="btn btn-outline-secondary sku-pick-btn"
-                        data-bs-toggle="modal" data-bs-target="#skuPickModal"
-                        data-target-input="{{ item_form.sku_code.id_for_label }}"
-                        title="SKU マスタから検索">
-                  <i class="bi bi-search"></i>
-                </button>
+              <div class="d-flex align-items-center gap-3 flex-wrap">
+                <div class="input-group" style="max-width: 220px">
+                  {{ item_form.sku_code }}
+                  <button type="button" class="btn btn-outline-secondary sku-pick-btn"
+                          data-bs-toggle="modal" data-bs-target="#skuPickModal"
+                          data-target-input="{{ item_form.sku_code.id_for_label }}"
+                          title="SKU マスタから検索">
+                    <i class="bi bi-search"></i>
+                  </button>
+                </div>
+                <div class="flex-grow-1">
+                  <span class="sku-name-display" data-for="{{ item_form.sku_code.id_for_label }}">{% if item_form.instance.pk and item_form.instance.sku_id %}{{ item_form.instance.sku.product.product_name }}{% endif %}</span>
+                  <span class="text-muted ms-2 sku-color-display" data-for="{{ item_form.sku_code.id_for_label }}">{% if item_form.instance.pk and item_form.instance.sku_id and item_form.instance.sku.color_info %}{{ item_form.instance.sku.color_info }}{% endif %}</span>
+                </div>
               </div>
-              <div class="text-muted small mt-1 sku-name-display"
-                   data-for="{{ item_form.sku_code.id_for_label }}">{% if item_form.instance.pk and item_form.instance.sku_id %}{{ item_form.instance.sku.product.product_name }}{% endif %}</div>
               {% if item_form.sku_code.errors %}<div class="invalid-feedback d-block small">{{ item_form.sku_code.errors|join:" " }}</div>{% endif %}
             </td>
             <td class="text-end">
@@ -194,17 +198,21 @@
     {% with items.empty_form as ef %}
     <tr class="item-row">
       <td class="text-start">
-        <div class="input-group input-group-sm">
-          {{ ef.sku_code }}
-          <button type="button" class="btn btn-outline-secondary sku-pick-btn"
-                  data-bs-toggle="modal" data-bs-target="#skuPickModal"
-                  data-target-input="{{ ef.sku_code.id_for_label }}"
-                  title="SKU マスタから検索">
-            <i class="bi bi-search"></i>
-          </button>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <div class="input-group" style="max-width: 220px">
+            {{ ef.sku_code }}
+            <button type="button" class="btn btn-outline-secondary sku-pick-btn"
+                    data-bs-toggle="modal" data-bs-target="#skuPickModal"
+                    data-target-input="{{ ef.sku_code.id_for_label }}"
+                    title="SKU マスタから検索">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
+          <div class="flex-grow-1">
+            <span class="sku-name-display" data-for="{{ ef.sku_code.id_for_label }}"></span>
+            <span class="text-muted ms-2 sku-color-display" data-for="{{ ef.sku_code.id_for_label }}"></span>
+          </div>
         </div>
-        <div class="text-muted small mt-1 sku-name-display"
-             data-for="{{ ef.sku_code.id_for_label }}"></div>
       </td>
       <td class="text-end">{{ ef.quantity_ordered }}</td>
       <td class="text-center">
@@ -366,14 +374,22 @@
   // SKUルックアップAPIを叩き、同じ行の .sku-name-display に商品名を表示する。
   const SKU_LOOKUP_URL = '{% url "masters:api_sku_lookup" %}';
   function updateSkuName(input) {
-    const disp = document.querySelector('.sku-name-display[data-for="' + input.id + '"]');
-    if (!disp) return;
+    const id = input.id;
+    const nameEl = document.querySelector('.sku-name-display[data-for="' + id + '"]');
+    const colorEl = document.querySelector('.sku-color-display[data-for="' + id + '"]');
     const code = (input.value || '').trim();
-    if (!code) { disp.textContent = ''; return; }
+    if (!code) {
+      if (nameEl) nameEl.textContent = '';
+      if (colorEl) colorEl.textContent = '';
+      return;
+    }
     fetch(SKU_LOOKUP_URL + '?code=' + encodeURIComponent(code))
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        disp.textContent = data.found ? data.product_name : '';
+        const name = data.found ? data.product_name : '';
+        const color = (data.found && data.color_info) ? data.color_info : '';
+        if (nameEl) nameEl.textContent = name;
+        if (colorEl) colorEl.textContent = color;
       })
       .catch(function () { /* ネットワークエラーは無視（保存時にサーバで再検証） */ });
   }
