@@ -1,4 +1,5 @@
 {% extends 'a/base.html' %}
+{% load wms_sort %}
 
 {% block title %}出荷起動{% endblock %}
 
@@ -92,12 +93,12 @@
           <th class="text-center" style="width: 44px">
             <input type="checkbox" class="form-check-input" id="check-all" title="すべて選択">
           </th>
-          <th class="text-start text-nowrap">指示番号</th>
-          <th class="text-start">顧客</th>
-          <th class="text-center text-nowrap">出荷期限</th>
-          <th class="text-end text-nowrap">明細</th>
-          <th class="text-end text-nowrap">指示数量</th>
-          <th class="text-end text-nowrap">登録日時</th>
+          {% sort_th '指示番号' 'code' sort dir align='start' %}
+          {% sort_th '顧客' 'customer' sort dir align='start' %}
+          {% sort_th '出荷期限' 'deadline' sort dir align='center' %}
+          {% sort_th '明細' 'items' sort dir align='end' %}
+          {% sort_th '指示数量' 'qty' sort dir align='end' %}
+          {% sort_th '登録日時' 'created' sort dir align='end' %}
         </tr>
       </thead>
       <tbody>

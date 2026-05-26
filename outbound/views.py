@@ -512,6 +512,15 @@ class OutboundLaunchView(LoginRequiredMixin, View):
 
     SEARCH_KEYS = ('q', 'customer', 'source_type', 'deadline_from', 'deadline_to')
 
+    SORTABLE = {
+        'code': ['outbound_order_code'],
+        'customer': ['customer__customer_name'],
+        'deadline': ['deadline_at'],
+        'items': ['item_count'],
+        'qty': ['total_ordered'],
+        'created': ['created_at'],
+    }
+
     def _filters(self):
         g = self.request.GET
         return {
@@ -549,10 +558,13 @@ class OutboundLaunchView(LoginRequiredMixin, View):
             qs = qs.filter(deadline_at__date__gte=deadline_from)
         if deadline_to:
             qs = qs.filter(deadline_at__date__lte=deadline_to)
-        return qs.annotate(
+        qs = qs.annotate(
             item_count=Count('items'),
             total_ordered=Sum('items__quantity_ordered'),
-        ).order_by('deadline_at', 'outbound_order_code')
+        )
+        qs, self._sort, self._dir = apply_ordering(
+            self.request, qs, self.SORTABLE, 'deadline', 'asc')
+        return qs
 
     def get(self, request, *args, **kwargs):
         f = self._filters()
@@ -565,6 +577,8 @@ class OutboundLaunchView(LoginRequiredMixin, View):
             'orders': orders,
             'filters': f,
             'searched': searched,
+            'sort': getattr(self, '_sort', 'deadline'),
+            'dir': getattr(self, '_dir', 'asc'),
             # 返品出荷は画面スコープ外のため出さない（出荷指示照会と同じ規約）
             'source_type_choices': [
                 c for c in OutboundOrder.SourceType.choices
