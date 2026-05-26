@@ -16,12 +16,12 @@
        余りすぎるので、コンテンツ幅を広げて一覧テーブル等に横スペースを与える。
        印刷時(@media print で max-width:100%)・ハンディ筐体(独自幅)には影響しない。 */
     @media (min-width: 1400px) {
-      main.container { max-width: 1600px; }
+      main.container { max-width: 1680px; }
     }
     /* 編集/新規登録/詳細など、フォーム中心の画面は本文がスカスカに見えるため
        テンプレ側で body_class ブロックに "narrow" を入れたページだけ
        コンテンツ幅を狭める。 */
-    body.narrow main.container { max-width: 1100px; }
+    body.narrow main.container { max-width: 1200px; }
     /* ページ下端のボタン等が画面ギリギリに貼り付かないよう余白を確保。
        印刷時は各印刷テンプレの main.container{padding:0} でリセットされる。 */
     main.container { padding-bottom: 1.5rem; }

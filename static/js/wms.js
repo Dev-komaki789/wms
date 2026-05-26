@@ -71,10 +71,13 @@
     }
 
     e.preventDefault();
-    // ナビゲーション対象: 入力フィールド + 送信ボタン + a.btn (キャンセル等)
+    // ナビゲーション対象: 入力フィールド + 送信ボタン + a.btn (キャンセル等)。
+    // 検索モーダルを開く 🔍 等のユーティリティボタン(data-bs-toggle="modal")は
+    // キーボード遷移の経路から外す。Enter で誤って検索モーダルが開くのを防ぐ。
     const focusables = Array.from(form.querySelectorAll(
       'input, select, textarea, button, a.btn'
-    )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null);
+    )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null
+      && !(f.tagName === 'BUTTON' && f.getAttribute('data-bs-toggle') === 'modal'));
     const idx = focusables.indexOf(t);
     const next = focusables[idx + direction];
     if (next) next.focus();
@@ -90,7 +93,8 @@
     if (!form) return;
     const focusables = Array.from(form.querySelectorAll(
       'input, select, textarea, button, a.btn'
-    )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null);
+    )).filter(f => !f.disabled && f.type !== 'hidden' && f.offsetParent !== null
+      && !(f.tagName === 'BUTTON' && f.getAttribute('data-bs-toggle') === 'modal'));
     const idx = focusables.indexOf(t);
     const next = focusables[idx + 1];
     if (next) next.focus();
