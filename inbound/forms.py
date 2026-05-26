@@ -45,7 +45,8 @@ class InboundOrderForm(forms.ModelForm):
                        'pattern': rf'({_CODE_PREFIX_ALT})-\d{{8}}-\d{{3}}',
                        'title': 'IO-YYYYMMDD-NNN（通常）または RT-YYYYMMDD-NNN（返品）形式'}
             ),
-            'supplier': forms.Select(attrs=SELECT),
+            # 仕入先は検索モーダルで選択する（テンプレ側の独自UI＋hidden で送信）
+            'supplier': forms.HiddenInput(),
             'expected_date': forms.DateInput(
                 # Chrome の date input は min/max が無いと年が 6 桁まで入力できる挙動なので範囲制約で 4 桁に固定
                 attrs={**TEXT, 'type': 'date', 'min': '2000-01-01', 'max': '2099-12-31'}

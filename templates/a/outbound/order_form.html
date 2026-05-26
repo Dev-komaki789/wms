@@ -57,11 +57,20 @@
       <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-3">顧客・出荷条件</h6>
       <div class="row">
         <div class="col-md-4 mb-3">
-          <label class="form-label d-block" for="{{ form.customer.id_for_label }}">
+          <label class="form-label d-block">
             {{ form.customer.label }} <span class="text-danger">*</span>
           </label>
-          {{ form.customer }}
-          <div class="form-text">出荷先の顧客</div>
+          {{ form.customer }}{# hidden input（顧客id） #}
+          <div class="input-group">
+            <input type="text" id="customer-display"
+                   class="form-control" readonly placeholder="未選択（🔍 から検索）"
+                   value="{% if form.instance.pk and form.instance.customer %}{{ form.instance.customer.customer_code }}　{{ form.instance.customer.customer_name }}{% endif %}">
+            <button type="button" class="btn btn-outline-secondary"
+                    data-bs-toggle="modal" data-bs-target="#customerPickModal"
+                    title="顧客マスタから検索">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
           {% if form.customer.errors %}<div class="invalid-feedback d-block">{{ form.customer.errors|join:" " }}</div>{% endif %}
         </div>
         <div class="col-md-4 mb-3">
@@ -257,6 +266,35 @@
     </div>
   </div>
 </div>
+
+{# ========== 顧客選択モーダル（顧客欄の 🔍 ボタンから開く） ========== #}
+<div class="modal fade" id="customerPickModal" tabindex="-1" aria-labelledby="customerPickModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="customerPickModalTitle">
+          <i class="bi bi-person-lines-fill me-1"></i>顧客マスタから選択
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="customerSearchInput" class="form-control mb-3" maxlength="50"
+               placeholder="顧客コード / 顧客名で検索（部分一致）" autocomplete="off">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="text-start">顧客コード</th>
+              <th class="text-start">顧客名</th>
+            </tr>
+          </thead>
+          <tbody id="customerPickResults">
+            <tr><td colspan="2" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -398,6 +436,64 @@
     const t = e.target;
     if (t && t.name && t.name.endsWith('-sku_code')) updateSkuName(t);
   });
+
+  // ===== 顧客選択モーダル =====
+  // 🔍 ボタンで開き、顧客検索APIを叩く。行クリックで hidden の form.customer に
+  // 顧客IDをセットし、表示欄(customer-display)に「コード　名称」を表示する。
+  const CUSTOMER_SEARCH_URL = '{% url "masters:api_customer_search" %}';
+  const customerModal = document.getElementById('customerPickModal');
+  const customerSearchInput = document.getElementById('customerSearchInput');
+  const customerResultsBody = document.getElementById('customerPickResults');
+  const customerHidden = document.getElementById('{{ form.customer.id_for_label }}');
+  const customerDisplay = document.getElementById('customer-display');
+  let customerSearchTimer = null;
+  if (customerModal) {
+    customerModal.addEventListener('shown.bs.modal', function () {
+      customerSearchInput.value = '';
+      customerResultsBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      customerSearchInput.focus();
+    });
+  }
+  if (customerSearchInput) {
+    customerSearchInput.addEventListener('input', function () {
+      clearTimeout(customerSearchTimer);
+      const q = this.value.trim();
+      customerSearchTimer = setTimeout(function () { customerFetchAndRender(q); }, 200);
+    });
+  }
+  function customerFetchAndRender(q) {
+    if (!q) {
+      customerResultsBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      return;
+    }
+    fetch(CUSTOMER_SEARCH_URL + '?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const results = data.results || [];
+        if (results.length === 0) {
+          customerResultsBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted py-4">該当する顧客はありません</td></tr>';
+          return;
+        }
+        customerResultsBody.innerHTML = results.map(function (c) {
+          return '<tr style="cursor: pointer" class="customer-pick-row"'
+            + ' data-id="' + c.id + '"'
+            + ' data-code="' + esc(c.customer_code) + '"'
+            + ' data-name="' + esc(c.customer_name) + '">'
+            + '<td class="text-start font-monospace">' + esc(c.customer_code) + '</td>'
+            + '<td class="text-start">' + esc(c.customer_name) + '</td>'
+            + '</tr>';
+        }).join('');
+      });
+  }
+  if (customerResultsBody) {
+    customerResultsBody.addEventListener('click', function (e) {
+      const row = e.target.closest('.customer-pick-row');
+      if (!row) return;
+      if (customerHidden) customerHidden.value = row.dataset.id;
+      if (customerDisplay) customerDisplay.value = row.dataset.code + '　' + row.dataset.name;
+      bootstrap.Modal.getInstance(customerModal).hide();
+    });
+  }
 })();
 </script>
 {% endblock %}

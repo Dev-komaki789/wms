@@ -46,7 +46,8 @@ class OutboundOrderForm(forms.ModelForm):
                        'pattern': r'OO-\d{8}-\d{3}',
                        'title': 'OO-YYYYMMDD-NNN 形式'}
             ),
-            'customer': forms.Select(attrs=SELECT),
+            # 顧客は検索モーダルで選択する（テンプレ側の独自UI＋hidden で送信）
+            'customer': forms.HiddenInput(),
             'external_order_id': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: OMS-2026-000123',
                        'autocomplete': 'off'}

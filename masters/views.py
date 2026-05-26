@@ -932,6 +932,67 @@ class CustomerDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- API (AJAX) ----
 
+class CustomerSearchAPIView(LoginRequiredMixin, View):
+    """顧客検索 API（AJAX 用）。
+
+    出荷指示登録画面などで顧客マスタを検索選択するためのエンドポイント。
+    顧客コード / 顧客名の部分一致で検索し最大 LIMIT 件返す（有効のみ）。
+    """
+
+    LIMIT = 30
+
+    def get(self, request):
+        q = (request.GET.get('q') or '').strip()
+        qs = Customer.objects.filter(is_active=True)
+        if q:
+            qs = qs.filter(
+                Q(customer_code__icontains=q) | Q(customer_name__icontains=q)
+            )
+        qs = qs.order_by('customer_code')[: self.LIMIT]
+        return JsonResponse({
+            'results': [
+                {
+                    'id': c.pk,
+                    'customer_code': c.customer_code,
+                    'customer_name': c.customer_name,
+                }
+                for c in qs
+            ]
+        })
+
+
+class SupplierSearchAPIView(LoginRequiredMixin, View):
+    """仕入先検索 API（AJAX 用）。
+
+    入荷指示登録画面などで仕入先マスタを検索選択するためのエンドポイント。
+    仕入先コード / 仕入先名 / 担当者の部分一致で検索し最大 LIMIT 件返す（有効のみ）。
+    """
+
+    LIMIT = 30
+
+    def get(self, request):
+        q = (request.GET.get('q') or '').strip()
+        qs = Supplier.objects.filter(is_active=True)
+        if q:
+            qs = qs.filter(
+                Q(supplier_code__icontains=q)
+                | Q(supplier_name__icontains=q)
+                | Q(contact_person__icontains=q)
+            )
+        qs = qs.order_by('supplier_code')[: self.LIMIT]
+        return JsonResponse({
+            'results': [
+                {
+                    'id': s.pk,
+                    'supplier_code': s.supplier_code,
+                    'supplier_name': s.supplier_name,
+                    'contact_person': s.contact_person,
+                }
+                for s in qs
+            ]
+        })
+
+
 class SkuSearchAPIView(LoginRequiredMixin, View):
     """SKU 検索 API（AJAX 用）。
 

@@ -72,11 +72,21 @@
 
       <div class="row">
         <div class="col-md-4 mb-3">
-          <label class="form-label d-block" for="{{ form.supplier.id_for_label }}">
+          <label class="form-label d-block">
             {{ form.supplier.label }}
             <span class="badge bg-warning-subtle text-warning-emphasis">通常入荷では必須</span>
           </label>
-          {{ form.supplier }}
+          {{ form.supplier }}{# hidden input（仕入先id） #}
+          <div class="input-group">
+            <input type="text" id="supplier-display"
+                   class="form-control" readonly placeholder="未選択（🔍 から検索）"
+                   value="{% if form.instance.pk and form.instance.supplier %}{{ form.instance.supplier.supplier_code }}　{{ form.instance.supplier.supplier_name }}{% endif %}">
+            <button type="button" class="btn btn-outline-secondary"
+                    data-bs-toggle="modal" data-bs-target="#supplierPickModal"
+                    title="仕入先マスタから検索">
+              <i class="bi bi-search"></i>
+            </button>
+          </div>
           <div class="form-text">返品入荷（顧客返品）の場合は空欄可</div>
           {% if form.supplier.errors %}<div class="invalid-feedback d-block">{{ form.supplier.errors|join:" " }}</div>{% endif %}
         </div>
@@ -261,6 +271,36 @@
     </div>
   </div>
 </div>
+
+{# ========== 仕入先選択モーダル（仕入先欄の 🔍 ボタンから開く） ========== #}
+<div class="modal fade" id="supplierPickModal" tabindex="-1" aria-labelledby="supplierPickModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="supplierPickModalTitle">
+          <i class="bi bi-truck me-1"></i>仕入先マスタから選択
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="supplierSearchInput" class="form-control mb-3" maxlength="50"
+               placeholder="仕入先コード / 仕入先名 / 担当者 で検索（部分一致）" autocomplete="off">
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="text-start">仕入先コード</th>
+              <th class="text-start">仕入先名</th>
+              <th class="text-start">担当者</th>
+            </tr>
+          </thead>
+          <tbody id="supplierPickResults">
+            <tr><td colspan="3" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -429,6 +469,65 @@
     const t = e.target;
     if (t && t.name && t.name.endsWith('-sku_code')) updateSkuName(t);
   });
+
+  // ===== 仕入先選択モーダル =====
+  // 🔍 ボタンで開き、仕入先検索APIを叩く。行クリックで hidden の form.supplier に
+  // 仕入先IDをセットし、表示欄(supplier-display)に「コード　名称」を表示する。
+  const SUPPLIER_SEARCH_URL = '{% url "masters:api_supplier_search" %}';
+  const supplierModal = document.getElementById('supplierPickModal');
+  const supplierSearchInput = document.getElementById('supplierSearchInput');
+  const supplierResultsBody = document.getElementById('supplierPickResults');
+  const supplierHidden = document.getElementById('{{ form.supplier.id_for_label }}');
+  const supplierDisplay = document.getElementById('supplier-display');
+  let supplierSearchTimer = null;
+  if (supplierModal) {
+    supplierModal.addEventListener('shown.bs.modal', function () {
+      supplierSearchInput.value = '';
+      supplierResultsBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      supplierSearchInput.focus();
+    });
+  }
+  if (supplierSearchInput) {
+    supplierSearchInput.addEventListener('input', function () {
+      clearTimeout(supplierSearchTimer);
+      const q = this.value.trim();
+      supplierSearchTimer = setTimeout(function () { supplierFetchAndRender(q); }, 200);
+    });
+  }
+  function supplierFetchAndRender(q) {
+    if (!q) {
+      supplierResultsBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      return;
+    }
+    fetch(SUPPLIER_SEARCH_URL + '?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        const results = data.results || [];
+        if (results.length === 0) {
+          supplierResultsBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-4">該当する仕入先はありません</td></tr>';
+          return;
+        }
+        supplierResultsBody.innerHTML = results.map(function (s) {
+          return '<tr style="cursor: pointer" class="supplier-pick-row"'
+            + ' data-id="' + s.id + '"'
+            + ' data-code="' + esc(s.supplier_code) + '"'
+            + ' data-name="' + esc(s.supplier_name) + '">'
+            + '<td class="text-start font-monospace">' + esc(s.supplier_code) + '</td>'
+            + '<td class="text-start">' + esc(s.supplier_name) + '</td>'
+            + '<td class="text-start small">' + esc(s.contact_person || '—') + '</td>'
+            + '</tr>';
+        }).join('');
+      });
+  }
+  if (supplierResultsBody) {
+    supplierResultsBody.addEventListener('click', function (e) {
+      const row = e.target.closest('.supplier-pick-row');
+      if (!row) return;
+      if (supplierHidden) supplierHidden.value = row.dataset.id;
+      if (supplierDisplay) supplierDisplay.value = row.dataset.code + '　' + row.dataset.name;
+      bootstrap.Modal.getInstance(supplierModal).hide();
+    });
+  }
 })();
 </script>
 {% endblock %}

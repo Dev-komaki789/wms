@@ -58,4 +58,6 @@ urlpatterns = [
     path('api/skus/search/', views.SkuSearchAPIView.as_view(), name='api_sku_search'),
     path('api/skus/lookup/', views.SkuLookupAPIView.as_view(), name='api_sku_lookup'),
     path('api/locations/lookup/', views.LocationLookupAPIView.as_view(), name='api_location_lookup'),
+    path('api/customers/search/', views.CustomerSearchAPIView.as_view(), name='api_customer_search'),
+    path('api/suppliers/search/', views.SupplierSearchAPIView.as_view(), name='api_supplier_search'),
 ]
