@@ -97,6 +97,11 @@
   @media (min-width: 600px) {
     .hh-screen {
       min-height: 780px;
+      /* 結果が多くてもページ全体が伸びないよう、筐体の高さを画面に収める。
+         ウィンドウより低いときは min-height が効いて 780px をキープし、
+         ウィンドウより高いときは max-height で頭打ち → 中身は hh-main 内で
+         スクロールする（実機のスマホアプリと同じ感覚）。 */
+      max-height: calc(100vh - 6rem);
       /* スマホ筐体: 黒い枠 + 角丸 + 二重影 */
       border: 14px solid #1a1a1a;
       border-radius: 44px;
@@ -105,6 +110,9 @@
         inset 0 0 0 2px #333;
       position: relative;
     }
+    /* ヘッダーは上に固定、中身（hh-main）だけがスクロールする。
+       hh-header は flex-shrink:0 のためサイズ固定。 */
+    .hh-main { overflow-y: auto; }
     /* ノッチ（上部のカメラ・スピーカーグリルっぽい黒帯） */
     .hh-screen::before {
       content: '';
