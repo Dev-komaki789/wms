@@ -74,6 +74,46 @@ class EditableOnlyMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
+def _filtered_outbound_orders(request):
+    """OutboundOrderInquiry の検索条件で絞った OutboundOrder queryset を返す。
+
+    照会画面と CSV エクスポートで同じフィルタを共有するためのヘルパ。
+    現在倉庫スコープ＋GET の検索条件を適用するだけで、annotate / order_by /
+    select_related は呼び出し側で必要に応じて付ける。
+    """
+    g = request.GET
+    qs = OutboundOrder.objects.all()
+    wh = get_current_warehouse(request)
+    if wh is not None:
+        qs = qs.filter(warehouse=wh)
+    q = g.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(outbound_order_code__icontains=q)
+            | Q(external_order_id__icontains=q)
+            | Q(delivery_name__icontains=q)
+        )
+    customer = g.get('customer', '').strip()
+    if customer:
+        qs = qs.filter(
+            Q(customer__customer_name__icontains=customer)
+            | Q(customer__customer_code__icontains=customer)
+        )
+    status = g.get('status', '')
+    if status:
+        qs = qs.filter(status=status)
+    source_type = g.get('source_type', '')
+    if source_type:
+        qs = qs.filter(source_type=source_type)
+    deadline_from = parse_query_date(g.get('deadline_from', ''))
+    if deadline_from:
+        qs = qs.filter(deadline_at__date__gte=deadline_from)
+    deadline_to = parse_query_date(g.get('deadline_to', ''))
+    if deadline_to:
+        qs = qs.filter(deadline_at__date__lte=deadline_to)
+    return qs
+
+
 class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
     """出荷指示の照会＋一覧。検索-first パターン。"""
 
@@ -111,32 +151,8 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
         }
 
         if searched:
-            qs = OutboundOrder.objects.select_related(
+            qs = _filtered_outbound_orders(self.request).select_related(
                 'warehouse', 'customer', 'created_by')
-            wh = get_current_warehouse(self.request)
-            if wh is not None:
-                qs = qs.filter(warehouse=wh)
-            if f['q']:
-                qs = qs.filter(
-                    Q(outbound_order_code__icontains=f['q'])
-                    | Q(external_order_id__icontains=f['q'])
-                    | Q(delivery_name__icontains=f['q'])
-                )
-            if f['customer']:
-                qs = qs.filter(
-                    Q(customer__customer_name__icontains=f['customer'])
-                    | Q(customer__customer_code__icontains=f['customer'])
-                )
-            if f['status']:
-                qs = qs.filter(status=f['status'])
-            if f['source_type']:
-                qs = qs.filter(source_type=f['source_type'])
-            deadline_from = parse_query_date(f['deadline_from'])
-            deadline_to = parse_query_date(f['deadline_to'])
-            if deadline_from:
-                qs = qs.filter(deadline_at__date__gte=deadline_from)
-            if deadline_to:
-                qs = qs.filter(deadline_at__date__lte=deadline_to)
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_ordered=Sum('items__quantity_ordered'),
@@ -1534,8 +1550,14 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
 # ---- 出荷指示 CSV 入出力 ----
 
 class OutboundOrderCsvExportView(OrderCsvExportView):
-    """出荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。"""
+    """出荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。
+
+    照会画面と同じ検索条件（GET）を反映する。条件未指定なら全件出力。
+    """
     spec = OUTBOUND_ORDER_SPEC
+
+    def get_queryset(self, request):
+        return _filtered_outbound_orders(request)
 
 
 class OutboundOrderCsvImportView(OrderCsvImportView):

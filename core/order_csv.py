@@ -228,11 +228,17 @@ def _export_value(fld, obj):
 
 # --- エクスポート -----------------------------------------------------------
 
-def build_order_csv(spec, delimiter=','):
-    """spec の指示を全件、ヘッダ＋明細フラット CSV（UTF-8 BOM付）の bytes で返す。"""
+def build_order_csv(spec, delimiter=',', orders=None):
+    """spec の指示を CSV（UTF-8 BOM付）の bytes で返す。
+
+    `orders` に絞り込み済み queryset を渡すと、その範囲だけを出力する。
+    省略時は全件出力（マスタ系の従来挙動）。select_related / prefetch_related と
+    並び順は本関数内で付与するので、呼び出し側はフィルタだけ済ませて渡せばよい。
+    """
     item_fk_attrs = [f.attr for f in spec.item_fields if isinstance(f, FkField)]
     header_fk_attrs = [f.attr for f in spec.header_fields if isinstance(f, FkField)]
-    orders = spec.order_model.objects.all()
+    if orders is None:
+        orders = spec.order_model.objects.all()
     if header_fk_attrs:
         orders = orders.select_related(*header_fk_attrs)
     item_qs = spec.item_model.objects.order_by('id')
@@ -454,12 +460,21 @@ def order_column_guide(spec, fields):
 # --- 画面（継承して spec を差す）-------------------------------------------
 
 class OrderCsvExportView(LoginRequiredMixin, View):
-    """指示を CSV（UTF-8 BOM付）でエクスポートする基底ビュー。"""
+    """指示を CSV（UTF-8 BOM付）でエクスポートする基底ビュー。
+
+    サブクラスで `get_queryset(request)` を override すると、照会画面と同じ
+    検索条件を反映した「絞り込みCSV」を出力できる（既定は全件）。
+    """
     spec = None
+
+    def get_queryset(self, request):
+        """CSV出力対象の queryset を返す。既定は全件。サブクラスで絞り込みを適用する。"""
+        return self.spec.order_model.objects.all()
 
     def get(self, request, *args, **kwargs):
         delimiter = DELIMITERS.get(request.GET.get('delimiter'), ',')
-        content = build_order_csv(self.spec, delimiter=delimiter)
+        orders = self.get_queryset(request)
+        content = build_order_csv(self.spec, delimiter=delimiter, orders=orders)
         response = HttpResponse(content, content_type='text/csv')
         filename = f'{self.spec.key}_orders_{timezone.localdate():%Y%m%d}.csv'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'

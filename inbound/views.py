@@ -79,6 +79,46 @@ class PendingOnlyMixin:
         return super().dispatch(request, *args, **kwargs)
 
 
+def _filtered_inbound_orders(request):
+    """InboundOrderInquiry の検索条件で絞った InboundOrder queryset を返す。
+
+    照会画面と CSV エクスポートで同じフィルタを共有するためのヘルパ。
+    現在倉庫スコープ＋GET の検索条件を適用するだけで、annotate / order_by /
+    select_related は呼び出し側で必要に応じて付ける。
+    """
+    g = request.GET
+    qs = InboundOrder.objects.all()
+    wh = get_current_warehouse(request)
+    if wh is not None:
+        qs = qs.filter(warehouse=wh)
+    q = g.get('q', '').strip()
+    if q:
+        qs = qs.filter(
+            Q(inbound_order_code__icontains=q)
+            | Q(purchase_order_code__icontains=q)
+            | Q(supplier_delivery_note_code__icontains=q)
+        )
+    supplier = g.get('supplier', '').strip()
+    if supplier:
+        qs = qs.filter(
+            Q(supplier__supplier_name__icontains=supplier)
+            | Q(supplier__supplier_code__icontains=supplier)
+        )
+    status = g.get('status', '')
+    if status:
+        qs = qs.filter(status=status)
+    source_type = g.get('source_type', '')
+    if source_type:
+        qs = qs.filter(source_type=source_type)
+    expected_from = parse_query_date(g.get('expected_from', ''))
+    if expected_from:
+        qs = qs.filter(expected_date__gte=expected_from)
+    expected_to = parse_query_date(g.get('expected_to', ''))
+    if expected_to:
+        qs = qs.filter(expected_date__lte=expected_to)
+    return qs
+
+
 class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
     """入荷指示の照会＋一覧。検索-first パターン。"""
 
@@ -115,32 +155,8 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
         }
 
         if searched:
-            qs = InboundOrder.objects.select_related(
+            qs = _filtered_inbound_orders(self.request).select_related(
                 'warehouse', 'supplier', 'created_by', 'in_progress_by')
-            wh = get_current_warehouse(self.request)
-            if wh is not None:
-                qs = qs.filter(warehouse=wh)
-            if f['q']:
-                qs = qs.filter(
-                    Q(inbound_order_code__icontains=f['q'])
-                    | Q(purchase_order_code__icontains=f['q'])
-                    | Q(supplier_delivery_note_code__icontains=f['q'])
-                )
-            if f['supplier']:
-                qs = qs.filter(
-                    Q(supplier__supplier_name__icontains=f['supplier'])
-                    | Q(supplier__supplier_code__icontains=f['supplier'])
-                )
-            if f['status']:
-                qs = qs.filter(status=f['status'])
-            if f['source_type']:
-                qs = qs.filter(source_type=f['source_type'])
-            expected_from = parse_query_date(f['expected_from'])
-            expected_to = parse_query_date(f['expected_to'])
-            if expected_from:
-                qs = qs.filter(expected_date__gte=expected_from)
-            if expected_to:
-                qs = qs.filter(expected_date__lte=expected_to)
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_expected=Sum('items__quantity_expected'),
@@ -1103,8 +1119,14 @@ class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
 # ---- 入荷指示 CSV 入出力 ----
 
 class InboundOrderCsvExportView(OrderCsvExportView):
-    """入荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。"""
+    """入荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。
+
+    照会画面と同じ検索条件（GET）を反映する。条件未指定なら全件出力。
+    """
     spec = INBOUND_ORDER_SPEC
+
+    def get_queryset(self, request):
+        return _filtered_inbound_orders(request)
 
 
 class InboundOrderCsvImportView(OrderCsvImportView):

@@ -15,8 +15,12 @@
         <i class="bi bi-download"></i> CSV出力
       </button>
       <ul class="dropdown-menu">
-        <li><a class="dropdown-item" href="{% url 'inbound:order_csv_export' %}?delimiter=comma">カンマ区切り（,）</a></li>
-        <li><a class="dropdown-item" href="{% url 'inbound:order_csv_export' %}?delimiter=caret">キャレット区切り（^）</a></li>
+        {# 出力対象（現在の絞り込みを反映する。未検索なら全件） #}
+        <li><h6 class="dropdown-header small">
+          {% if searched %}絞り込み結果（{{ stats.total }} 件）を出力{% else %}全件を出力{% endif %}
+        </h6></li>
+        <li><a class="dropdown-item" href="{% url 'inbound:order_csv_export' %}?{{ request.GET.urlencode }}&delimiter=comma">カンマ区切り（,）</a></li>
+        <li><a class="dropdown-item" href="{% url 'inbound:order_csv_export' %}?{{ request.GET.urlencode }}&delimiter=caret">キャレット区切り（^）</a></li>
       </ul>
     </div>
     <a href="{% url 'inbound:order_csv_import' %}" class="btn btn-outline-secondary btn-sm">
