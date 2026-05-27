@@ -34,12 +34,12 @@ class _StockOperationForm(forms.Form):
         ),
     )
     sku_code = forms.CharField(
-        label='SKU',
+        label='SKU / JAN',
         max_length=13,
         widget=forms.TextInput(
             attrs={
                 'class': 'form-control hh-key',
-                'placeholder': 'SKU をスキャン',
+                'placeholder': 'SKU か JAN をスキャン',
                 'autocomplete': 'off',
                 'data-hh-lookup': 'sku',
                 # 棚番欄が空のままだと SKU 検証で弾く（業務フローを棚番先行に統一）。
@@ -112,7 +112,7 @@ class _StockOperationForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
 
@@ -198,12 +198,12 @@ class StockTransferForm(forms.Form):
         ),
     )
     sku_code = forms.CharField(
-        label='SKU',
+        label='SKU / JAN',
         max_length=13,
         widget=forms.TextInput(
             attrs={
                 'class': 'form-control hh-key',
-                'placeholder': 'SKU をスキャン',
+                'placeholder': 'SKU か JAN をスキャン',
                 'autocomplete': 'off',
                 # 移動元ロケーション × SKU の在庫紐づきを即時チェックする
                 'data-hh-lookup': 'stock',
@@ -285,7 +285,7 @@ class StockTransferForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
@@ -345,13 +345,13 @@ class HandheldStockInquiryForm(forms.Form):
         ),
     )
     sku_code = forms.CharField(
-        label='SKU',
+        label='SKU / JAN',
         max_length=13,
         required=False,
         widget=forms.TextInput(
             attrs={
                 'class': 'form-control hh-key',
-                'placeholder': 'SKU をスキャン',
+                'placeholder': 'SKU か JAN をスキャン',
                 'autocomplete': 'off',
                 'data-hh-lookup': 'sku',
                 'inputmode': 'text',
@@ -390,14 +390,14 @@ class HandheldStockInquiryForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
         cleaned = super().clean()
         # どちらも空 → 検索条件なしなのでエラー
         if not cleaned.get('location_code') and not cleaned.get('sku_code'):
-            raise forms.ValidationError('棚番か SKU のどちらかを入力してください。')
+            raise forms.ValidationError('棚番か SKU / JAN のどちらかを入力してください。')
         return cleaned
 
 
@@ -480,12 +480,12 @@ class StocktakeCountForm(forms.Form):
         ),
     )
     sku_code = forms.CharField(
-        label='SKU',
+        label='SKU / JAN',
         max_length=13,
         widget=forms.TextInput(
             attrs={
                 'class': 'form-control hh-key',
-                'placeholder': 'SKU をスキャン',
+                'placeholder': 'SKU か JAN をスキャン',
                 'autocomplete': 'off',
                 'data-hh-lookup': 'sku',
                 # 業務フローを棚番先行に統一（その棚の SKU をカウントする画面）
@@ -543,7 +543,7 @@ class StocktakeCountForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
