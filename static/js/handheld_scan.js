@@ -9,6 +9,10 @@
  *      "stock"    棚番 × SKU の在庫紐づき（その棚に在庫があるか）。
  *                 対象の棚番フィールドの id を data-hh-stock-loc で指定する。
  *    検証 NG ならその場でエラー表示し、前進・送信を止める。
+ *  - data-hh-require-loc を持つフィールド: 検証より前に、指定 id の棚番欄が
+ *    空でないことを要求する。空なら「先にロケーションを入力してください。」と
+ *    エラーにして API も呼ばない。業務フローを棚番先行に揃えるために使う
+ *    （計画外入庫・棚卸カウントなど、SKU 単体 API でも入力順を縛りたい場面）。
  *  - Enter は本スクリプトが占有し、wms.js のフィールド移動には渡さない
  *    （stopPropagation）。矢印キーは従来どおり wms.js が処理する。
  *
@@ -126,6 +130,18 @@
     const kind = input.dataset.hhLookup;
     const code = input.value.trim();
     if (!code) { focusNext(idx); return; }
+
+    // 棚番先行を要求するフラグ。指定 id の棚番欄が空ならここで弾く。
+    // 計画外入庫・棚卸カウントなど SKU 単体 API でも棚番先行を強制したい画面で使う。
+    const requireLocId = input.dataset.hhRequireLoc;
+    if (requireLocId) {
+      const locInput = document.getElementById(requireLocId);
+      const locCode = locInput ? locInput.value.trim() : '';
+      if (!locCode) {
+        fail(input, '先にロケーションを入力してください。');
+        return;
+      }
+    }
 
     if (kind === 'stock') {
       // 対象の棚番フィールドの値と組み合わせて在庫をチェックする

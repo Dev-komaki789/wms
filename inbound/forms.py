@@ -186,7 +186,7 @@ class InboundOrderItemForm(forms.ModelForm):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def save(self, commit=True):

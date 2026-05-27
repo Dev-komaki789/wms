@@ -42,6 +42,10 @@ class _StockOperationForm(forms.Form):
                 'placeholder': 'SKU をスキャン',
                 'autocomplete': 'off',
                 'data-hh-lookup': 'sku',
+                # 棚番欄が空のままだと SKU 検証で弾く（業務フローを棚番先行に統一）。
+                # 計画外出庫は __init__ で data-hh-lookup を 'stock' に上書きするが、
+                # その場合も stock チェック内で同じ棚番空チェックがあるので二重で安全。
+                'data-hh-require-loc': 'id_location_code',
                 'inputmode': 'text',
             }
         ),
@@ -108,7 +112,7 @@ class _StockOperationForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
 
@@ -281,7 +285,7 @@ class StockTransferForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
@@ -316,7 +320,8 @@ class HandheldStockInquiryForm(forms.Form):
     """ハンディ/スマホ向け在庫照会の検索フォーム。
 
     棚番・SKU の少なくとも一方は必須（両方任意では検索意味がない）。
-    SKU 欄は sku_code でも jan_code でも一致する（PC 版照会と同じ規約）。
+    SKU 欄は sku_code でも jan_code でも内部的に一致する（他ハンディ画面と
+    同じ規約）が、ラベル表示は他画面に合わせて「SKU」のみとする。
     解決した結果は self._location / self._sku に保持し、ビュー側で使う。
 
     `data-hh-lookup` 属性を付けて camera_scan.js のカメラボタン自動付与の対象に
@@ -340,13 +345,13 @@ class HandheldStockInquiryForm(forms.Form):
         ),
     )
     sku_code = forms.CharField(
-        label='SKU / JAN',
+        label='SKU',
         max_length=13,
         required=False,
         widget=forms.TextInput(
             attrs={
                 'class': 'form-control hh-key',
-                'placeholder': 'SKU か JAN をスキャン',
+                'placeholder': 'SKU をスキャン',
                 'autocomplete': 'off',
                 'data-hh-lookup': 'sku',
                 'inputmode': 'text',
@@ -385,14 +390,14 @@ class HandheldStockInquiryForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
         cleaned = super().clean()
         # どちらも空 → 検索条件なしなのでエラー
         if not cleaned.get('location_code') and not cleaned.get('sku_code'):
-            raise forms.ValidationError('棚番か SKU / JAN のどちらかを入力してください。')
+            raise forms.ValidationError('棚番か SKU のどちらかを入力してください。')
         return cleaned
 
 
@@ -483,6 +488,8 @@ class StocktakeCountForm(forms.Form):
                 'placeholder': 'SKU をスキャン',
                 'autocomplete': 'off',
                 'data-hh-lookup': 'sku',
+                # 業務フローを棚番先行に統一（その棚の SKU をカウントする画面）
+                'data-hh-require-loc': 'id_location_code',
                 'inputmode': 'text',
             }
         ),
@@ -536,7 +543,7 @@ class StocktakeCountForm(forms.Form):
             .first()
         )
         if self._sku is None:
-            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
