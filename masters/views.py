@@ -15,11 +15,26 @@ from core.utils import PAGE_SIZE, GetPageMixin, apply_ordering, paginate
 
 from .csv_io import DELIMITERS, MASTER_SPECS, build_csv, column_guide, import_csv
 from .forms import (
-    AreaForm, CategoryForm, CustomerForm, LocationBulkCreateForm, LocationForm,
-    ManufacturerForm, ProductForm, SkuForm, SupplierForm,
+    AreaForm,
+    CategoryForm,
+    CustomerForm,
+    LocationBulkCreateForm,
+    LocationForm,
+    ManufacturerForm,
+    ProductForm,
+    SkuForm,
+    SupplierForm,
 )
 from .models import (
-    Area, Category, Customer, Location, Manufacturer, Product, Sku, Supplier, Warehouse,
+    Area,
+    Category,
+    Customer,
+    Location,
+    Manufacturer,
+    Product,
+    Sku,
+    Supplier,
+    Warehouse,
 )
 from .utils import get_current_warehouse
 
@@ -79,14 +94,16 @@ class LocationFormContextMixin:
         if current_wh is not None:
             area_qs = area_qs.filter(warehouse=current_wh)
         for area in area_qs:
-            areas_by_type.setdefault(area.location_type, []).append({
-                'id': area.pk,
-                'area_code': area.area_code,
-                'area_name': area.area_name or '',
-                'warehouse_code': area.warehouse.warehouse_code,
-                'warehouse_name': area.warehouse.warehouse_name,
-                'location_type': area.location_type,
-            })
+            areas_by_type.setdefault(area.location_type, []).append(
+                {
+                    'id': area.pk,
+                    'area_code': area.area_code,
+                    'area_name': area.area_name or '',
+                    'warehouse_code': area.warehouse.warehouse_code,
+                    'warehouse_name': area.warehouse.warehouse_name,
+                    'location_type': area.location_type,
+                }
+            )
         ctx['areas_by_type_json'] = json.dumps(areas_by_type, ensure_ascii=False)
 
         # 区分ごとのセグメント定義
@@ -149,8 +166,8 @@ class FilterableListMixin(GetPageMixin):
             qs = qs.filter(is_active=False)
         if self.sortable:
             qs, self._sort, self._dir = apply_ordering(
-                self.request, qs, self.sortable,
-                self.default_sort, self.default_dir)
+                self.request, qs, self.sortable, self.default_sort, self.default_dir
+            )
         return qs
 
     def get_context_data(self, **kwargs):
@@ -166,6 +183,7 @@ class FilterableListMixin(GetPageMixin):
 
 
 # ---- Master Inquiry (combined Area + Location overview) ----
+
 
 class MasterInquiryView(LoginRequiredMixin, TemplateView):
     """エリアとロケーションを1画面で照会できる入口画面。
@@ -217,7 +235,8 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
             elif loc_status == 'inactive':
                 loc_qs = loc_qs.filter(is_active=False)
             loc_qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, loc_qs, self.SORTABLE, 'warehouse', 'asc')
+                self.request, loc_qs, self.SORTABLE, 'warehouse', 'asc'
+            )
             page = paginate(self.request, loc_qs)
             ctx['locations'] = page
             ctx['page_obj'] = page
@@ -226,7 +245,9 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
             ctx['loc_stats'] = {
                 'total': loc_qs.count(),
                 'storage': loc_qs.filter(area__location_type=Area.LocationType.STORAGE).count(),
-                'large_item': loc_qs.filter(area__location_type=Area.LocationType.LARGE_ITEM).count(),
+                'large_item': loc_qs.filter(
+                    area__location_type=Area.LocationType.LARGE_ITEM
+                ).count(),
                 'active': loc_qs.filter(is_active=True).count(),
                 'inactive': loc_qs.filter(is_active=False).count(),
             }
@@ -236,9 +257,8 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
 
         # ---- フィルタ選択肢 ----
         ctx['warehouses'] = Warehouse.objects.order_by('warehouse_code')
-        ctx['all_areas'] = (
-            Area.objects.select_related('warehouse')
-            .order_by('warehouse__warehouse_code', 'area_code')
+        ctx['all_areas'] = Area.objects.select_related('warehouse').order_by(
+            'warehouse__warehouse_code', 'area_code'
         )
         ctx['location_types'] = Area.LocationType.choices
 
@@ -255,6 +275,7 @@ class MasterInquiryView(LoginRequiredMixin, TemplateView):
 
 
 # ---- Area ----
+
 
 class AreaListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, ListView):
     model = Area
@@ -274,7 +295,8 @@ class AreaListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin
     def get_queryset(self):
         qs = super().get_queryset().select_related('warehouse')
         qs, self._sort, self._dir = apply_ordering(
-            self.request, qs, self.SORTABLE, 'warehouse', 'asc')
+            self.request, qs, self.SORTABLE, 'warehouse', 'asc'
+        )
         return qs
 
     def get_context_data(self, **kwargs):
@@ -301,7 +323,9 @@ class AreaUpdateView(CurrentWarehouseScopedMixin, LoginRequiredMixin, UpdateView
         return super().get_queryset().select_related('warehouse')
 
 
-class AreaDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+class AreaDeleteView(
+    CurrentWarehouseScopedMixin, LoginRequiredMixin, ProtectedErrorMixin, DeleteView
+):
     model = Area
     template_name = 'a/masters/area_confirm_delete.html'
     success_url = reverse_lazy('masters:area_list')
@@ -311,6 +335,7 @@ class AreaDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, ProtectedE
 
 
 # ---- Location ----
+
 
 class LocationListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, ListView):
     model = Location
@@ -331,7 +356,8 @@ class LocationListView(GetPageMixin, CurrentWarehouseScopedMixin, LoginRequiredM
     def get_queryset(self):
         qs = super().get_queryset().select_related('warehouse', 'area')
         qs, self._sort, self._dir = apply_ordering(
-            self.request, qs, self.SORTABLE, 'warehouse', 'asc')
+            self.request, qs, self.SORTABLE, 'warehouse', 'asc'
+        )
         return qs
 
     def get_context_data(self, **kwargs):
@@ -372,18 +398,23 @@ class LocationBulkCreateView(LocationFormContextMixin, LoginRequiredMixin, FormV
         with transaction.atomic():
             # 同一倉庫内で既に存在する棚番はスキップする
             existing = set(
-                Location.objects
-                .filter(warehouse=area.warehouse, location_code__in=codes)
-                .values_list('location_code', flat=True)
+                Location.objects.filter(
+                    warehouse=area.warehouse, location_code__in=codes
+                ).values_list('location_code', flat=True)
             )
             to_create = [c for c in codes if c not in existing]
-            Location.objects.bulk_create([
-                Location(
-                    warehouse=area.warehouse, area=area,
-                    location_code=code, location_name='', is_active=is_active,
-                )
-                for code in to_create
-            ])
+            Location.objects.bulk_create(
+                [
+                    Location(
+                        warehouse=area.warehouse,
+                        area=area,
+                        location_code=code,
+                        location_name='',
+                        is_active=is_active,
+                    )
+                    for code in to_create
+                ]
+            )
         created = len(to_create)
         skipped = len(existing)
         if created:
@@ -394,13 +425,14 @@ class LocationBulkCreateView(LocationFormContextMixin, LoginRequiredMixin, FormV
         else:
             messages.info(
                 self.request,
-                f'登録対象がありませんでした'
-                f'（生成した {skipped} 件はすべて既存の棚番です）。',
+                f'登録対象がありませんでした（生成した {skipped} 件はすべて既存の棚番です）。',
             )
         return super().form_valid(form)
 
 
-class LocationUpdateView(LocationFormContextMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, UpdateView):
+class LocationUpdateView(
+    LocationFormContextMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, UpdateView
+):
     model = Location
     form_class = LocationForm
     template_name = 'a/masters/location_form.html'
@@ -410,7 +442,9 @@ class LocationUpdateView(LocationFormContextMixin, CurrentWarehouseScopedMixin, 
         return super().get_queryset().select_related('warehouse', 'area')
 
 
-class LocationDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+class LocationDeleteView(
+    CurrentWarehouseScopedMixin, LoginRequiredMixin, ProtectedErrorMixin, DeleteView
+):
     model = Location
     template_name = 'a/masters/location_confirm_delete.html'
     success_url = reverse_lazy('masters:master_inquiry')
@@ -420,6 +454,7 @@ class LocationDeleteView(CurrentWarehouseScopedMixin, LoginRequiredMixin, Protec
 
 
 # ---- Category ----
+
 
 class CategoryListView(GetPageMixin, LoginRequiredMixin, ListView):
     """カテゴリ一覧。
@@ -481,8 +516,7 @@ class CategoryListView(GetPageMixin, LoginRequiredMixin, ListView):
         if q:
             ql = q.lower()
             result = [
-                c for c in result
-                if ql in c.category_code.lower() or ql in c.category_name.lower()
+                c for c in result if ql in c.category_code.lower() or ql in c.category_name.lower()
             ]
         if status == 'active':
             result = [c for c in result if c.is_active]
@@ -512,15 +546,17 @@ class CategoryListView(GetPageMixin, LoginRequiredMixin, ListView):
 
         nav = [
             {
-                'pk': c.pk, 'name': c.category_name, 'code': c.category_code,
-                'parent': c.parent_id, 'depth': depth_of(c),
+                'pk': c.pk,
+                'name': c.category_name,
+                'code': c.category_code,
+                'parent': c.parent_id,
+                'depth': depth_of(c),
                 'is_leaf': c.is_leaf,
             }
             for c in cats
         ]
         ctx['category_nav_json'] = json.dumps(nav, ensure_ascii=False)
-        ctx['level_labels_json'] = json.dumps(
-            Category.LEVEL_LABELS, ensure_ascii=False)
+        ctx['level_labels_json'] = json.dumps(Category.LEVEL_LABELS, ensure_ascii=False)
         return ctx
 
 
@@ -571,7 +607,7 @@ class CategoryCreateView(CategoryFormContextMixin, LoginRequiredMixin, CreateVie
 
     def get_success_url(self):
         # 登録後は一覧で新カテゴリにハイライト + 祖先自動展開
-        return f"{reverse('masters:category_list')}?highlight={self.object.pk}"
+        return f'{reverse("masters:category_list")}?highlight={self.object.pk}'
 
 
 class CategoryUpdateView(CategoryFormContextMixin, LoginRequiredMixin, UpdateView):
@@ -580,7 +616,7 @@ class CategoryUpdateView(CategoryFormContextMixin, LoginRequiredMixin, UpdateVie
     template_name = 'a/masters/category_form.html'
 
     def get_success_url(self):
-        return f"{reverse('masters:category_list')}?highlight={self.object.pk}"
+        return f'{reverse("masters:category_list")}?highlight={self.object.pk}'
 
 
 class CategoryDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
@@ -590,6 +626,7 @@ class CategoryDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 
 # ---- Manufacturer ----
+
 
 class ManufacturerListView(FilterableListMixin, LoginRequiredMixin, ListView):
     model = Manufacturer
@@ -628,6 +665,7 @@ class ManufacturerDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView
 
 
 # ---- Product ----
+
 
 class ProductInquiryView(LoginRequiredMixin, TemplateView):
     """商品の照会＋一覧。検索-first パターン（エリア・ロケーション照会と同じ規約）。
@@ -677,7 +715,8 @@ class ProductInquiryView(LoginRequiredMixin, TemplateView):
             elif p_status == 'inactive':
                 qs = qs.filter(is_active=False)
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'code', 'asc')
+                self.request, qs, self.SORTABLE, 'code', 'asc'
+            )
             page = paginate(self.request, qs)
             ctx['products'] = page
             ctx['page_obj'] = page
@@ -738,6 +777,7 @@ class ProductDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- SKU ----
 
+
 class SkuInquiryView(LoginRequiredMixin, TemplateView):
     """SKU の照会＋一覧。検索-first パターン（商品照会と同じ規約）。"""
 
@@ -769,9 +809,7 @@ class SkuInquiryView(LoginRequiredMixin, TemplateView):
         s_status = g.get('s_status', '')
 
         if searched:
-            qs = Sku.objects.select_related(
-                'product', 'product__category', 'product__manufacturer'
-            )
+            qs = Sku.objects.select_related('product', 'product__category', 'product__manufacturer')
             if s_q:
                 qs = qs.filter(Q(sku_code__icontains=s_q) | Q(jan_code__icontains=s_q))
             if s_product:
@@ -786,7 +824,8 @@ class SkuInquiryView(LoginRequiredMixin, TemplateView):
             elif s_status == 'inactive':
                 qs = qs.filter(is_active=False)
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'code', 'asc')
+                self.request, qs, self.SORTABLE, 'code', 'asc'
+            )
             page = paginate(self.request, qs)
             ctx['skus'] = page
             ctx['page_obj'] = page
@@ -839,6 +878,7 @@ class SkuDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- Supplier ----
 
+
 class SupplierListView(FilterableListMixin, LoginRequiredMixin, ListView):
     model = Supplier
     template_name = 'a/masters/supplier_list.html'
@@ -878,6 +918,7 @@ class SupplierDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 
 # ---- Customer ----
+
 
 class CustomerListView(FilterableListMixin, LoginRequiredMixin, ListView):
     model = Customer
@@ -932,6 +973,7 @@ class CustomerDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
 
 # ---- API (AJAX) ----
 
+
 class CustomerSearchAPIView(LoginRequiredMixin, View):
     """顧客検索 API（AJAX 用）。
 
@@ -945,20 +987,20 @@ class CustomerSearchAPIView(LoginRequiredMixin, View):
         q = (request.GET.get('q') or '').strip()
         qs = Customer.objects.filter(is_active=True)
         if q:
-            qs = qs.filter(
-                Q(customer_code__icontains=q) | Q(customer_name__icontains=q)
-            )
+            qs = qs.filter(Q(customer_code__icontains=q) | Q(customer_name__icontains=q))
         qs = qs.order_by('customer_code')[: self.LIMIT]
-        return JsonResponse({
-            'results': [
-                {
-                    'id': c.pk,
-                    'customer_code': c.customer_code,
-                    'customer_name': c.customer_name,
-                }
-                for c in qs
-            ]
-        })
+        return JsonResponse(
+            {
+                'results': [
+                    {
+                        'id': c.pk,
+                        'customer_code': c.customer_code,
+                        'customer_name': c.customer_name,
+                    }
+                    for c in qs
+                ]
+            }
+        )
 
 
 class SupplierSearchAPIView(LoginRequiredMixin, View):
@@ -980,17 +1022,19 @@ class SupplierSearchAPIView(LoginRequiredMixin, View):
                 | Q(contact_person__icontains=q)
             )
         qs = qs.order_by('supplier_code')[: self.LIMIT]
-        return JsonResponse({
-            'results': [
-                {
-                    'id': s.pk,
-                    'supplier_code': s.supplier_code,
-                    'supplier_name': s.supplier_name,
-                    'contact_person': s.contact_person,
-                }
-                for s in qs
-            ]
-        })
+        return JsonResponse(
+            {
+                'results': [
+                    {
+                        'id': s.pk,
+                        'supplier_code': s.supplier_code,
+                        'supplier_name': s.supplier_name,
+                        'contact_person': s.contact_person,
+                    }
+                    for s in qs
+                ]
+            }
+        )
 
 
 class SkuSearchAPIView(LoginRequiredMixin, View):
@@ -1004,10 +1048,7 @@ class SkuSearchAPIView(LoginRequiredMixin, View):
 
     def get(self, request):
         q = (request.GET.get('q') or '').strip()
-        qs = (
-            Sku.objects.filter(is_active=True)
-            .select_related('product', 'product__manufacturer')
-        )
+        qs = Sku.objects.filter(is_active=True).select_related('product', 'product__manufacturer')
         if q:
             qs = qs.filter(
                 Q(sku_code__icontains=q)
@@ -1016,23 +1057,26 @@ class SkuSearchAPIView(LoginRequiredMixin, View):
                 | Q(product__product_code__icontains=q)
             )
         qs = qs.order_by('sku_code')[: self.LIMIT]
-        return JsonResponse({
-            'results': [
-                {
-                    'sku_code': sku.sku_code,
-                    'jan_code': sku.jan_code,
-                    'product_name': sku.product.product_name,
-                    'product_code': sku.product.product_code,
-                    'size_info': sku.size_info,
-                    'color_info': sku.color_info,
-                    'manufacturer_name': (
-                        sku.product.manufacturer.manufacturer_name
-                        if sku.product.manufacturer_id else ''
-                    ),
-                }
-                for sku in qs
-            ]
-        })
+        return JsonResponse(
+            {
+                'results': [
+                    {
+                        'sku_code': sku.sku_code,
+                        'jan_code': sku.jan_code,
+                        'product_name': sku.product.product_name,
+                        'product_code': sku.product.product_code,
+                        'size_info': sku.size_info,
+                        'color_info': sku.color_info,
+                        'manufacturer_name': (
+                            sku.product.manufacturer.manufacturer_name
+                            if sku.product.manufacturer_id
+                            else ''
+                        ),
+                    }
+                    for sku in qs
+                ]
+            }
+        )
 
 
 class SkuLookupAPIView(LoginRequiredMixin, View):
@@ -1047,21 +1091,19 @@ class SkuLookupAPIView(LoginRequiredMixin, View):
         code = (request.GET.get('code') or '').strip()
         if not code:
             return JsonResponse({'found': False})
-        sku = (
-            Sku.objects.select_related('product')
-            .filter(sku_code=code, is_active=True)
-            .first()
-        )
+        sku = Sku.objects.select_related('product').filter(sku_code=code, is_active=True).first()
         if sku is None:
             return JsonResponse({'found': False})
-        return JsonResponse({
-            'found': True,
-            'sku_code': sku.sku_code,
-            'jan_code': sku.jan_code,
-            'product_name': sku.product.product_name,
-            'size_info': sku.size_info,
-            'color_info': sku.color_info,
-        })
+        return JsonResponse(
+            {
+                'found': True,
+                'sku_code': sku.sku_code,
+                'jan_code': sku.jan_code,
+                'product_name': sku.product.product_name,
+                'size_info': sku.size_info,
+                'color_info': sku.color_info,
+            }
+        )
 
 
 class LocationLookupAPIView(LoginRequiredMixin, View):
@@ -1076,28 +1118,28 @@ class LocationLookupAPIView(LoginRequiredMixin, View):
         code = (request.GET.get('code') or '').strip()
         if not code:
             return JsonResponse({'found': False})
-        qs = (
-            Location.objects.select_related('area')
-            .filter(location_code=code, is_active=True)
-        )
+        qs = Location.objects.select_related('area').filter(location_code=code, is_active=True)
         wh = get_current_warehouse(request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
         location = qs.first()
         if location is None:
             return JsonResponse({'found': False})
-        return JsonResponse({
-            'found': True,
-            'location_code': location.location_code,
-            'location_name': location.location_name,
-            'area_name': location.area.area_name or location.area.area_code,
-            # エリア区分（storage / large_item）。棚入れ時の格納先チェックに使う
-            'area_location_type': location.area.location_type,
-            'area_location_type_display': location.area.get_location_type_display(),
-        })
+        return JsonResponse(
+            {
+                'found': True,
+                'location_code': location.location_code,
+                'location_name': location.location_name,
+                'area_name': location.area.area_name or location.area.area_code,
+                # エリア区分（storage / large_item）。棚入れ時の格納先チェックに使う
+                'area_location_type': location.area.location_type,
+                'area_location_type_display': location.area.get_location_type_display(),
+            }
+        )
 
 
 # ---- マスタ CSV 入出力 ----
+
 
 class MasterCsvExportView(LoginRequiredMixin, View):
     """マスタを CSV（UTF-8 BOM付）でエクスポートする。
@@ -1165,14 +1207,10 @@ class MasterCsvImportView(LoginRequiredMixin, TemplateView):
             return HttpResponseRedirect(reverse(spec.list_url))
 
         # 失敗: ErrorLog に1件記録し、画面に行ごとのエラーを表示する
-        detail = '\n'.join(
-            f'{line}行目: {msg}' if line else msg
-            for line, msg in report.errors
-        )
+        detail = '\n'.join(f'{line}行目: {msg}' if line else msg for line, msg in report.errors)
         ErrorLog.objects.create(
             error_type=ErrorLog.ErrorType.IMPORT,
-            summary=(f'CSVインポート失敗: {spec.label}マスタ '
-                     f'{len(report.errors)}件のエラー')[:255],
+            summary=(f'CSVインポート失敗: {spec.label}マスタ {len(report.errors)}件のエラー')[:255],
             detail=f'ファイル名: {upload.name}\n\n{detail}',
             source=f'マスタCSVインポート（{spec.label}）',
             request_method='POST',

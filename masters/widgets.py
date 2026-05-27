@@ -1,4 +1,5 @@
 """カスタムフォームウィジェット。"""
+
 from django import forms
 
 

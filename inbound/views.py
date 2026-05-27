@@ -8,9 +8,13 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.decorators.http import require_POST
 from django.views.generic import (
-    CreateView, DeleteView, DetailView, TemplateView, UpdateView, View,
+    CreateView,
+    DeleteView,
+    DetailView,
+    TemplateView,
+    UpdateView,
+    View,
 )
 
 from core.order_csv import OrderCsvExportView, OrderCsvImportView
@@ -72,8 +76,7 @@ class PendingOnlyMixin:
         if order.in_progress_by_id:
             messages.error(
                 request,
-                f'入荷指示 {order.inbound_order_code} は受入れ作業中のため、'
-                f'編集・削除できません。',
+                f'入荷指示 {order.inbound_order_code} は受入れ作業中のため、編集・削除できません。',
             )
             return HttpResponseRedirect(reverse('inbound:order_inquiry'))
         return super().dispatch(request, *args, **kwargs)
@@ -124,8 +127,7 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
 
     template_name = 'a/inbound/order_inquiry.html'
 
-    SEARCH_KEYS = ('q', 'supplier', 'status', 'source_type',
-                   'expected_from', 'expected_to')
+    SEARCH_KEYS = ('q', 'supplier', 'status', 'source_type', 'expected_from', 'expected_to')
 
     SORTABLE = {
         'code': ['inbound_order_code'],
@@ -156,26 +158,24 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
 
         if searched:
             qs = _filtered_inbound_orders(self.request).select_related(
-                'warehouse', 'supplier', 'created_by', 'in_progress_by')
+                'warehouse', 'supplier', 'created_by', 'in_progress_by'
+            )
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_expected=Sum('items__quantity_expected'),
             )
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'created', 'desc')
+                self.request, qs, self.SORTABLE, 'created', 'desc'
+            )
             page = paginate(self.request, qs)
             ctx['orders'] = page
             ctx['page_obj'] = page
             ctx['stats'] = {
                 'total': qs.count(),
-                'receiving_wait': qs.filter(
-                    status=InboundOrder.Status.RECEIVING_WAIT).count(),
-                'inspection_wait': qs.filter(
-                    status=InboundOrder.Status.INSPECTION_WAIT).count(),
-                'putaway_wait': qs.filter(
-                    status=InboundOrder.Status.PUTAWAY_WAIT).count(),
-                'completed': qs.filter(
-                    status=InboundOrder.Status.COMPLETED).count(),
+                'receiving_wait': qs.filter(status=InboundOrder.Status.RECEIVING_WAIT).count(),
+                'inspection_wait': qs.filter(status=InboundOrder.Status.INSPECTION_WAIT).count(),
+                'putaway_wait': qs.filter(status=InboundOrder.Status.PUTAWAY_WAIT).count(),
+                'completed': qs.filter(status=InboundOrder.Status.COMPLETED).count(),
             }
         else:
             ctx['orders'] = InboundOrder.objects.none()
@@ -187,9 +187,7 @@ class InboundOrderInquiryView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class InboundOrderDetailView(
-    CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView
-):
+class InboundOrderDetailView(CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView):
     """入荷指示の詳細（読み取り専用）。入荷指示照会の「表示」から遷移。
 
     指示の概要・明細に加え、受け入れ／検品／棚入れの実績（実入荷数・検品結果・
@@ -209,9 +207,9 @@ class InboundOrderDetailView(
             'inboundreceipt__putaway_by',
         ).order_by('sku__sku_code')
         return (
-            super().get_queryset()
-            .select_related('warehouse', 'supplier', 'created_by',
-                            'in_progress_by')
+            super()
+            .get_queryset()
+            .select_related('warehouse', 'supplier', 'created_by', 'in_progress_by')
             .prefetch_related(Prefetch('items', queryset=items_qs))
         )
 
@@ -232,14 +230,16 @@ class _OrderFormMixin:
         # 新規登録時のみ: 種別切替で JS が伝票番号を差し替えるための候補値を渡す
         if not self.object:
             today = timezone.localdate()
-            ctx['next_codes_json'] = json.dumps({
-                InboundOrder.SourceType.MANUAL.value: InboundOrder.next_code(
-                    today, InboundOrder.SourceType.MANUAL.value
-                ),
-                InboundOrder.SourceType.RETURN.value: InboundOrder.next_code(
-                    today, InboundOrder.SourceType.RETURN.value
-                ),
-            })
+            ctx['next_codes_json'] = json.dumps(
+                {
+                    InboundOrder.SourceType.MANUAL.value: InboundOrder.next_code(
+                        today, InboundOrder.SourceType.MANUAL.value
+                    ),
+                    InboundOrder.SourceType.RETURN.value: InboundOrder.next_code(
+                        today, InboundOrder.SourceType.RETURN.value
+                    ),
+                }
+            )
         return ctx
 
     def form_valid(self, form):
@@ -277,8 +277,7 @@ class InboundOrderCreateView(_OrderFormMixin, LoginRequiredMixin, CreateView):
 
 
 class InboundOrderUpdateView(
-    _OrderFormMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin,
-    PendingOnlyMixin, UpdateView
+    _OrderFormMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, PendingOnlyMixin, UpdateView
 ):
     model = InboundOrder
     success_url = reverse_lazy('inbound:order_inquiry')
@@ -288,8 +287,11 @@ class InboundOrderUpdateView(
 
 
 class InboundOrderDeleteView(
-    CurrentWarehouseScopedMixin, LoginRequiredMixin, PendingOnlyMixin,
-    ProtectedErrorMixin, DeleteView
+    CurrentWarehouseScopedMixin,
+    LoginRequiredMixin,
+    PendingOnlyMixin,
+    ProtectedErrorMixin,
+    DeleteView,
 ):
     model = InboundOrder
     template_name = 'a/inbound/order_confirm_delete.html'
@@ -297,7 +299,8 @@ class InboundOrderDeleteView(
 
     def get_queryset(self):
         return (
-            super().get_queryset()
+            super()
+            .get_queryset()
             .select_related('warehouse', 'supplier', 'created_by')
             .prefetch_related('items__sku__product')
         )
@@ -315,8 +318,7 @@ class InboundArrivalView(LoginRequiredMixin, View):
 
     def _scoped_orders(self):
         """現在ログイン中の倉庫スコープに絞った InboundOrder クエリセット。"""
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -368,8 +370,7 @@ class InboundArrivalView(LoginRequiredMixin, View):
                 worker = prev.display_name or prev.username
                 messages.error(
                     request,
-                    f'入荷指示 {order.inbound_order_code} は {worker} が'
-                    f'受入れ作業中です。',
+                    f'入荷指示 {order.inbound_order_code} は {worker} が受入れ作業中です。',
                 )
                 return HttpResponseRedirect(reverse('inbound:handheld_arrival'))
             # 担当者として確保。担当者が変わるとき（新規・引き継ぎ）は開始時刻を更新
@@ -383,8 +384,7 @@ class InboundArrivalView(LoginRequiredMixin, View):
                     request,
                     f'{worker} から受入れ作業を引き継ぎました。',
                 )
-        return HttpResponseRedirect(
-            reverse('inbound:handheld_receiving', args=[order.pk]))
+        return HttpResponseRedirect(reverse('inbound:handheld_receiving', args=[order.pk]))
 
 
 class InboundReceivingView(LoginRequiredMixin, View):
@@ -399,8 +399,7 @@ class InboundReceivingView(LoginRequiredMixin, View):
     template_name = 'a/inbound/handheld/receiving.html'
 
     def _scoped_orders(self):
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -418,25 +417,17 @@ class InboundReceivingView(LoginRequiredMixin, View):
                 f'「{order.get_status_display()}」のため、受入れ作業の対象外です。',
             )
             return HttpResponseRedirect(reverse('inbound:handheld_arrival'))
-        if (order.in_progress_by_id
-                and order.in_progress_by_id != request.user.pk):
-            worker = (order.in_progress_by.display_name
-                      or order.in_progress_by.username)
+        if order.in_progress_by_id and order.in_progress_by_id != request.user.pk:
+            worker = order.in_progress_by.display_name or order.in_progress_by.username
             messages.error(
                 request,
-                f'入荷指示 {order.inbound_order_code} は {worker} が'
-                f'受入れ作業中です。',
+                f'入荷指示 {order.inbound_order_code} は {worker} が受入れ作業中です。',
             )
             return HttpResponseRedirect(reverse('inbound:handheld_arrival'))
         return None
 
     def get(self, request, pk, *args, **kwargs):
-        order = (
-            self._scoped_orders()
-            .prefetch_related('items__sku__product')
-            .filter(pk=pk)
-            .first()
-        )
+        order = self._scoped_orders().prefetch_related('items__sku__product').filter(pk=pk).first()
         guard = self._guard(request, order)
         if guard:
             return guard
@@ -451,8 +442,7 @@ class InboundReceivingView(LoginRequiredMixin, View):
             }
             for it in order.items.all()
         ]
-        return render(request, self.template_name,
-                      {'order': order, 'items': items})
+        return render(request, self.template_name, {'order': order, 'items': items})
 
     def post(self, request, pk, *args, **kwargs):
         with transaction.atomic():
@@ -483,9 +473,7 @@ class InboundReceivingView(LoginRequiredMixin, View):
                         f'実数が未確認の商品があります（{it.sku.sku_code}）。'
                         f'受入れ作業をやり直してください。',
                     )
-                    return HttpResponseRedirect(
-                        reverse('inbound:handheld_receiving', args=[pk])
-                    )
+                    return HttpResponseRedirect(reverse('inbound:handheld_receiving', args=[pk]))
                 parsed[it.pk] = val
 
             for it in items:
@@ -500,8 +488,7 @@ class InboundReceivingView(LoginRequiredMixin, View):
 
         messages.success(
             request,
-            f'入荷指示 {order.inbound_order_code} の受け入れを確定しました。'
-            f'（次工程: 入荷検品）',
+            f'入荷指示 {order.inbound_order_code} の受け入れを確定しました。（次工程: 入荷検品）',
         )
         return HttpResponseRedirect(reverse('inbound:handheld_arrival'))
 
@@ -517,8 +504,7 @@ class InboundInspectionView(LoginRequiredMixin, View):
     template_name = 'a/inbound/handheld/inspection.html'
 
     def _scoped_orders(self):
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -570,8 +556,7 @@ class InboundInspectionView(LoginRequiredMixin, View):
                 worker = prev.display_name or prev.username
                 messages.error(
                     request,
-                    f'入荷指示 {order.inbound_order_code} は {worker} が'
-                    f'検品作業中です。',
+                    f'入荷指示 {order.inbound_order_code} は {worker} が検品作業中です。',
                 )
                 return HttpResponseRedirect(reverse('inbound:handheld_inspection'))
             # 担当者として確保。担当者が変わるとき（新規・引き継ぎ）は開始時刻を更新
@@ -585,8 +570,7 @@ class InboundInspectionView(LoginRequiredMixin, View):
                     request,
                     f'{worker} から検品作業を引き継ぎました。',
                 )
-        return HttpResponseRedirect(
-            reverse('inbound:handheld_inspection_work', args=[order.pk]))
+        return HttpResponseRedirect(reverse('inbound:handheld_inspection_work', args=[order.pk]))
 
 
 class InboundInspectionWorkView(LoginRequiredMixin, View):
@@ -601,8 +585,7 @@ class InboundInspectionWorkView(LoginRequiredMixin, View):
     template_name = 'a/inbound/handheld/inspection_work.html'
 
     def _scoped_orders(self):
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -620,25 +603,17 @@ class InboundInspectionWorkView(LoginRequiredMixin, View):
                 f'「{order.get_status_display()}」のため、検品の対象外です。',
             )
             return HttpResponseRedirect(reverse('inbound:handheld_inspection'))
-        if (order.in_progress_by_id
-                and order.in_progress_by_id != request.user.pk):
-            worker = (order.in_progress_by.display_name
-                      or order.in_progress_by.username)
+        if order.in_progress_by_id and order.in_progress_by_id != request.user.pk:
+            worker = order.in_progress_by.display_name or order.in_progress_by.username
             messages.error(
                 request,
-                f'入荷指示 {order.inbound_order_code} は {worker} が'
-                f'検品作業中です。',
+                f'入荷指示 {order.inbound_order_code} は {worker} が検品作業中です。',
             )
             return HttpResponseRedirect(reverse('inbound:handheld_inspection'))
         return None
 
     def get(self, request, pk, *args, **kwargs):
-        order = (
-            self._scoped_orders()
-            .prefetch_related('items__sku__product')
-            .filter(pk=pk)
-            .first()
-        )
+        order = self._scoped_orders().prefetch_related('items__sku__product').filter(pk=pk).first()
         guard = self._guard(request, order)
         if guard:
             return guard
@@ -654,8 +629,7 @@ class InboundInspectionWorkView(LoginRequiredMixin, View):
             }
             for it in order.items.all()
         ]
-        return render(request, self.template_name,
-                      {'order': order, 'items': items})
+        return render(request, self.template_name, {'order': order, 'items': items})
 
     @staticmethod
     def _to_int(raw):
@@ -701,7 +675,7 @@ class InboundInspectionWorkView(LoginRequiredMixin, View):
             # 明細ごとに InboundReceipt（検品結果）を作成
             for it in items:
                 good, defective, reason = parsed[it.pk]
-                total = good + defective   # 検品した入荷総数
+                total = good + defective  # 検品した入荷総数
                 if total < it.quantity_expected:
                     dtype = InboundReceipt.DiscrepancyType.SHORTAGE
                 elif total > it.quantity_expected:
@@ -727,8 +701,7 @@ class InboundInspectionWorkView(LoginRequiredMixin, View):
 
         messages.success(
             request,
-            f'入荷指示 {order.inbound_order_code} の検品が完了しました。'
-            f'（次工程: 棚入れ）',
+            f'入荷指示 {order.inbound_order_code} の検品が完了しました。（次工程: 棚入れ）',
         )
         return HttpResponseRedirect(reverse('inbound:handheld_inspection'))
 
@@ -746,14 +719,16 @@ def _putaway_item_rows(order):
     rows = []
     for it in order.items.select_related('sku__product', 'inboundreceipt').all():
         receipt = _receipt_of(it)
-        rows.append({
-            'sku': it.sku.sku_code,
-            'name': it.sku.product.product_name,
-            'received': receipt.quantity_received if receipt else None,
-            'defective': receipt.quantity_defective if receipt else 0,
-            # 計上数（在庫に積む数）= 実入荷数 − 不良品数。未検品は None
-            'good': receipt.quantity_good if receipt else None,
-        })
+        rows.append(
+            {
+                'sku': it.sku.sku_code,
+                'name': it.sku.product.product_name,
+                'received': receipt.quantity_received if receipt else None,
+                'defective': receipt.quantity_defective if receipt else 0,
+                # 計上数（在庫に積む数）= 実入荷数 − 不良品数。未検品は None
+                'good': receipt.quantity_good if receipt else None,
+            }
+        )
     return rows
 
 
@@ -768,8 +743,7 @@ class InboundPutawayView(LoginRequiredMixin, View):
     template_name = 'a/inbound/handheld/putaway.html'
 
     def _scoped_orders(self):
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -779,11 +753,7 @@ class InboundPutawayView(LoginRequiredMixin, View):
         code = request.GET.get('code', '').strip()
         ctx = {'code': code}
         if code:
-            order = (
-                self._scoped_orders()
-                .filter(inbound_order_code=code)
-                .first()
-            )
+            order = self._scoped_orders().filter(inbound_order_code=code).first()
             if order is None:
                 ctx['lookup_error'] = f'入荷指示番号「{code}」は見つかりません。'
             else:
@@ -821,8 +791,7 @@ class InboundPutawayView(LoginRequiredMixin, View):
                 worker = prev.display_name or prev.username
                 messages.error(
                     request,
-                    f'入荷指示 {order.inbound_order_code} は {worker} が'
-                    f'棚入れ作業中です。',
+                    f'入荷指示 {order.inbound_order_code} は {worker} が棚入れ作業中です。',
                 )
                 return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
             # 担当者として確保。担当者が変わるとき（新規・引き継ぎ）は開始時刻を更新
@@ -836,8 +805,7 @@ class InboundPutawayView(LoginRequiredMixin, View):
                     request,
                     f'{worker} から棚入れ作業を引き継ぎました。',
                 )
-        return HttpResponseRedirect(
-            reverse('inbound:handheld_putaway_work', args=[order.pk]))
+        return HttpResponseRedirect(reverse('inbound:handheld_putaway_work', args=[order.pk]))
 
 
 class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
@@ -859,8 +827,7 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
     template_name = 'a/inbound/handheld/putaway_work.html'
 
     def _scoped_orders(self):
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -878,14 +845,11 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
                 f'「{order.get_status_display()}」のため、棚入れの対象外です。',
             )
             return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
-        if (order.in_progress_by_id
-                and order.in_progress_by_id != request.user.pk):
-            worker = (order.in_progress_by.display_name
-                      or order.in_progress_by.username)
+        if order.in_progress_by_id and order.in_progress_by_id != request.user.pk:
+            worker = order.in_progress_by.display_name or order.in_progress_by.username
             messages.error(
                 request,
-                f'入荷指示 {order.inbound_order_code} は {worker} が'
-                f'棚入れ作業中です。',
+                f'入荷指示 {order.inbound_order_code} は {worker} が棚入れ作業中です。',
             )
             return HttpResponseRedirect(reverse('inbound:handheld_putaway'))
         return None
@@ -898,24 +862,28 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
         # COMPLETED の場合は最終結果サマリを読み取り専用で表示
         if order.status == InboundOrder.Status.COMPLETED:
             summary_items = []
-            for it in order.items.select_related(
-                    'sku__product', 'inboundreceipt').all():
+            for it in order.items.select_related('sku__product', 'inboundreceipt').all():
                 receipt = _receipt_of(it)
                 if receipt is None:
                     continue
-                summary_items.append({
-                    'sku': it.sku.sku_code,
-                    'name': it.sku.product.product_name,
-                    'good': receipt.quantity_good,
-                    'location': (receipt.location.location_code
-                                 if receipt.location else ''),
-                    'skip': receipt.quantity_good <= 0,
-                })
-            return render(request, self.template_name, {
-                'mode': 'summary',
-                'order': order,
-                'summary_items': summary_items,
-            })
+                summary_items.append(
+                    {
+                        'sku': it.sku.sku_code,
+                        'name': it.sku.product.product_name,
+                        'good': receipt.quantity_good,
+                        'location': (receipt.location.location_code if receipt.location else ''),
+                        'skip': receipt.quantity_good <= 0,
+                    }
+                )
+            return render(
+                request,
+                self.template_name,
+                {
+                    'mode': 'summary',
+                    'order': order,
+                    'summary_items': summary_items,
+                },
+            )
         guard = self._guard(request, order)
         if guard:
             return guard
@@ -923,8 +891,7 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
         items = []
         done_count = 0
         total = 0
-        for it in order.items.select_related(
-                'sku__product', 'inboundreceipt').all():
+        for it in order.items.select_related('sku__product', 'inboundreceipt').all():
             receipt = _receipt_of(it)
             if receipt is None:
                 # 検品結果が無い = データ不整合。入口へ差し戻す
@@ -939,22 +906,30 @@ class InboundPutawayWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
                 done_count += 1
                 continue
             good = receipt.quantity_good
-            items.append({
-                'id': it.pk,
-                'sku': it.sku.sku_code,
-                'jan': it.sku.jan_code or '',
-                'name': it.sku.product.product_name,
-                'received': receipt.quantity_received,
-                'defective': receipt.quantity_defective,
-                'good': good,
-                # 格納可能なエリア区分（ピッキング種別から決まる）
-                'area_type': it.sku.required_location_type,
-                'area_type_label': it.sku.required_location_type.label,
-            })
-        return render(request, self.template_name, {
-            'order': order, 'items': items,
-            'done_count': done_count, 'total': total,
-        })
+            items.append(
+                {
+                    'id': it.pk,
+                    'sku': it.sku.sku_code,
+                    'jan': it.sku.jan_code or '',
+                    'name': it.sku.product.product_name,
+                    'received': receipt.quantity_received,
+                    'defective': receipt.quantity_defective,
+                    'good': good,
+                    # 格納可能なエリア区分（ピッキング種別から決まる）
+                    'area_type': it.sku.required_location_type,
+                    'area_type_label': it.sku.required_location_type.label,
+                }
+            )
+        return render(
+            request,
+            self.template_name,
+            {
+                'order': order,
+                'items': items,
+                'done_count': done_count,
+                'total': total,
+            },
+        )
 
 
 class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
@@ -973,8 +948,7 @@ class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
     http_method_names = ['post']
 
     def _scoped_orders(self, request):
-        qs = InboundOrder.objects.select_related(
-            'supplier', 'warehouse', 'in_progress_by')
+        qs = InboundOrder.objects.select_related('supplier', 'warehouse', 'in_progress_by')
         wh = get_current_warehouse(request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -990,82 +964,97 @@ class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
                 .first()
             )
             if order is None:
-                return JsonResponse({
-                    'ok': False, 'error': '入荷指示が見つかりません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': '入荷指示が見つかりません。',
+                    }
+                )
             if order.status != InboundOrder.Status.PUTAWAY_WAIT:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'入荷指示 {order.inbound_order_code} は'
-                             f'「{order.get_status_display()}」のため棚入れできません。',
-                })
-            if (order.in_progress_by_id
-                    and order.in_progress_by_id != request.user.pk):
-                worker = (order.in_progress_by.display_name
-                          or order.in_progress_by.username)
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'{worker} が棚入れ作業中です。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'入荷指示 {order.inbound_order_code} は'
+                        f'「{order.get_status_display()}」のため棚入れできません。',
+                    }
+                )
+            if order.in_progress_by_id and order.in_progress_by_id != request.user.pk:
+                worker = order.in_progress_by.display_name or order.in_progress_by.username
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'{worker} が棚入れ作業中です。',
+                    }
+                )
 
-            item = (
-                order.items.select_related('sku__product')
-                .filter(pk=item_pk).first()
-            )
+            item = order.items.select_related('sku__product').filter(pk=item_pk).first()
             if item is None:
-                return JsonResponse({
-                    'ok': False, 'error': '対象の明細が見つかりません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': '対象の明細が見つかりません。',
+                    }
+                )
             receipt = _receipt_of(item)
             if receipt is None:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'{item.sku.sku_code} は未検品です。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'{item.sku.sku_code} は未検品です。',
+                    }
+                )
             if receipt.putaway_at is not None:
                 # 既に確定済み（重複 POST の防御）
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'{item.sku.sku_code} は既に棚入れ済みです。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'{item.sku.sku_code} は既に棚入れ済みです。',
+                    }
+                )
 
             good = receipt.quantity_good
             location = None
             if good > 0:
                 if not location_code:
-                    return JsonResponse({
-                        'ok': False, 'error': '格納先の棚番を入力してください。',
-                    })
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': '格納先の棚番を入力してください。',
+                        }
+                    )
                 location = (
                     Location.objects.select_related('area')
-                    .filter(location_code=location_code, is_active=True,
-                            warehouse=order.warehouse)
+                    .filter(location_code=location_code, is_active=True, warehouse=order.warehouse)
                     .first()
                 )
                 if location is None:
-                    return JsonResponse({
-                        'ok': False,
-                        'error': f'棚番「{location_code}」は存在しないか無効です。',
-                    })
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': f'棚番「{location_code}」は存在しないか無効です。',
+                        }
+                    )
                 required = item.sku.required_location_type
                 if location.area.location_type != required:
-                    return JsonResponse({
-                        'ok': False,
-                        'error': f'{item.sku.sku_code} は「{required.label}」エリアに'
-                                 f'格納してください（「{location_code}」は'
-                                 f'「{location.area.get_location_type_display()}」エリア）。',
-                    })
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': f'{item.sku.sku_code} は「{required.label}」エリアに'
+                            f'格納してください（「{location_code}」は'
+                            f'「{location.area.get_location_type_display()}」エリア）。',
+                        }
+                    )
 
             # 在庫加算 + StockMovement.IN 発行（不良のみ＝good==0 のときは何もしない）
             movement = None
             if good > 0:
                 StockBalance.objects.get_or_create(
-                    location=location, sku=item.sku,
+                    location=location,
+                    sku=item.sku,
                     defaults={'quantity': 0},
                 )
-                balance = (
-                    StockBalance.objects.select_for_update()
-                    .get(location=location, sku=item.sku)
+                balance = StockBalance.objects.select_for_update().get(
+                    location=location, sku=item.sku
                 )
                 quantity_before = balance.quantity
                 quantity_after = quantity_before + good
@@ -1095,12 +1084,8 @@ class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
             receipt.save()
 
             # 全明細が putaway_at を持ったら入荷指示を COMPLETED に
-            remaining = (
-                order.items
-                .filter(inboundreceipt__putaway_at__isnull=True)
-                .count()
-            )
-            all_done = (remaining == 0)
+            remaining = order.items.filter(inboundreceipt__putaway_at__isnull=True).count()
+            all_done = remaining == 0
             if all_done:
                 order.status = InboundOrder.Status.COMPLETED
                 order.received_at = now
@@ -1108,21 +1093,27 @@ class InboundPutawayItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
                 order.in_progress_at = None
                 order.save()
 
-        return JsonResponse({
-            'ok': True, 'all_done': all_done, 'remaining': remaining,
-            'location': location.location_code if location else '',
-            'location_name': location.location_name if location else '',
-            'area_name': location.area.area_name if location else '',
-        })
+        return JsonResponse(
+            {
+                'ok': True,
+                'all_done': all_done,
+                'remaining': remaining,
+                'location': location.location_code if location else '',
+                'location_name': location.location_name if location else '',
+                'area_name': location.area.area_name if location else '',
+            }
+        )
 
 
 # ---- 入荷指示 CSV 入出力 ----
+
 
 class InboundOrderCsvExportView(OrderCsvExportView):
     """入荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。
 
     照会画面と同じ検索条件（GET）を反映する。条件未指定なら全件出力。
     """
+
     spec = INBOUND_ORDER_SPEC
 
     def get_queryset(self, request):
@@ -1131,4 +1122,5 @@ class InboundOrderCsvExportView(OrderCsvExportView):
 
 class InboundOrderCsvImportView(OrderCsvImportView):
     """入荷指示を CSV でインポートする（新規作成のみ）。"""
+
     spec = INBOUND_ORDER_SPEC

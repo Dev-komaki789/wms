@@ -3,6 +3,7 @@
 ロール判定は Django 標準の Group を使う。グループ名は HANDHELD_GROUP_NAME。
 superuser は制限の対象外（常に全画面アクセス可）。
 """
+
 from django.contrib.auth.models import Group
 
 # ハンディ専用作業者を表す Group 名

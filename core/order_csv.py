@@ -10,6 +10,7 @@
 列定義は inbound/csv_io.py・outbound/csv_io.py の OrderCsvSpec で与える。
 画面は OrderCsvExportView / OrderCsvImportView を継承して spec を差すだけ。
 """
+
 import csv
 import datetime
 import io
@@ -48,47 +49,51 @@ class RowError(Exception):
 
 # --- 列定義 -----------------------------------------------------------------
 
+
 @dataclass
 class Field:
     """単純列（文字列 / 数値 / 真偽 / 日付 / 日時）。"""
+
     header: str
     attr: str
-    kind: str = 'str'      # 'str' | 'int' | 'bool' | 'date' | 'datetime'
+    kind: str = 'str'  # 'str' | 'int' | 'bool' | 'date' | 'datetime'
     required: bool = False
     default: object = None
-    note: str = ''         # 取込画面の説明（空なら kind から自動生成）
+    note: str = ''  # 取込画面の説明（空なら kind から自動生成）
 
 
 @dataclass
 class FkField:
     """外部キー列。参照先を lookup フィールドのコードで引く。"""
+
     header: str
     attr: str
     model: object
     lookup: str
     required: bool = True
-    active_only: bool = False   # is_active=True のものだけ参照可
+    active_only: bool = False  # is_active=True のものだけ参照可
     note: str = ''
 
 
 @dataclass
 class OrderCsvSpec:
     """1指示種（入荷指示 / 出荷指示）の CSV 定義。"""
-    key: str                   # 'inbound' / 'outbound'
-    label: str                 # '入荷指示' / '出荷指示'
+
+    key: str  # 'inbound' / 'outbound'
+    label: str  # '入荷指示' / '出荷指示'
     order_model: object
     item_model: object
-    code_field: str            # 指示番号フィールド名
-    item_order_fk: str         # 明細→指示の FK フィールド名
-    list_url: str              # 一覧画面の URL 名
-    export_url: str            # エクスポート URL 名
-    import_url: str            # インポート URL 名
-    header_fields: list        # 指示ヘッダの Field/FkField（先頭は指示番号）
-    item_fields: list          # 明細の Field/FkField
+    code_field: str  # 指示番号フィールド名
+    item_order_fk: str  # 明細→指示の FK フィールド名
+    list_url: str  # 一覧画面の URL 名
+    export_url: str  # エクスポート URL 名
+    import_url: str  # インポート URL 名
+    header_fields: list  # 指示ヘッダの Field/FkField（先頭は指示番号）
+    item_fields: list  # 明細の Field/FkField
     code_to_source_type: object  # callable(code)->source_type。書式不正なら RowError
-    initial_status: object       # 新規作成時の status
+    initial_status: object  # 新規作成時の status
     items_related: str = 'items'  # 指示→明細の逆アクセサ
-    item_sku_attr: str = 'sku'    # 明細の SKU FK 属性（明細内重複検出に使う）
+    item_sku_attr: str = 'sku'  # 明細の SKU FK 属性（明細内重複検出に使う）
     extra_order_checks: list = field(default_factory=list)  # [(order)->str|None]
 
     @property
@@ -110,10 +115,11 @@ class OrderImportReport:
     total_rows: int = 0
     orders_created: int = 0
     items_created: int = 0
-    errors: list = field(default_factory=list)   # [(line_no, message)]
+    errors: list = field(default_factory=list)  # [(line_no, message)]
 
 
 # --- 値の変換 ---------------------------------------------------------------
+
 
 def _to_bool(raw, fld):
     s = raw.strip().lower()
@@ -186,7 +192,10 @@ def _to_str(raw, fld):
 
 
 _CONVERTERS = {
-    'int': _to_int, 'bool': _to_bool, 'date': _to_date, 'datetime': _to_datetime,
+    'int': _to_int,
+    'bool': _to_bool,
+    'date': _to_date,
+    'datetime': _to_datetime,
 }
 
 
@@ -228,6 +237,7 @@ def _export_value(fld, obj):
 
 # --- エクスポート -----------------------------------------------------------
 
+
 def build_order_csv(spec, delimiter=',', orders=None):
     """spec の指示を CSV（UTF-8 BOM付）の bytes で返す。
 
@@ -244,9 +254,9 @@ def build_order_csv(spec, delimiter=',', orders=None):
     item_qs = spec.item_model.objects.order_by('id')
     if item_fk_attrs:
         item_qs = item_qs.select_related(*item_fk_attrs)
-    orders = orders.prefetch_related(
-        Prefetch(spec.items_related, queryset=item_qs)
-    ).order_by(spec.code_field)
+    orders = orders.prefetch_related(Prefetch(spec.items_related, queryset=item_qs)).order_by(
+        spec.code_field
+    )
 
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=delimiter)
@@ -257,15 +267,14 @@ def build_order_csv(spec, delimiter=',', orders=None):
         items = list(getattr(order, spec.items_related).all())
         if items:
             for item in items:
-                writer.writerow(
-                    header_cells + [_export_value(f, item) for f in spec.item_fields]
-                )
+                writer.writerow(header_cells + [_export_value(f, item) for f in spec.item_fields])
         else:
             writer.writerow(header_cells + blank_item)
     return buf.getvalue().encode('utf-8-sig')
 
 
 # --- インポート -------------------------------------------------------------
+
 
 def _decode(raw_bytes):
     for enc in CSV_ENCODINGS:
@@ -358,7 +367,8 @@ def _build_order(spec, code, group, warehouse, user):
         if sku is not None:
             if sku.pk in seen_sku:
                 raise RowError(
-                    f'指示「{code}」内で SKU「{sku.sku_code}」が重複しています。', line=line)
+                    f'指示「{code}」内で SKU「{sku.sku_code}」が重複しています。', line=line
+                )
             seen_sku.add(sku.pk)
         try:
             item.full_clean(exclude=[spec.item_order_fk])
@@ -381,17 +391,17 @@ def import_order_csv(spec, raw_bytes, *, warehouse, user, delimiter=None):
     missing = [h for h in spec.headers if h not in got]
     if missing:
         return OrderImportReport(
-            ok=False, errors=[(0, f'必要な列がありません: {"、".join(missing)}')])
+            ok=False, errors=[(0, f'必要な列がありません: {"、".join(missing)}')]
+        )
 
     rows = []
     for i, raw in enumerate(reader):
         if any((v or '').strip() for v in raw.values()):
-            rows.append((i + 2, raw))   # 1行目は見出し
+            rows.append((i + 2, raw))  # 1行目は見出し
     if not rows:
         return OrderImportReport(ok=False, errors=[(0, 'データ行がありません。')])
     if warehouse is None:
-        return OrderImportReport(
-            ok=False, errors=[(0, '現在の倉庫が特定できません。')])
+        return OrderImportReport(ok=False, errors=[(0, '現在の倉庫が特定できません。')])
 
     # 指示番号でグループ化（先頭出現順を保持）
     code_header = spec.code_header
@@ -400,8 +410,7 @@ def import_order_csv(spec, raw_bytes, *, warehouse, user, delimiter=None):
     for line, raw in rows:
         code = (raw.get(code_header) or '').strip()
         if not code:
-            errors.append(
-                (line, f'{code_header}は必須です（明細をまとめるキーになります）。'))
+            errors.append((line, f'{code_header}は必須です（明細をまとめるキーになります）。'))
             continue
         groups.setdefault(code, []).append((line, raw))
 
@@ -426,15 +435,15 @@ def import_order_csv(spec, raw_bytes, *, warehouse, user, delimiter=None):
             orders_created += 1
             items_created += len(items)
     return OrderImportReport(
-        ok=True, total_rows=len(rows),
-        orders_created=orders_created, items_created=items_created)
+        ok=True, total_rows=len(rows), orders_created=orders_created, items_created=items_created
+    )
 
 
 def order_column_guide(spec, fields):
     """取込画面に表示する列の説明（ヘッダ名 / 必須 / 補足）を組み立てる。"""
     guide = []
     for f in fields:
-        is_code = (f.attr == spec.code_field)
+        is_code = f.attr == spec.code_field
         if f.note:
             note = f.note
         elif isinstance(f, FkField):
@@ -449,15 +458,18 @@ def order_column_guide(spec, fields):
             note = '数値' + ('' if f.default is None else f'（空欄は {f.default}）')
         else:
             note = ''
-        guide.append({
-            'header': f.header,
-            'required': True if is_code else f.required,
-            'note': note,
-        })
+        guide.append(
+            {
+                'header': f.header,
+                'required': True if is_code else f.required,
+                'note': note,
+            }
+        )
     return guide
 
 
 # --- 画面（継承して spec を差す）-------------------------------------------
+
 
 class OrderCsvExportView(LoginRequiredMixin, View):
     """指示を CSV（UTF-8 BOM付）でエクスポートする基底ビュー。
@@ -465,6 +477,7 @@ class OrderCsvExportView(LoginRequiredMixin, View):
     サブクラスで `get_queryset(request)` を override すると、照会画面と同じ
     検索条件を反映した「絞り込みCSV」を出力できる（既定は全件）。
     """
+
     spec = None
 
     def get_queryset(self, request):
@@ -483,6 +496,7 @@ class OrderCsvExportView(LoginRequiredMixin, View):
 
 class OrderCsvImportView(LoginRequiredMixin, TemplateView):
     """指示を CSV でインポート（新規作成のみ）する基底ビュー。"""
+
     spec = None
     template_name = 'a/order_csv_import.html'
 
@@ -502,8 +516,10 @@ class OrderCsvImportView(LoginRequiredMixin, TemplateView):
 
         delimiter = DELIMITERS.get(request.POST.get('delimiter'))  # auto → None
         report = import_order_csv(
-            self.spec, upload.read(),
-            warehouse=get_current_warehouse(request), user=request.user,
+            self.spec,
+            upload.read(),
+            warehouse=get_current_warehouse(request),
+            user=request.user,
             delimiter=delimiter,
         )
         if report.ok:
@@ -514,12 +530,10 @@ class OrderCsvImportView(LoginRequiredMixin, TemplateView):
             )
             return HttpResponseRedirect(reverse(self.spec.list_url))
 
-        detail = '\n'.join(
-            f'{line}行目: {msg}' if line else msg for line, msg in report.errors)
+        detail = '\n'.join(f'{line}行目: {msg}' if line else msg for line, msg in report.errors)
         ErrorLog.objects.create(
             error_type=ErrorLog.ErrorType.IMPORT,
-            summary=(f'CSVインポート失敗: {self.spec.label} '
-                     f'{len(report.errors)}件のエラー')[:255],
+            summary=(f'CSVインポート失敗: {self.spec.label} {len(report.errors)}件のエラー')[:255],
             detail=f'ファイル名: {upload.name}\n\n{detail}',
             source=f'{self.spec.label}CSVインポート',
             request_method='POST',

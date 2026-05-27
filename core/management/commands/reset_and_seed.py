@@ -17,6 +17,7 @@ User 以外の全データを削除し、マスタ・在庫・指示・履歴を
   python manage.py reset_and_seed --yes     # 確認プロンプトをスキップ
   python manage.py reset_and_seed --seed 7  # 乱数シード変更
 """
+
 from __future__ import annotations
 
 import random
@@ -30,16 +31,34 @@ from django.utils import timezone
 from core.models import ErrorLog
 from inbound.models import InboundOrder, InboundOrderItem, InboundReceipt
 from masters.models import (
-    Area, Category, Customer, Location, Manufacturer, Product, Sku, Supplier,
+    Area,
+    Category,
+    Customer,
+    Location,
+    Manufacturer,
+    Product,
+    Sku,
+    Supplier,
     Warehouse,
 )
 from outbound.models import (
-    DeliveryNote, DeliveryNoteItem, OutboundOrder, OutboundOrderItem,
-    PickingList, PickingListItem, Shipment, ShipmentItem, StockReservation,
+    DeliveryNote,
+    DeliveryNoteItem,
+    OutboundOrder,
+    OutboundOrderItem,
+    PickingList,
+    PickingListItem,
+    Shipment,
+    ShipmentItem,
+    StockReservation,
 )
 from stock.models import (
-    StockBalance, StockMovement, StockTransfer,
-    StocktakeAdjustment, StocktakeItem, StocktakeSession,
+    StockBalance,
+    StockMovement,
+    StockTransfer,
+    StocktakeAdjustment,
+    StocktakeItem,
+    StocktakeSession,
 )
 
 
@@ -48,11 +67,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--yes', action='store_true',
+            '--yes',
+            action='store_true',
             help='確認プロンプトをスキップする',
         )
         parser.add_argument(
-            '--seed', type=int, default=42,
+            '--seed',
+            type=int,
+            default=42,
             help='乱数シード（既定: 42）',
         )
 
@@ -60,9 +82,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if not options['yes']:
-            self.stdout.write(self.style.WARNING(
-                'User 以外の全データを削除して中規模テストデータを再生成します。'
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    'User 以外の全データを削除して中規模テストデータを再生成します。'
+                )
+            )
             confirm = input('続行しますか？ [y/N]: ').strip().lower()
             if confirm != 'y':
                 self.stdout.write('中断しました。')
@@ -95,6 +119,7 @@ class Command(BaseCommand):
         グループ所属だけを保証する。
         """
         from accounts.permissions import ensure_handheld_group
+
         self.stdout.write('  ハンディ作業者グループ・worker1 を用意...')
         group = ensure_handheld_group()
         User = get_user_model()
@@ -119,13 +144,9 @@ class Command(BaseCommand):
         user.groups.add(group)
 
     def _get_seed_user(self):
-        user = (
-            get_user_model().objects
-            .filter(is_superuser=True).order_by('pk').first()
-        )
+        user = get_user_model().objects.filter(is_superuser=True).order_by('pk').first()
         if user is None:
-            raise CommandError(
-                'superuser が見つかりません。先に createsuperuser してください。')
+            raise CommandError('superuser が見つかりません。先に createsuperuser してください。')
         return user
 
     # ===== delete ==========================================================
@@ -197,32 +218,38 @@ class Command(BaseCommand):
         # area_code は warehouse 内ユニークだが、別倉庫でも分けておくと location_code が
         # 衝突せず見やすい
         self.area_a = Area.objects.create(
-            warehouse=self.wh1, area_code='A',
+            warehouse=self.wh1,
+            area_code='A',
             area_name='Aエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_b = Area.objects.create(
-            warehouse=self.wh1, area_code='B',
+            warehouse=self.wh1,
+            area_code='B',
             area_name='Bエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_l = Area.objects.create(
-            warehouse=self.wh1, area_code='L',
+            warehouse=self.wh1,
+            area_code='L',
             area_name='Lエリア（大型・長物）',
             location_type=Area.LocationType.LARGE_ITEM,
         )
         self.area_d = Area.objects.create(
-            warehouse=self.wh2, area_code='D',
+            warehouse=self.wh2,
+            area_code='D',
             area_name='Dエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_e = Area.objects.create(
-            warehouse=self.wh2, area_code='E',
+            warehouse=self.wh2,
+            area_code='E',
             area_name='Eエリア（AGV）',
             location_type=Area.LocationType.STORAGE,
         )
         self.area_m = Area.objects.create(
-            warehouse=self.wh2, area_code='M',
+            warehouse=self.wh2,
+            area_code='M',
             area_name='Mエリア（大型・長物）',
             location_type=Area.LocationType.LARGE_ITEM,
         )
@@ -230,20 +257,23 @@ class Command(BaseCommand):
         # ロケーション 192件
         self._create_storage_locations(self.area_a, aisles=3, racks=6, levels=3)  # 54
         self._create_storage_locations(self.area_b, aisles=3, racks=6, levels=3)  # 54
-        self._create_large_item_locations(self.area_l, count=20)                  # 20
+        self._create_large_item_locations(self.area_l, count=20)  # 20
         self._create_storage_locations(self.area_d, aisles=2, racks=6, levels=3)  # 36
         self._create_storage_locations(self.area_e, aisles=2, racks=4, levels=3)  # 24
-        self._create_large_item_locations(self.area_m, count=4)                   # 4
+        self._create_large_item_locations(self.area_m, count=4)  # 4
 
     def _create_storage_locations(self, area, *, aisles, racks, levels):
         for a in range(1, aisles + 1):
             for r in range(1, racks + 1):
                 for lv in range(1, levels + 1):
                     code = area.format_location_code(
-                        aisle=a, rack=r, level=lv,
+                        aisle=a,
+                        rack=r,
+                        level=lv,
                     )
                     Location.objects.create(
-                        warehouse=area.warehouse, area=area,
+                        warehouse=area.warehouse,
+                        area=area,
                         location_code=code,
                     )
 
@@ -251,51 +281,76 @@ class Command(BaseCommand):
         for s in range(1, count + 1):
             code = area.format_location_code(seq=s)
             Location.objects.create(
-                warehouse=area.warehouse, area=area,
+                warehouse=area.warehouse,
+                area=area,
                 location_code=code,
             )
 
     def _create_categories(self):
         """4階層のうち 2階層（大→中=leaf）構成で十分。商品は leaf に紐付ける。"""
         tree = [
-            ('CAT-001', '工具', [
-                ('切削工具', True),
-                ('手工具', True),
-                ('測定工具', True),
-            ]),
-            ('CAT-002', '電子部品', [
-                ('抵抗器', True),
-                ('コンデンサ', True),
-                ('半導体', True),
-            ]),
-            ('CAT-003', '機械部品', [
-                ('ベアリング', True),
-                ('配管継手', True),
-                ('ボルト・ナット', True),
-            ]),
-            ('CAT-004', '消耗品', [
-                ('文具', True),
-                ('梱包資材', True),
-                ('清掃用品', True),
-            ]),
-            ('CAT-005', '大型機器', [
-                ('エンジン部品', True),
-                ('シャフト・配管', True),
-            ]),
+            (
+                'CAT-001',
+                '工具',
+                [
+                    ('切削工具', True),
+                    ('手工具', True),
+                    ('測定工具', True),
+                ],
+            ),
+            (
+                'CAT-002',
+                '電子部品',
+                [
+                    ('抵抗器', True),
+                    ('コンデンサ', True),
+                    ('半導体', True),
+                ],
+            ),
+            (
+                'CAT-003',
+                '機械部品',
+                [
+                    ('ベアリング', True),
+                    ('配管継手', True),
+                    ('ボルト・ナット', True),
+                ],
+            ),
+            (
+                'CAT-004',
+                '消耗品',
+                [
+                    ('文具', True),
+                    ('梱包資材', True),
+                    ('清掃用品', True),
+                ],
+            ),
+            (
+                'CAT-005',
+                '大型機器',
+                [
+                    ('エンジン部品', True),
+                    ('シャフト・配管', True),
+                ],
+            ),
         ]
-        self.leaf_categories = []         # 通常 SKU の格納先（TOTAL）
-        self.large_leaf_categories = []   # ORDER SKU の格納先
+        self.leaf_categories = []  # 通常 SKU の格納先（TOTAL）
+        self.large_leaf_categories = []  # ORDER SKU の格納先
         for root_code, root_name, children in tree:
             root = Category.objects.create(
-                category_code=root_code, category_name=root_name,
+                category_code=root_code,
+                category_name=root_name,
                 sort_order=int(root_code.split('-')[1]) * 10,
                 is_leaf=False,
             )
             for i, (child_name, is_leaf) in enumerate(children, start=1):
                 child_code = f'{root_code}-{i:02d}'
                 child = Category.objects.create(
-                    category_code=child_code, category_name=child_name,
-                    parent=root, sort_order=i * 10, is_leaf=is_leaf,
+                    category_code=child_code,
+                    category_name=child_name,
+                    parent=root,
+                    sort_order=i * 10,
+                    is_leaf=is_leaf,
                 )
                 if root_code == 'CAT-005':
                     self.large_leaf_categories.append(child)
@@ -318,7 +373,8 @@ class Command(BaseCommand):
         ]
         self.manufacturers = [
             Manufacturer.objects.create(
-                manufacturer_code=code, manufacturer_name=name,
+                manufacturer_code=code,
+                manufacturer_name=name,
                 url=f'https://example.com/{code.lower()}/',
             )
             for code, name in names
@@ -429,8 +485,10 @@ class Command(BaseCommand):
         ]
         self.suppliers = [
             Supplier.objects.create(
-                supplier_code=code, supplier_name=name,
-                contact_person=person, phone_number=phone,
+                supplier_code=code,
+                supplier_name=name,
+                contact_person=person,
+                phone_number=phone,
             )
             for code, name, person, phone in rows
         ]
@@ -456,9 +514,12 @@ class Command(BaseCommand):
         ]
         self.customers = [
             Customer.objects.create(
-                customer_code=code, customer_name=name,
-                customer_type=ctype, industry_type=industry,
-                postal_code='100-0000', address='東京都千代田区サンプル1-1-1',
+                customer_code=code,
+                customer_name=name,
+                customer_type=ctype,
+                industry_type=industry,
+                postal_code='100-0000',
+                address='東京都千代田区サンプル1-1-1',
             )
             for code, name, ctype, industry in rows
         ]
@@ -470,14 +531,26 @@ class Command(BaseCommand):
         self.stdout.write('  初期在庫構築...')
 
         # SKU の picking_type → 対象エリア の対応で、倉庫ごとに使えるロケーションを引いておく
-        wh1_storage = list(Location.objects.filter(
-            warehouse=self.wh1, area__location_type=Area.LocationType.STORAGE))
-        wh1_large = list(Location.objects.filter(
-            warehouse=self.wh1, area__location_type=Area.LocationType.LARGE_ITEM))
-        wh2_storage = list(Location.objects.filter(
-            warehouse=self.wh2, area__location_type=Area.LocationType.STORAGE))
-        wh2_large = list(Location.objects.filter(
-            warehouse=self.wh2, area__location_type=Area.LocationType.LARGE_ITEM))
+        wh1_storage = list(
+            Location.objects.filter(
+                warehouse=self.wh1, area__location_type=Area.LocationType.STORAGE
+            )
+        )
+        wh1_large = list(
+            Location.objects.filter(
+                warehouse=self.wh1, area__location_type=Area.LocationType.LARGE_ITEM
+            )
+        )
+        wh2_storage = list(
+            Location.objects.filter(
+                warehouse=self.wh2, area__location_type=Area.LocationType.STORAGE
+            )
+        )
+        wh2_large = list(
+            Location.objects.filter(
+                warehouse=self.wh2, area__location_type=Area.LocationType.LARGE_ITEM
+            )
+        )
 
         movements = []
         balances = {}  # (location_id, sku_id) -> quantity
@@ -522,7 +595,9 @@ class Command(BaseCommand):
         # StockBalance を一括作成（FIFO 並び替え用に first_received_at もセット）
         bal_objs = [
             StockBalance(
-                location_id=loc_id, sku_id=sku_id, quantity=qty,
+                location_id=loc_id,
+                sku_id=sku_id,
+                quantity=qty,
                 first_received_at=earliest_at[(loc_id, sku_id)],
             )
             for (loc_id, sku_id), qty in balances.items()
@@ -554,7 +629,8 @@ class Command(BaseCommand):
             )
             # auto_now_add を上書き
             StockMovement.objects.filter(pk=m.pk).update(
-                moved_at=past, created_at=past,
+                moved_at=past,
+                created_at=past,
             )
 
     def _random_past_datetime(self, *, min_days, max_days):
@@ -568,8 +644,11 @@ class Command(BaseCommand):
         """完了済み入荷指示を 2 件作る（履歴一覧に表示するためのサンプル）。"""
         self.stdout.write('  完了済み入荷指示 2 件...')
         sample_skus_total = [s for s in self.skus if s.picking_type == Sku.PickingType.TOTAL]
-        storage_locs = list(Location.objects.filter(
-            warehouse=self.wh1, area__location_type=Area.LocationType.STORAGE))
+        storage_locs = list(
+            Location.objects.filter(
+                warehouse=self.wh1, area__location_type=Area.LocationType.STORAGE
+            )
+        )
 
         for i in range(2):
             past_date = self.today - timedelta(days=random.randint(5, 25))
@@ -590,13 +669,17 @@ class Command(BaseCommand):
             for sku in random.sample(sample_skus_total, k=3):
                 qty = random.randint(20, 60)
                 item = InboundOrderItem.objects.create(
-                    inbound_order=order, sku=sku,
-                    quantity_expected=qty, quantity_received=qty,
+                    inbound_order=order,
+                    sku=sku,
+                    quantity_expected=qty,
+                    quantity_received=qty,
                 )
                 loc = random.choice(storage_locs)
                 # 在庫加算
                 bal, _ = StockBalance.objects.get_or_create(
-                    location=loc, sku=sku, defaults={'quantity': 0},
+                    location=loc,
+                    sku=sku,
+                    defaults={'quantity': 0},
                 )
                 before = bal.quantity
                 bal.quantity = before + qty
@@ -609,15 +692,18 @@ class Command(BaseCommand):
 
                 m = StockMovement.objects.create(
                     movement_type=StockMovement.MovementType.IN,
-                    location=loc, sku=sku,
+                    location=loc,
+                    sku=sku,
                     quantity=qty,
-                    quantity_before=before, quantity_after=bal.quantity,
+                    quantity_before=before,
+                    quantity_after=bal.quantity,
                     reference_type=StockMovement.ReferenceType.INBOUND_ORDER,
                     reference_id=order.pk,
                     created_by=self.user,
                 )
                 StockMovement.objects.filter(pk=m.pk).update(
-                    moved_at=past_dt + timedelta(hours=2), created_at=past_dt + timedelta(hours=2),
+                    moved_at=past_dt + timedelta(hours=2),
+                    created_at=past_dt + timedelta(hours=2),
                 )
                 InboundReceipt.objects.create(
                     inbound_order_item=item,
@@ -698,8 +784,10 @@ class Command(BaseCommand):
                     continue
                 item = OutboundOrderItem.objects.create(
                     outbound_order=order,
-                    sku=bal.sku, location=bal.location,
-                    quantity_ordered=qty, quantity_shipped=qty,
+                    sku=bal.sku,
+                    location=bal.location,
+                    quantity_ordered=qty,
+                    quantity_shipped=qty,
                 )
                 before = bal.quantity
                 bal.quantity = before - qty
@@ -707,9 +795,11 @@ class Command(BaseCommand):
 
                 m = StockMovement.objects.create(
                     movement_type=StockMovement.MovementType.OUT,
-                    location=bal.location, sku=bal.sku,
+                    location=bal.location,
+                    sku=bal.sku,
                     quantity=-qty,
-                    quantity_before=before, quantity_after=bal.quantity,
+                    quantity_before=before,
+                    quantity_after=bal.quantity,
                     reference_type=StockMovement.ReferenceType.OUTBOUND_ORDER,
                     reference_id=order.pk,
                     created_by=self.user,
@@ -719,11 +809,15 @@ class Command(BaseCommand):
                     created_at=past_dt + timedelta(hours=3),
                 )
                 ShipmentItem.objects.create(
-                    shipment=shipment, outbound_order_item=item,
-                    sku=bal.sku, quantity_shipped=qty, stock_movement=m,
+                    shipment=shipment,
+                    outbound_order_item=item,
+                    sku=bal.sku,
+                    quantity_shipped=qty,
+                    stock_movement=m,
                 )
                 DeliveryNoteItem.objects.create(
-                    delivery_note=delivery, outbound_order_item=item,
+                    delivery_note=delivery,
+                    outbound_order_item=item,
                     sku=bal.sku,
                     product_name=bal.sku.product.product_name,
                     sku_code=bal.sku.sku_code,
@@ -789,7 +883,8 @@ class Command(BaseCommand):
             for sku in chosen:
                 qty = random.choice([5, 10, 20, 30, 50, 100])
                 InboundOrderItem.objects.create(
-                    inbound_order=order, sku=sku,
+                    inbound_order=order,
+                    sku=sku,
                     quantity_expected=qty,
                 )
 
@@ -817,12 +912,10 @@ class Command(BaseCommand):
                 external = f'EC-{random.randint(1000000, 9999999)}'
                 oms_seq += 1
             elif st == OutboundOrder.SourceType.MANUAL:
-                code = OutboundOrder.next_code(
-                    deadline_dt.date(), st.value)
+                code = OutboundOrder.next_code(deadline_dt.date(), st.value)
                 external = ''
             else:  # RETURN
-                code = OutboundOrder.next_code(
-                    deadline_dt.date(), st.value)
+                code = OutboundOrder.next_code(deadline_dt.date(), st.value)
                 external = ''
 
             customer = random.choice(self.customers)
@@ -848,7 +941,8 @@ class Command(BaseCommand):
                 qty = random.choice([1, 2, 3, 5, 8])
                 # 既存制約 (outbound_order, sku, location) のため、location は NULL のまま
                 OutboundOrderItem.objects.create(
-                    outbound_order=order, sku=sku,
+                    outbound_order=order,
+                    sku=sku,
                     quantity_ordered=qty,
                 )
 
@@ -858,36 +952,106 @@ class Command(BaseCommand):
         self.stdout.write('  エラーログ 10 件...')
         ET = ErrorLog.ErrorType
         samples = [
-            (ET.IMPORT, timedelta(hours=2),
-             'OMS取込: 必須項目「配送先住所」が空のため取り込めません',
-             'OMS連携バッチ', '', 'OMS-2026-000457', False, False),
-            (ET.IMPORT, timedelta(hours=4),
-             'OMS取込: SKU「SKU-999999」がマスタに存在しません',
-             'OMS連携バッチ', '', 'OMS-2026-000458', False, False),
-            (ET.IMPORT, timedelta(days=1, hours=3),
-             'OMS取込: 数量が不正です（quantity=-2）',
-             'OMS連携バッチ', '', 'OMS-2026-000461', False, True),
-            (ET.IMPORT, timedelta(days=2),
-             'CSV取込: 区切り文字の解釈に失敗（明細行が分離できません）',
-             'マスタCSV取込', '', '', False, False),
-            (ET.IMPORT, timedelta(days=3),
-             'OMS取込: 同一OMS注文番号が既に登録済み',
-             'OMS連携バッチ', '', 'OMS-2026-000482', False, True),
-            (ET.EXCEPTION, timedelta(hours=5),
-             "ValueError: invalid literal for int() with base 10: 'たくさん'",
-             '/outbound/orders/new/', 'POST', '', True, False),
-            (ET.EXCEPTION, timedelta(days=1, hours=8),
-             "IntegrityError: duplicate key on uk_locations_warehouse_code",
-             '/masters/locations/new/', 'POST', '', True, True),
-            (ET.EXCEPTION, timedelta(days=2, hours=1),
-             'Sku.DoesNotExist: Sku matching query does not exist.',
-             '/inbound/orders/12/edit/', 'POST', '', True, True),
-            (ET.EXCEPTION, timedelta(days=4),
-             'StockBalance.DoesNotExist: requested balance row not found',
-             '/stock/transfer/', 'POST', '', True, False),
-            (ET.EXCEPTION, timedelta(days=6),
-             'PermissionDenied: 別の作業担当者がロック中です',
-             '/inbound/putaway/15/work/', 'POST', '', True, True),
+            (
+                ET.IMPORT,
+                timedelta(hours=2),
+                'OMS取込: 必須項目「配送先住所」が空のため取り込めません',
+                'OMS連携バッチ',
+                '',
+                'OMS-2026-000457',
+                False,
+                False,
+            ),
+            (
+                ET.IMPORT,
+                timedelta(hours=4),
+                'OMS取込: SKU「SKU-999999」がマスタに存在しません',
+                'OMS連携バッチ',
+                '',
+                'OMS-2026-000458',
+                False,
+                False,
+            ),
+            (
+                ET.IMPORT,
+                timedelta(days=1, hours=3),
+                'OMS取込: 数量が不正です（quantity=-2）',
+                'OMS連携バッチ',
+                '',
+                'OMS-2026-000461',
+                False,
+                True,
+            ),
+            (
+                ET.IMPORT,
+                timedelta(days=2),
+                'CSV取込: 区切り文字の解釈に失敗（明細行が分離できません）',
+                'マスタCSV取込',
+                '',
+                '',
+                False,
+                False,
+            ),
+            (
+                ET.IMPORT,
+                timedelta(days=3),
+                'OMS取込: 同一OMS注文番号が既に登録済み',
+                'OMS連携バッチ',
+                '',
+                'OMS-2026-000482',
+                False,
+                True,
+            ),
+            (
+                ET.EXCEPTION,
+                timedelta(hours=5),
+                "ValueError: invalid literal for int() with base 10: 'たくさん'",
+                '/outbound/orders/new/',
+                'POST',
+                '',
+                True,
+                False,
+            ),
+            (
+                ET.EXCEPTION,
+                timedelta(days=1, hours=8),
+                'IntegrityError: duplicate key on uk_locations_warehouse_code',
+                '/masters/locations/new/',
+                'POST',
+                '',
+                True,
+                True,
+            ),
+            (
+                ET.EXCEPTION,
+                timedelta(days=2, hours=1),
+                'Sku.DoesNotExist: Sku matching query does not exist.',
+                '/inbound/orders/12/edit/',
+                'POST',
+                '',
+                True,
+                True,
+            ),
+            (
+                ET.EXCEPTION,
+                timedelta(days=4),
+                'StockBalance.DoesNotExist: requested balance row not found',
+                '/stock/transfer/',
+                'POST',
+                '',
+                True,
+                False,
+            ),
+            (
+                ET.EXCEPTION,
+                timedelta(days=6),
+                'PermissionDenied: 別の作業担当者がロック中です',
+                '/inbound/putaway/15/work/',
+                'POST',
+                '',
+                True,
+                True,
+            ),
         ]
         for etype, ago, summary, source, method, ref, with_user, resolved in samples:
             occurred = self.now - ago
@@ -938,28 +1102,28 @@ class Command(BaseCommand):
     def _print_summary(self):
         self.stdout.write(self.style.SUCCESS('--- 投入後の件数 ---'))
         rows = [
-            ('User',           get_user_model().objects.count()),
-            ('Warehouse',      Warehouse.objects.count()),
-            ('Area',           Area.objects.count()),
-            ('Location',       Location.objects.count()),
-            ('Category',       Category.objects.count()),
-            ('Manufacturer',   Manufacturer.objects.count()),
-            ('Product',        Product.objects.count()),
-            ('Sku',            Sku.objects.count()),
-            ('Supplier',       Supplier.objects.count()),
-            ('Customer',       Customer.objects.count()),
-            ('StockBalance',   StockBalance.objects.count()),
-            ('StockMovement',  StockMovement.objects.count()),
-            ('InboundOrder',   InboundOrder.objects.count()),
+            ('User', get_user_model().objects.count()),
+            ('Warehouse', Warehouse.objects.count()),
+            ('Area', Area.objects.count()),
+            ('Location', Location.objects.count()),
+            ('Category', Category.objects.count()),
+            ('Manufacturer', Manufacturer.objects.count()),
+            ('Product', Product.objects.count()),
+            ('Sku', Sku.objects.count()),
+            ('Supplier', Supplier.objects.count()),
+            ('Customer', Customer.objects.count()),
+            ('StockBalance', StockBalance.objects.count()),
+            ('StockMovement', StockMovement.objects.count()),
+            ('InboundOrder', InboundOrder.objects.count()),
             ('InboundOrderItem', InboundOrderItem.objects.count()),
             ('InboundReceipt', InboundReceipt.objects.count()),
-            ('OutboundOrder',  OutboundOrder.objects.count()),
+            ('OutboundOrder', OutboundOrder.objects.count()),
             ('OutboundOrderItem', OutboundOrderItem.objects.count()),
-            ('Shipment',       Shipment.objects.count()),
-            ('ShipmentItem',   ShipmentItem.objects.count()),
-            ('DeliveryNote',   DeliveryNote.objects.count()),
+            ('Shipment', Shipment.objects.count()),
+            ('ShipmentItem', ShipmentItem.objects.count()),
+            ('DeliveryNote', DeliveryNote.objects.count()),
             ('StocktakeSession', StocktakeSession.objects.count()),
-            ('ErrorLog',       ErrorLog.objects.count()),
+            ('ErrorLog', ErrorLog.objects.count()),
         ]
         for name, count in rows:
             self.stdout.write(f'  {name:<20} {count:>6}')

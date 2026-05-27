@@ -1,4 +1,5 @@
 """画面で発生した未処理例外を ErrorLog に記録するミドルウェア。"""
+
 import traceback
 
 from .models import ErrorLog

@@ -30,7 +30,13 @@ class InboundOrderAdmin(admin.ModelAdmin):
 
 @admin.register(InboundOrderItem)
 class InboundOrderItemAdmin(admin.ModelAdmin):
-    list_display = ('inbound_order', 'sku', 'quantity_expected', 'quantity_received', 'is_crossdock')
+    list_display = (
+        'inbound_order',
+        'sku',
+        'quantity_expected',
+        'quantity_received',
+        'is_crossdock',
+    )
     search_fields = ('inbound_order__inbound_order_code', 'sku__sku_code')
     list_filter = ('is_crossdock',)
     autocomplete_fields = ('inbound_order', 'sku')
@@ -51,5 +57,11 @@ class InboundReceiptAdmin(admin.ModelAdmin):
     search_fields = ('inbound_order_item__inbound_order__inbound_order_code',)
     list_filter = ('discrepancy_type',)
     date_hierarchy = 'inspected_at'
-    autocomplete_fields = ('inbound_order_item', 'location', 'stock_movement', 'inspected_by', 'putaway_by')
+    autocomplete_fields = (
+        'inbound_order_item',
+        'location',
+        'stock_movement',
+        'inspected_by',
+        'putaway_by',
+    )
     readonly_fields = ('inspected_at', 'created_at')

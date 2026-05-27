@@ -3,6 +3,7 @@
 エンジンは core/order_csv.py。指示番号のプレフィックスで入荷元種別を判定する
 （IO＝通常入荷 / RT＝返品入荷）。倉庫は取込時の現在倉庫に固定する。
 """
+
 import re
 
 from core.order_csv import Field, FkField, OrderCsvSpec, RowError
@@ -19,9 +20,9 @@ def _source_type(code):
     if not m:
         raise RowError(
             f'指示番号「{code}」は IO-YYYYMMDD-NNN（通常入荷）または '
-            f'RT-YYYYMMDD-NNN（返品入荷）形式で入力してください。')
-    return (InboundOrder.SourceType.MANUAL if m.group(1) == 'IO'
-            else InboundOrder.SourceType.RETURN)
+            f'RT-YYYYMMDD-NNN（返品入荷）形式で入力してください。'
+        )
+    return InboundOrder.SourceType.MANUAL if m.group(1) == 'IO' else InboundOrder.SourceType.RETURN
 
 
 def _check_manual_required(order):
@@ -48,13 +49,21 @@ INBOUND_ORDER_SPEC = OrderCsvSpec(
     initial_status=InboundOrder.Status.RECEIVING_WAIT,
     extra_order_checks=[_check_manual_required],
     header_fields=[
-        Field('指示番号', 'inbound_order_code',
-              note='IO-YYYYMMDD-NNN（通常）/ RT-YYYYMMDD-NNN（返品）。明細をまとめるキー'),
-        FkField('仕入先コード', 'supplier', Supplier, 'supplier_code',
-                required=False, active_only=True,
-                note='仕入先のコードで参照。通常入荷（IO-）は必須 / 返品（RT-）は任意'),
-        Field('入荷予定日', 'expected_date', kind='date',
-              note='YYYY-MM-DD。通常入荷（IO-）は必須'),
+        Field(
+            '指示番号',
+            'inbound_order_code',
+            note='IO-YYYYMMDD-NNN（通常）/ RT-YYYYMMDD-NNN（返品）。明細をまとめるキー',
+        ),
+        FkField(
+            '仕入先コード',
+            'supplier',
+            Supplier,
+            'supplier_code',
+            required=False,
+            active_only=True,
+            note='仕入先のコードで参照。通常入荷（IO-）は必須 / 返品（RT-）は任意',
+        ),
+        Field('入荷予定日', 'expected_date', kind='date', note='YYYY-MM-DD。通常入荷（IO-）は必須'),
         Field('発注番号', 'purchase_order_code'),
         Field('納品書番号', 'supplier_delivery_note_code'),
         Field('備考', 'note'),

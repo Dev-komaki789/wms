@@ -17,12 +17,19 @@ from masters.utils import get_current_warehouse
 from outbound.models import OutboundOrder, StockReservation
 
 from .forms import (
-    StockTransferForm, StocktakeCountForm, StocktakeSessionForm,
-    UnplannedStockInForm, UnplannedStockOutForm,
+    StockTransferForm,
+    StocktakeCountForm,
+    StocktakeSessionForm,
+    UnplannedStockInForm,
+    UnplannedStockOutForm,
 )
 from .models import (
-    StockBalance, StockMovement, StockTransfer,
-    StocktakeAdjustment, StocktakeItem, StocktakeSession,
+    StockBalance,
+    StockMovement,
+    StockTransfer,
+    StocktakeAdjustment,
+    StocktakeItem,
+    StocktakeSession,
 )
 
 
@@ -68,13 +75,16 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
 
         if searched:
             qs = StockBalance.objects.select_related(
-                'location', 'location__area', 'location__warehouse',
-                'sku', 'sku__product', 'sku__product__category',
+                'location',
+                'location__area',
+                'location__warehouse',
+                'sku',
+                'sku__product',
+                'sku__product__category',
             )
             if f['q']:
                 qs = qs.filter(
-                    Q(sku__sku_code__icontains=f['q'])
-                    | Q(sku__jan_code__icontains=f['q'])
+                    Q(sku__sku_code__icontains=f['q']) | Q(sku__jan_code__icontains=f['q'])
                 )
             if f['product']:
                 qs = qs.filter(
@@ -92,8 +102,7 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
             # 引き当て数 = この (ロケーション × SKU) に紐づく active な
             # StockReservation の合計。出荷可能数 = 在庫数 − 引き当て数。
             reserved_subquery = (
-                StockReservation.objects
-                .filter(
+                StockReservation.objects.filter(
                     location=OuterRef('location'),
                     sku=OuterRef('sku'),
                     status=StockReservation.Status.ACTIVE,
@@ -103,14 +112,13 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
                 .values('total')
             )
             qs = qs.annotate(
-                reserved=Coalesce(
-                    Subquery(reserved_subquery, output_field=IntegerField()), 0
-                ),
+                reserved=Coalesce(Subquery(reserved_subquery, output_field=IntegerField()), 0),
             ).annotate(
                 available=F('quantity') - F('reserved'),
             )
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'location', 'asc')
+                self.request, qs, self.SORTABLE, 'location', 'asc'
+            )
             # サマリーは検索結果の全件を集計（ページ送りしても合計は全体ベース）
             agg = qs.aggregate(
                 rows=Count('id'),
@@ -161,14 +169,14 @@ def _attach_reference_codes(movements):
             ob_ids.append(m.reference_id)
     codes = {}
     if ib_ids:
-        for pk, code in InboundOrder.objects.filter(
-            pk__in=ib_ids
-        ).values_list('pk', 'inbound_order_code'):
+        for pk, code in InboundOrder.objects.filter(pk__in=ib_ids).values_list(
+            'pk', 'inbound_order_code'
+        ):
             codes[(RT.INBOUND_ORDER, pk)] = code
     if ob_ids:
-        for pk, code in OutboundOrder.objects.filter(
-            pk__in=ob_ids
-        ).values_list('pk', 'outbound_order_code'):
+        for pk, code in OutboundOrder.objects.filter(pk__in=ob_ids).values_list(
+            'pk', 'outbound_order_code'
+        ):
             codes[(RT.OUTBOUND_ORDER, pk)] = code
     for m in movements:
         m.reference_code = codes.get((m.reference_type, m.reference_id))
@@ -187,8 +195,15 @@ class StockMovementInquiryView(LoginRequiredMixin, TemplateView):
 
     template_name = 'a/stock/movement_inquiry.html'
 
-    SEARCH_KEYS = ('q', 'product', 'location', 'movement_type',
-                   'reference_type', 'date_from', 'date_to')
+    SEARCH_KEYS = (
+        'q',
+        'product',
+        'location',
+        'movement_type',
+        'reference_type',
+        'date_from',
+        'date_to',
+    )
 
     SORTABLE = {
         'moved': ['moved_at'],
@@ -223,13 +238,15 @@ class StockMovementInquiryView(LoginRequiredMixin, TemplateView):
 
         if searched:
             qs = StockMovement.objects.select_related(
-                'location', 'location__area',
-                'sku', 'sku__product', 'created_by',
+                'location',
+                'location__area',
+                'sku',
+                'sku__product',
+                'created_by',
             )
             if f['q']:
                 qs = qs.filter(
-                    Q(sku__sku_code__icontains=f['q'])
-                    | Q(sku__jan_code__icontains=f['q'])
+                    Q(sku__sku_code__icontains=f['q']) | Q(sku__jan_code__icontains=f['q'])
                 )
             if f['product']:
                 qs = qs.filter(
@@ -249,7 +266,8 @@ class StockMovementInquiryView(LoginRequiredMixin, TemplateView):
             if date_to:
                 qs = qs.filter(moved_at__date__lte=date_to)
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'moved', 'desc')
+                self.request, qs, self.SORTABLE, 'moved', 'desc'
+            )
 
             # サマリーは検索結果の全件を集計（ページ送りしても合計は全体ベース）。
             agg = qs.aggregate(
@@ -342,13 +360,11 @@ class UnplannedStockInView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView
             # 在庫行をロックして取得（同時入庫での更新消失=lost update を防ぐ）。
             # 行が無ければ作成し、ロック付きで取り直す。
             StockBalance.objects.get_or_create(
-                location=location, sku=sku,
+                location=location,
+                sku=sku,
                 defaults={'quantity': 0},
             )
-            balance = (
-                StockBalance.objects.select_for_update()
-                .get(location=location, sku=sku)
-            )
+            balance = StockBalance.objects.select_for_update().get(location=location, sku=sku)
             quantity_before = balance.quantity
             quantity_after = quantity_before + quantity
 
@@ -405,9 +421,7 @@ class UnplannedStockOutView(StocktakeLockGuardMixin, LoginRequiredMixin, FormVie
             # form.clean() で在庫数は検証済みだが、検証〜確定の間に他端末が
             # 在庫を減らす可能性に備え、ロック確保後にもう一度残数を確認する。
             balance = (
-                StockBalance.objects.select_for_update()
-                .filter(location=location, sku=sku)
-                .first()
+                StockBalance.objects.select_for_update().filter(location=location, sku=sku).first()
             )
             on_hand = balance.quantity if balance else 0
             if quantity > on_hand:
@@ -476,10 +490,7 @@ class StockTransferView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView):
                 .filter(sku=sku, location__in=[from_loc, to_loc])
                 .order_by('location_id')
             )
-            from_balance = (
-                StockBalance.objects
-                .filter(location=from_loc, sku=sku).first()
-            )
+            from_balance = StockBalance.objects.filter(location=from_loc, sku=sku).first()
             from_on_hand = from_balance.quantity if from_balance else 0
             # form.clean() で検証済みだが、検証〜確定の間に在庫が減る可能性に
             # 備え、ロック確保後にもう一度残数を確認する。
@@ -492,25 +503,33 @@ class StockTransferView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView):
                 return self.form_invalid(form)
             # 移動先の在庫行（無ければ 0 で作成。新規行はこのトランザクション専有）
             to_balance, _ = StockBalance.objects.get_or_create(
-                location=to_loc, sku=sku, defaults={'quantity': 0},
+                location=to_loc,
+                sku=sku,
+                defaults={'quantity': 0},
             )
 
             now = timezone.now()
             transfer = StockTransfer.objects.create(
-                from_location=from_loc, to_location=to_loc, sku=sku,
-                quantity=quantity, status=StockTransfer.Status.COMPLETED,
-                transferred_at=now, created_by=self.request.user,
+                from_location=from_loc,
+                to_location=to_loc,
+                sku=sku,
+                quantity=quantity,
+                status=StockTransfer.Status.COMPLETED,
+                transferred_at=now,
+                created_by=self.request.user,
             )
             # 移動元から OUT
             StockMovement.objects.create(
                 movement_type=StockMovement.MovementType.OUT,
-                location=from_loc, sku=sku,
+                location=from_loc,
+                sku=sku,
                 quantity=-quantity,  # OUT なので負の値で記録
                 quantity_before=from_on_hand,
                 quantity_after=from_on_hand - quantity,
                 reference_type=StockMovement.ReferenceType.STOCK_TRANSFER,
                 reference_id=transfer.pk,
-                note='', created_by=self.request.user,
+                note='',
+                created_by=self.request.user,
             )
             from_balance.quantity = from_on_hand - quantity
             from_balance.save()
@@ -518,13 +537,15 @@ class StockTransferView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView):
             to_before = to_balance.quantity
             to_movement = StockMovement.objects.create(
                 movement_type=StockMovement.MovementType.IN,
-                location=to_loc, sku=sku,
+                location=to_loc,
+                sku=sku,
                 quantity=quantity,  # IN なので正の値
                 quantity_before=to_before,
                 quantity_after=to_before + quantity,
                 reference_type=StockMovement.ReferenceType.STOCK_TRANSFER,
                 reference_id=transfer.pk,
-                note='', created_by=self.request.user,
+                note='',
+                created_by=self.request.user,
             )
             to_balance.quantity = to_before + quantity
             # 0 → 正への切り替えで FIFO 用の最古入荷日時をリセットする。
@@ -567,8 +588,7 @@ class StockCheckAPIView(LoginRequiredMixin, View):
 
         location = None
         if loc_code:
-            loc_qs = Location.objects.filter(
-                location_code=loc_code, is_active=True)
+            loc_qs = Location.objects.filter(location_code=loc_code, is_active=True)
             wh = get_current_warehouse(request)
             if wh is not None:
                 loc_qs = loc_qs.filter(warehouse=wh)
@@ -576,26 +596,25 @@ class StockCheckAPIView(LoginRequiredMixin, View):
 
         on_hand = 0
         if sku is not None and location is not None:
-            balance = (
-                StockBalance.objects
-                .filter(location=location, sku=sku)
-                .first()
-            )
+            balance = StockBalance.objects.filter(location=location, sku=sku).first()
             on_hand = balance.quantity if balance else 0
 
-        return JsonResponse({
-            'sku_found': sku is not None,
-            'location_found': location is not None,
-            'on_hand': on_hand,
-            'sku_code': sku.sku_code if sku else sku_code,
-            'product_name': sku.product.product_name if sku else '',
-            'location_code': location.location_code if location else loc_code,
-        })
+        return JsonResponse(
+            {
+                'sku_found': sku is not None,
+                'location_found': location is not None,
+                'on_hand': on_hand,
+                'sku_code': sku.sku_code if sku else sku_code,
+                'product_name': sku.product.product_name if sku else '',
+                'location_code': location.location_code if location else loc_code,
+            }
+        )
 
 
 # ============================================================================
 # 棚卸（Stocktake）— PC: 照会・作成・詳細・状態遷移アクション、handheld: カウント
 # ============================================================================
+
 
 class StocktakeInquiryView(LoginRequiredMixin, TemplateView):
     """棚卸セッション照会（検索-first パターン）。"""
@@ -628,8 +647,7 @@ class StocktakeInquiryView(LoginRequiredMixin, TemplateView):
             'planned_to': g.get('planned_to', ''),
         }
         if searched:
-            qs = StocktakeSession.objects.select_related(
-                'warehouse', 'area', 'created_by')
+            qs = StocktakeSession.objects.select_related('warehouse', 'area', 'created_by')
             wh = get_current_warehouse(self.request)
             if wh is not None:
                 qs = qs.filter(warehouse=wh)
@@ -649,14 +667,17 @@ class StocktakeInquiryView(LoginRequiredMixin, TemplateView):
                 item_count=Count('items'),
                 counted_count=Count(
                     'items',
-                    filter=Q(items__status__in=[
-                        StocktakeItem.Status.COUNTED,
-                        StocktakeItem.Status.ADJUSTED,
-                    ]),
+                    filter=Q(
+                        items__status__in=[
+                            StocktakeItem.Status.COUNTED,
+                            StocktakeItem.Status.ADJUSTED,
+                        ]
+                    ),
                 ),
             )
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'planned', 'desc')
+                self.request, qs, self.SORTABLE, 'planned', 'desc'
+            )
             ctx['stats'] = {
                 'total': qs.count(),
                 'planning': qs.filter(status=StocktakeSession.Status.PLANNING).count(),
@@ -698,19 +719,13 @@ class StocktakeCreateView(LoginRequiredMixin, FormView):
         instance.status = StocktakeSession.Status.PLANNING
         try:
             with transaction.atomic():
-                instance.session_code = StocktakeSession.next_code(
-                    timezone.localdate())
+                instance.session_code = StocktakeSession.next_code(timezone.localdate())
                 instance.save()
         except IntegrityError:
-            form.add_error(
-                None,
-                '採番が他の登録と衝突した可能性があります。再度お試しください。')
+            form.add_error(None, '採番が他の登録と衝突した可能性があります。再度お試しください。')
             return self.render_to_response(self.get_context_data(form=form))
-        messages.success(
-            self.request,
-            f'棚卸セッション {instance.session_code} を作成しました。')
-        return HttpResponseRedirect(
-            reverse('stock:stocktake_detail', args=[instance.pk]))
+        messages.success(self.request, f'棚卸セッション {instance.session_code} を作成しました。')
+        return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[instance.pk]))
 
 
 class StocktakeDetailView(LoginRequiredMixin, DetailView):
@@ -721,29 +736,32 @@ class StocktakeDetailView(LoginRequiredMixin, DetailView):
     context_object_name = 'session'
 
     def get_queryset(self):
-        return (super().get_queryset()
-                .select_related('warehouse', 'area', 'created_by'))
+        return super().get_queryset().select_related('warehouse', 'area', 'created_by')
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         session = self.object
-        items = (session.items
-                 .select_related(
-                     'location', 'location__area',
-                     'sku', 'sku__product', 'counted_by')
-                 .order_by('location__location_code', 'sku__sku_code'))
+        items = session.items.select_related(
+            'location', 'location__area', 'sku', 'sku__product', 'counted_by'
+        ).order_by('location__location_code', 'sku__sku_code')
         # サマリーは全件集計
         agg = items.aggregate(
             total=Count('id'),
-            counted=Count('id', filter=Q(status__in=[
-                StocktakeItem.Status.COUNTED, StocktakeItem.Status.ADJUSTED])),
+            counted=Count(
+                'id',
+                filter=Q(status__in=[StocktakeItem.Status.COUNTED, StocktakeItem.Status.ADJUSTED]),
+            ),
             uncounted=Count('id', filter=Q(status=StocktakeItem.Status.UNCOUNTED)),
             adjusted=Count('id', filter=Q(status=StocktakeItem.Status.ADJUSTED)),
         )
         # 差異あり件数（counted_quantity が NULL でなく system と異なる）
-        diff_count = items.filter(
-            counted_quantity__isnull=False,
-        ).exclude(counted_quantity=F('system_quantity')).count()
+        diff_count = (
+            items.filter(
+                counted_quantity__isnull=False,
+            )
+            .exclude(counted_quantity=F('system_quantity'))
+            .count()
+        )
         ctx['item_stats'] = {
             'total': agg['total'],
             'counted': agg['counted'],
@@ -782,26 +800,28 @@ class StocktakeStartView(LoginRequiredMixin, View):
         session = _get_session_for_action(pk)
         if session.status != StocktakeSession.Status.PLANNING:
             messages.error(request, '計画中の棚卸のみ開始できます。')
-            return HttpResponseRedirect(
-                reverse('stock:stocktake_detail', args=[pk]))
+            return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
         with transaction.atomic():
-            bal_qs = StockBalance.objects.filter(
-                location__warehouse=session.warehouse)
+            bal_qs = StockBalance.objects.filter(location__warehouse=session.warehouse)
             if session.stocktake_type == StocktakeSession.StocktakeType.CYCLE:
                 bal_qs = bal_qs.filter(location__area=session.area)
             balances = list(
-                bal_qs.select_related('location', 'sku')
-                .order_by('location__location_code', 'sku__sku_code')
-            )
-            StocktakeItem.objects.bulk_create([
-                StocktakeItem(
-                    session=session,
-                    location=b.location, sku=b.sku,
-                    system_quantity=b.quantity,
-                    status=StocktakeItem.Status.UNCOUNTED,
+                bal_qs.select_related('location', 'sku').order_by(
+                    'location__location_code', 'sku__sku_code'
                 )
-                for b in balances
-            ])
+            )
+            StocktakeItem.objects.bulk_create(
+                [
+                    StocktakeItem(
+                        session=session,
+                        location=b.location,
+                        sku=b.sku,
+                        system_quantity=b.quantity,
+                        status=StocktakeItem.Status.UNCOUNTED,
+                    )
+                    for b in balances
+                ]
+            )
             session.status = StocktakeSession.Status.COUNTING
             session.started_at = timezone.now()
             if session.stocktake_type == StocktakeSession.StocktakeType.FULL:
@@ -810,9 +830,9 @@ class StocktakeStartView(LoginRequiredMixin, View):
         messages.success(
             request,
             f'棚卸 {session.session_code} を開始しました'
-            f'（{len(balances)} 件の明細をスナップショット）。')
-        return HttpResponseRedirect(
-            reverse('stock:stocktake_detail', args=[pk]))
+            f'（{len(balances)} 件の明細をスナップショット）。',
+        )
+        return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
 
 
 class StocktakeReviewView(LoginRequiredMixin, View):
@@ -822,13 +842,11 @@ class StocktakeReviewView(LoginRequiredMixin, View):
         session = _get_session_for_action(pk)
         if session.status != StocktakeSession.Status.COUNTING:
             messages.error(request, 'カウント中の棚卸のみ差異確認へ進めます。')
-            return HttpResponseRedirect(
-                reverse('stock:stocktake_detail', args=[pk]))
+            return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
         session.status = StocktakeSession.Status.REVIEW
         session.save(update_fields=['status', 'updated_at'])
         messages.info(request, '差異確認モードへ移行しました。')
-        return HttpResponseRedirect(
-            reverse('stock:stocktake_detail', args=[pk]))
+        return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
 
 
 class StocktakeConfirmView(LoginRequiredMixin, View):
@@ -838,13 +856,12 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
         session = _get_session_for_action(pk)
         if session.status != StocktakeSession.Status.REVIEW:
             messages.error(request, '差異確認中の棚卸のみ確定できます。')
-            return HttpResponseRedirect(
-                reverse('stock:stocktake_detail', args=[pk]))
+            return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
         adj_count = 0
         with transaction.atomic():
-            for item in (session.items
-                         .select_related('location', 'sku')
-                         .filter(status=StocktakeItem.Status.COUNTED)):
+            for item in session.items.select_related('location', 'sku').filter(
+                status=StocktakeItem.Status.COUNTED
+            ):
                 if item.counted_quantity is None or item.counted_quantity == item.system_quantity:
                     item.status = StocktakeItem.Status.ADJUSTED
                     item.save(update_fields=['status', 'updated_at'])
@@ -852,11 +869,13 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
                 # 行ロックして現在の StockBalance を取得し、実カウント数に合わせる。
                 # ADJ 発行〜StockBalance 更新の隙に他の入出庫が走らないようロック。
                 StockBalance.objects.get_or_create(
-                    location=item.location, sku=item.sku,
+                    location=item.location,
+                    sku=item.sku,
                     defaults={'quantity': 0},
                 )
-                balance = (StockBalance.objects.select_for_update()
-                           .get(location=item.location, sku=item.sku))
+                balance = StockBalance.objects.select_for_update().get(
+                    location=item.location, sku=item.sku
+                )
                 before = balance.quantity
                 after = item.counted_quantity
                 delta = after - before
@@ -866,9 +885,11 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
                     continue
                 movement = StockMovement.objects.create(
                     movement_type=StockMovement.MovementType.ADJ,
-                    location=item.location, sku=item.sku,
+                    location=item.location,
+                    sku=item.sku,
                     quantity=delta,
-                    quantity_before=before, quantity_after=after,
+                    quantity_before=before,
+                    quantity_after=after,
                     reference_type=StockMovement.ReferenceType.STOCKTAKE,
                     reference_id=session.pk,
                     note=f'棚卸 {session.session_code} による調整',
@@ -881,7 +902,8 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
                     balance.first_received_at = movement.moved_at
                 balance.save()
                 StocktakeAdjustment.objects.create(
-                    stocktake_item=item, stock_movement=movement,
+                    stocktake_item=item,
+                    stock_movement=movement,
                     approved_by=request.user,
                 )
                 item.status = StocktakeItem.Status.ADJUSTED
@@ -893,10 +915,9 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
             session.save()
         messages.success(
             request,
-            f'棚卸 {session.session_code} を確定しました'
-            f'（差異調整 {adj_count} 件を発行）。')
-        return HttpResponseRedirect(
-            reverse('stock:stocktake_detail', args=[pk]))
+            f'棚卸 {session.session_code} を確定しました（差異調整 {adj_count} 件を発行）。',
+        )
+        return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
 
 
 class StocktakeCancelView(LoginRequiredMixin, View):
@@ -909,14 +930,12 @@ class StocktakeCancelView(LoginRequiredMixin, View):
             StocktakeSession.Status.CANCELLED,
         ):
             messages.error(request, '完了済み・取消済みは状態を変更できません。')
-            return HttpResponseRedirect(
-                reverse('stock:stocktake_detail', args=[pk]))
+            return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
         session.status = StocktakeSession.Status.CANCELLED
         session.is_locked = False
         session.save(update_fields=['status', 'is_locked', 'updated_at'])
         messages.info(request, f'棚卸 {session.session_code} を取り消しました。')
-        return HttpResponseRedirect(
-            reverse('stock:stocktake_detail', args=[pk]))
+        return HttpResponseRedirect(reverse('stock:stocktake_detail', args=[pk]))
 
 
 class StocktakeCountView(LoginRequiredMixin, View):
@@ -926,12 +945,10 @@ class StocktakeCountView(LoginRequiredMixin, View):
 
     def get(self, request):
         wh = get_current_warehouse(request)
-        qs = StocktakeSession.objects.filter(
-            status=StocktakeSession.Status.COUNTING)
+        qs = StocktakeSession.objects.filter(status=StocktakeSession.Status.COUNTING)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
-        sessions = (qs.select_related('warehouse', 'area')
-                    .order_by('-planned_at', '-session_code'))
+        sessions = qs.select_related('warehouse', 'area').order_by('-planned_at', '-session_code')
         return render(request, self.template_name, {'sessions': sessions})
 
     def post(self, request):
@@ -941,17 +958,15 @@ class StocktakeCountView(LoginRequiredMixin, View):
             return HttpResponseRedirect(reverse('stock:handheld_stocktake'))
         wh = get_current_warehouse(request)
         qs = StocktakeSession.objects.filter(
-            session_code=code, status=StocktakeSession.Status.COUNTING)
+            session_code=code, status=StocktakeSession.Status.COUNTING
+        )
         if wh is not None:
             qs = qs.filter(warehouse=wh)
         session = qs.first()
         if session is None:
-            messages.error(
-                request,
-                f'棚卸番号「{code}」のカウント中セッションが見つかりません。')
+            messages.error(request, f'棚卸番号「{code}」のカウント中セッションが見つかりません。')
             return HttpResponseRedirect(reverse('stock:handheld_stocktake'))
-        return HttpResponseRedirect(
-            reverse('stock:handheld_stocktake_work', args=[session.pk]))
+        return HttpResponseRedirect(reverse('stock:handheld_stocktake_work', args=[session.pk]))
 
 
 class StocktakeCountWorkView(LoginRequiredMixin, FormView):
@@ -963,8 +978,7 @@ class StocktakeCountWorkView(LoginRequiredMixin, FormView):
     def dispatch(self, request, *args, **kwargs):
         self.session = get_object_or_404(StocktakeSession, pk=kwargs['pk'])
         if self.session.status != StocktakeSession.Status.COUNTING:
-            messages.error(
-                request, 'この棚卸はカウント可能な状態ではありません。')
+            messages.error(request, 'この棚卸はカウント可能な状態ではありません。')
             return HttpResponseRedirect(reverse('stock:handheld_stocktake'))
         return super().dispatch(request, *args, **kwargs)
 
@@ -980,8 +994,7 @@ class StocktakeCountWorkView(LoginRequiredMixin, FormView):
         items = self.session.items
         ctx['progress'] = {
             'total': items.count(),
-            'counted': items.exclude(
-                status=StocktakeItem.Status.UNCOUNTED).count(),
+            'counted': items.exclude(status=StocktakeItem.Status.UNCOUNTED).count(),
         }
         return ctx
 
@@ -998,11 +1011,7 @@ class StocktakeCountWorkView(LoginRequiredMixin, FormView):
             item.status = StocktakeItem.Status.COUNTED
             item.save()
         diff = counted - item.system_quantity
-        diff_label = (
-            '差異なし' if diff == 0
-            else f'差異 +{diff}' if diff > 0
-            else f'差異 {diff}'
-        )
+        diff_label = '差異なし' if diff == 0 else f'差異 +{diff}' if diff > 0 else f'差異 {diff}'
         messages.success(
             self.request,
             f'カウント記録: {item.location.location_code} / '

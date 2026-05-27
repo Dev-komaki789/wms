@@ -26,9 +26,7 @@ class InboundOrder(models.Model):
         RETURN = 'return', '返品'
 
     inbound_order_code = models.CharField('入荷指示番号', max_length=30, unique=True)
-    warehouse = models.ForeignKey(
-        Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
-    )
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
     supplier = models.ForeignKey(
         Supplier,
         on_delete=models.SET_NULL,
@@ -37,17 +35,12 @@ class InboundOrder(models.Model):
         verbose_name='仕入先',
     )
     status = models.CharField(
-        'ステータス', max_length=20, choices=Status.choices,
-        default=Status.RECEIVING_WAIT
+        'ステータス', max_length=20, choices=Status.choices, default=Status.RECEIVING_WAIT
     )
     expected_date = models.DateField('入荷予定日', null=True, blank=True)
     arrived_at = models.DateTimeField('到着確認日時', null=True, blank=True)
-    purchase_order_code = models.CharField(
-        'SCMラベル発注番号', max_length=50, blank=True
-    )
-    supplier_delivery_note_code = models.CharField(
-        '仕入先納品書番号', max_length=50, blank=True
-    )
+    purchase_order_code = models.CharField('SCMラベル発注番号', max_length=50, blank=True)
+    supplier_delivery_note_code = models.CharField('仕入先納品書番号', max_length=50, blank=True)
     received_at = models.DateTimeField('入荷完了日時', null=True, blank=True)
     in_progress_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -80,9 +73,7 @@ class InboundOrder(models.Model):
         verbose_name_plural = '入荷指示'
         indexes = [
             models.Index(fields=['status'], name='idx_inbound_orders_status'),
-            models.Index(
-                fields=['expected_date'], name='idx_inbound_orders_expected'
-            ),
+            models.Index(fields=['expected_date'], name='idx_inbound_orders_expected'),
         ]
 
     def __str__(self):
@@ -111,9 +102,9 @@ class InboundOrder(models.Model):
             ) from e
         prefix = f'{code_prefix}-{date.strftime("%Y%m%d")}-'
         max_n = 0
-        for code in cls.objects.filter(
-            inbound_order_code__startswith=prefix
-        ).values_list('inbound_order_code', flat=True):
+        for code in cls.objects.filter(inbound_order_code__startswith=prefix).values_list(
+            'inbound_order_code', flat=True
+        ):
             m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
             if m:
                 max_n = max(max_n, int(m.group(1)))
@@ -130,9 +121,7 @@ class InboundOrderItem(models.Model):
         verbose_name='入荷指示',
     )
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
-    quantity_expected = models.IntegerField(
-        '予定入荷数', validators=[MinValueValidator(1)]
-    )
+    quantity_expected = models.IntegerField('予定入荷数', validators=[MinValueValidator(1)])
     quantity_received = models.IntegerField(
         '実入荷数', default=0, validators=[MinValueValidator(0)]
     )
@@ -181,9 +170,7 @@ class InboundReceipt(models.Model):
         verbose_name='格納先ロケーション',
         help_text='検品時はNULL、格納完了時に更新',
     )
-    quantity_expected = models.IntegerField(
-        '予定入荷数', validators=[MinValueValidator(1)]
-    )
+    quantity_expected = models.IntegerField('予定入荷数', validators=[MinValueValidator(1)])
     quantity_received = models.IntegerField(
         '実入荷数',
         validators=[MinValueValidator(0)],

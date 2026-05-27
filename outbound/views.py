@@ -7,7 +7,12 @@ from django.shortcuts import render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import (
-    CreateView, DeleteView, DetailView, TemplateView, UpdateView, View,
+    CreateView,
+    DeleteView,
+    DetailView,
+    TemplateView,
+    UpdateView,
+    View,
 )
 
 from core.order_csv import OrderCsvExportView, OrderCsvImportView
@@ -20,9 +25,15 @@ from stock.models import StockBalance, StockMovement
 from .csv_io import OUTBOUND_ORDER_SPEC
 from .forms import OutboundOrderForm, OutboundOrderItemFormSet
 from .models import (
-    DeliveryNote, DeliveryNoteItem,
-    OutboundOrder, OutboundOrderItem, PickingList, PickingListItem,
-    Shipment, ShipmentItem, StockReservation,
+    DeliveryNote,
+    DeliveryNoteItem,
+    OutboundOrder,
+    OutboundOrderItem,
+    PickingList,
+    PickingListItem,
+    Shipment,
+    ShipmentItem,
+    StockReservation,
 )
 from .utils import code128_svg, create_with_retry
 
@@ -119,8 +130,7 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
 
     template_name = 'a/outbound/order_inquiry.html'
 
-    SEARCH_KEYS = ('q', 'customer', 'status', 'source_type',
-                   'deadline_from', 'deadline_to')
+    SEARCH_KEYS = ('q', 'customer', 'status', 'source_type', 'deadline_from', 'deadline_to')
 
     # 見出しクリックで並び替え可能な列（許可リスト）。
     SORTABLE = {
@@ -152,26 +162,24 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
 
         if searched:
             qs = _filtered_outbound_orders(self.request).select_related(
-                'warehouse', 'customer', 'created_by')
+                'warehouse', 'customer', 'created_by'
+            )
             qs = qs.annotate(
                 item_count=Count('items'),
                 total_ordered=Sum('items__quantity_ordered'),
             )
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'created', 'desc')
+                self.request, qs, self.SORTABLE, 'created', 'desc'
+            )
             page = paginate(self.request, qs)
             ctx['orders'] = page
             ctx['page_obj'] = page
             ctx['stats'] = {
                 'total': qs.count(),
-                'allocation_wait': qs.filter(
-                    status=OutboundOrder.Status.ALLOCATION_WAIT).count(),
-                'picking_wait': qs.filter(
-                    status=OutboundOrder.Status.PICKING_WAIT).count(),
-                'inspection_wait': qs.filter(
-                    status=OutboundOrder.Status.INSPECTION_WAIT).count(),
-                'shipped': qs.filter(
-                    status=OutboundOrder.Status.SHIPPED).count(),
+                'allocation_wait': qs.filter(status=OutboundOrder.Status.ALLOCATION_WAIT).count(),
+                'picking_wait': qs.filter(status=OutboundOrder.Status.PICKING_WAIT).count(),
+                'inspection_wait': qs.filter(status=OutboundOrder.Status.INSPECTION_WAIT).count(),
+                'shipped': qs.filter(status=OutboundOrder.Status.SHIPPED).count(),
             }
         else:
             ctx['orders'] = OutboundOrder.objects.none()
@@ -180,16 +188,13 @@ class OutboundOrderInquiryView(LoginRequiredMixin, TemplateView):
         ctx['status_choices'] = OutboundOrder.Status.choices
         # 出荷元種別フィルタは oms / manual のみ。返品出荷は画面スコープ外のため出さない
         ctx['source_type_choices'] = [
-            c for c in OutboundOrder.SourceType.choices
-            if c[0] != OutboundOrder.SourceType.RETURN
+            c for c in OutboundOrder.SourceType.choices if c[0] != OutboundOrder.SourceType.RETURN
         ]
         ctx['filters'] = f
         return ctx
 
 
-class OutboundOrderDetailView(
-    CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView
-):
+class OutboundOrderDetailView(CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView):
     """出荷指示の詳細（読み取り専用）。出荷指示照会の指示番号リンクから遷移。
 
     指示の概要・明細（需要）に加え、出荷起動で確定するピッキング元ロケーション・
@@ -203,12 +208,13 @@ class OutboundOrderDetailView(
     def get_queryset(self):
         # 明細は SKU 順に固定し、ピッキング元ロケーションまで一括取得する
         items_qs = OutboundOrderItem.objects.select_related(
-            'sku__product', 'location__area',
+            'sku__product',
+            'location__area',
         ).order_by('sku__sku_code')
         return (
-            super().get_queryset()
-            .select_related('warehouse', 'customer', 'created_by',
-                            'cancelled_by')
+            super()
+            .get_queryset()
+            .select_related('warehouse', 'customer', 'created_by', 'cancelled_by')
             .prefetch_related(Prefetch('items', queryset=items_qs))
         )
 
@@ -263,8 +269,7 @@ class OutboundOrderCreateView(_OrderFormMixin, LoginRequiredMixin, CreateView):
 
 
 class OutboundOrderUpdateView(
-    _OrderFormMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin,
-    EditableOnlyMixin, UpdateView
+    _OrderFormMixin, CurrentWarehouseScopedMixin, LoginRequiredMixin, EditableOnlyMixin, UpdateView
 ):
     model = OutboundOrder
     success_url = reverse_lazy('outbound:order_inquiry')
@@ -274,8 +279,11 @@ class OutboundOrderUpdateView(
 
 
 class OutboundOrderDeleteView(
-    CurrentWarehouseScopedMixin, LoginRequiredMixin, EditableOnlyMixin,
-    ProtectedErrorMixin, DeleteView
+    CurrentWarehouseScopedMixin,
+    LoginRequiredMixin,
+    EditableOnlyMixin,
+    ProtectedErrorMixin,
+    DeleteView,
 ):
     model = OutboundOrder
     template_name = 'a/outbound/order_confirm_delete.html'
@@ -283,7 +291,8 @@ class OutboundOrderDeleteView(
 
     def get_queryset(self):
         return (
-            super().get_queryset()
+            super()
+            .get_queryset()
             .select_related('warehouse', 'customer', 'created_by')
             .prefetch_related('items__sku__product')
         )
@@ -297,16 +306,15 @@ def _available_locations(sku, warehouse):
     戻り値: [(Location, available_qty, first_received_at), ...]
     """
     balances = list(
-        StockBalance.objects
-        .select_for_update(of=('self',))
+        StockBalance.objects.select_for_update(of=('self',))
         .filter(sku=sku, location__warehouse=warehouse, quantity__gt=0)
         .select_related('location__area')
     )
     # この SKU の有効な引き当てをロケーション別に集計
     reserved = (
-        StockReservation.objects
-        .filter(sku=sku, status=StockReservation.Status.ACTIVE,
-                location__warehouse=warehouse)
+        StockReservation.objects.filter(
+            sku=sku, status=StockReservation.Status.ACTIVE, location__warehouse=warehouse
+        )
         .values('location')
         .annotate(total=Sum('quantity'))
     )
@@ -337,26 +345,31 @@ def _generate_picking_lists(order, items, user, *, picking_type, completed):
         by_area.setdefault(area.pk, (area, []))[1].append(item)
     for area, area_items in by_area.values():
         # picking_list_code は採番衝突に備えてリトライ付きで作成する
-        picking_list = create_with_retry(lambda area=area: PickingList.objects.create(
-            picking_list_code=PickingList.next_code(today),
-            warehouse=order.warehouse, area=area,
-            picking_type=picking_type,
-            status=(PickingList.Status.COMPLETED if completed
-                    else PickingList.Status.PENDING),
-            started_at=now if completed else None,
-            completed_at=now if completed else None,
-            created_by=user,
-        ))
+        picking_list = create_with_retry(
+            lambda area=area: PickingList.objects.create(
+                picking_list_code=PickingList.next_code(today),
+                warehouse=order.warehouse,
+                area=area,
+                picking_type=picking_type,
+                status=(PickingList.Status.COMPLETED if completed else PickingList.Status.PENDING),
+                started_at=now if completed else None,
+                completed_at=now if completed else None,
+                created_by=user,
+            )
+        )
         # 巡回順は棚番順
         area_items.sort(key=lambda it: it.location.location_code)
         for sort_idx, item in enumerate(area_items, start=1):
             PickingListItem.objects.create(
-                picking_list=picking_list, outbound_order_item=item,
-                location=item.location, sku=item.sku,
+                picking_list=picking_list,
+                outbound_order_item=item,
+                location=item.location,
+                sku=item.sku,
                 quantity_requested=item.quantity_ordered,
                 quantity_picked=(item.quantity_ordered if completed else 0),
-                status=(PickingListItem.Status.PICKED if completed
-                        else PickingListItem.Status.PENDING),
+                status=(
+                    PickingListItem.Status.PICKED if completed else PickingListItem.Status.PENDING
+                ),
                 picked_at=now if completed else None,
                 sort_order=sort_idx,
             )
@@ -409,8 +422,11 @@ def _try_launch_order(order, user):
             alloc.append((location, take))
             need -= take
         if need > 0:
-            return {'order': order, 'ok': False,
-                    'reason': f'{item.sku.sku_code} の在庫が不足しています'}
+            return {
+                'order': order,
+                'ok': False,
+                'reason': f'{item.sku.sku_code} の在庫が不足しています',
+            }
         plan.append((item, alloc))
 
     # --- 2パス目: 引き当てを確定（StockReservation 作成・明細を棚別に分割） ---
@@ -418,9 +434,12 @@ def _try_launch_order(order, user):
     for item, alloc in plan:
         for idx, (location, qty) in enumerate(alloc):
             reservation = StockReservation.objects.create(
-                location=location, sku=item.sku, quantity=qty,
+                location=location,
+                sku=item.sku,
+                quantity=qty,
                 status=StockReservation.Status.ACTIVE,
-                order=order, created_by=user,
+                order=order,
+                created_by=user,
             )
             if idx == 0:
                 # 1棚目は需要明細をそのまま更新（location=NULL → 棚を確定）
@@ -431,29 +450,28 @@ def _try_launch_order(order, user):
                 located_items.append(item)
             else:
                 # 2棚目以降は明細を分割（1棚 = 1明細。uk(order,sku,location) を満たす）
-                located_items.append(OutboundOrderItem.objects.create(
-                    outbound_order=order, sku=item.sku, location=location,
-                    reservation=reservation, quantity_ordered=qty,
-                ))
+                located_items.append(
+                    OutboundOrderItem.objects.create(
+                        outbound_order=order,
+                        sku=item.sku,
+                        location=location,
+                        reservation=reservation,
+                        quantity_ordered=qty,
+                    )
+                )
 
     # --- ピッキングリスト生成（指示 × エリア単位） ---
     # オーダーピッキング対象は通常のピッキングリスト（pending）を発行する。
     # AGV/GTP 対象は実倉庫では自動ピッキング・自動仕分け設備が処理する工程を、
     # 出荷起動の内部処理として完了状態のピッキングリストとして即時生成する。
-    order_pick_items = [
-        it for it in located_items
-        if it.sku.picking_type == Sku.PickingType.ORDER
-    ]
-    total_pick_items = [
-        it for it in located_items
-        if it.sku.picking_type == Sku.PickingType.TOTAL
-    ]
+    order_pick_items = [it for it in located_items if it.sku.picking_type == Sku.PickingType.ORDER]
+    total_pick_items = [it for it in located_items if it.sku.picking_type == Sku.PickingType.TOTAL]
     pl_count = _generate_picking_lists(
-        order, order_pick_items, user,
-        picking_type=PickingList.PickingType.ORDER, completed=False)
+        order, order_pick_items, user, picking_type=PickingList.PickingType.ORDER, completed=False
+    )
     auto_count = _generate_picking_lists(
-        order, total_pick_items, user,
-        picking_type=PickingList.PickingType.TOTAL, completed=True)
+        order, total_pick_items, user, picking_type=PickingList.PickingType.TOTAL, completed=True
+    )
 
     # オーダーピッキング対象があればピッキング工程へ。AGV/GTP のみの指示は
     # 自動仕分けまで完了済みなので出荷検品工程へ直接進める。
@@ -468,8 +486,7 @@ def _try_launch_order(order, user):
     # （_finalize_shipment）に発行する。出荷検品の開始バーコードは、ピッキングリストに
     # 印字した出荷指示番号を梱包エリアで読み取って用いる。
 
-    return {'order': order, 'ok': True,
-            'pl_count': pl_count, 'auto_count': auto_count}
+    return {'order': order, 'ok': True, 'pl_count': pl_count, 'auto_count': auto_count}
 
 
 def _ensure_delivery_note(order):
@@ -491,18 +508,24 @@ def _ensure_delivery_note(order):
         qty = it.quantity_shipped or 0
         if qty <= 0:
             continue
-        agg = by_sku.setdefault(it.sku_id, {
-            'sku': it.sku, 'ooi': it,
-            'product_name': it.sku.product.product_name,
-            'sku_code': it.sku.sku_code,
-            'qty': 0,
-        })
+        agg = by_sku.setdefault(
+            it.sku_id,
+            {
+                'sku': it.sku,
+                'ooi': it,
+                'product_name': it.sku.product.product_name,
+                'sku_code': it.sku.sku_code,
+                'qty': 0,
+            },
+        )
         agg['qty'] += qty
-    delivery_note = create_with_retry(lambda: DeliveryNote.objects.create(
-        delivery_note_code=DeliveryNote.next_code(today),
-        outbound_order=order,
-        customer=order.customer,
-    ))
+    delivery_note = create_with_retry(
+        lambda: DeliveryNote.objects.create(
+            delivery_note_code=DeliveryNote.next_code(today),
+            outbound_order=order,
+            customer=order.customer,
+        )
+    )
     for agg in by_sku.values():
         DeliveryNoteItem.objects.create(
             delivery_note=delivery_note,
@@ -579,7 +602,8 @@ class OutboundLaunchView(LoginRequiredMixin, View):
             total_ordered=Sum('items__quantity_ordered'),
         )
         qs, self._sort, self._dir = apply_ordering(
-            self.request, qs, self.SORTABLE, 'deadline', 'asc')
+            self.request, qs, self.SORTABLE, 'deadline', 'asc'
+        )
         return qs
 
     def get(self, request, *args, **kwargs):
@@ -589,18 +613,23 @@ class OutboundLaunchView(LoginRequiredMixin, View):
         # （メニューから遷移、クエリ無し）では一覧を出さない（大量データ対策）。
         searched = any(k in request.GET for k in self.SEARCH_KEYS)
         orders = self._candidates(f) if searched else OutboundOrder.objects.none()
-        return render(request, self.template_name, {
-            'orders': orders,
-            'filters': f,
-            'searched': searched,
-            'sort': getattr(self, '_sort', 'deadline'),
-            'dir': getattr(self, '_dir', 'asc'),
-            # 返品出荷は画面スコープ外のため出さない（出荷指示照会と同じ規約）
-            'source_type_choices': [
-                c for c in OutboundOrder.SourceType.choices
-                if c[0] != OutboundOrder.SourceType.RETURN
-            ],
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                'orders': orders,
+                'filters': f,
+                'searched': searched,
+                'sort': getattr(self, '_sort', 'deadline'),
+                'dir': getattr(self, '_dir', 'asc'),
+                # 返品出荷は画面スコープ外のため出さない（出荷指示照会と同じ規約）
+                'source_type_choices': [
+                    c
+                    for c in OutboundOrder.SourceType.choices
+                    if c[0] != OutboundOrder.SourceType.RETURN
+                ],
+            },
+        )
 
     def post(self, request, *args, **kwargs):
         ids = [i for i in request.POST.getlist('order_ids') if i.isdigit()]
@@ -611,17 +640,14 @@ class OutboundLaunchView(LoginRequiredMixin, View):
         launched, skipped = [], []
         with transaction.atomic():
             # 確定対象の指示行をロックして取得（同時起動の二重処理を防ぐ）
-            qs = (
-                OutboundOrder.objects
-                .select_for_update(of=('self',))
-                .filter(pk__in=ids, status=OutboundOrder.Status.ALLOCATION_WAIT)
+            qs = OutboundOrder.objects.select_for_update(of=('self',)).filter(
+                pk__in=ids, status=OutboundOrder.Status.ALLOCATION_WAIT
             )
             wh = get_current_warehouse(request)
             if wh is not None:
                 qs = qs.filter(warehouse=wh)
             # 出荷期限の早い指示から引き当て（限られた在庫を先に確保）
-            for order in qs.order_by('deadline_at',
-                                     'outbound_order_code'):
+            for order in qs.order_by('deadline_at', 'outbound_order_code'):
                 result = _try_launch_order(order, request.user)
                 (launched if result['ok'] else skipped).append(result)
 
@@ -637,8 +663,7 @@ class OutboundLaunchView(LoginRequiredMixin, View):
             )
         if skipped:
             detail = '／'.join(
-                f"{r['order'].outbound_order_code}（{r['reason']}）"
-                for r in skipped
+                f'{r["order"].outbound_order_code}（{r["reason"]}）' for r in skipped
             )
             messages.warning(
                 request,
@@ -647,8 +672,7 @@ class OutboundLaunchView(LoginRequiredMixin, View):
         if not launched and not skipped:
             messages.info(
                 request,
-                '対象の出荷指示がありませんでした'
-                '（すでに起動済みの可能性があります）。',
+                '対象の出荷指示がありませんでした（すでに起動済みの可能性があります）。',
             )
         return HttpResponseRedirect(reverse('outbound:launch'))
 
@@ -692,7 +716,8 @@ class PickingListInquiryView(LoginRequiredMixin, TemplateView):
             total_qty=Sum('items__quantity_requested'),
         )
         qs, ctx['sort'], ctx['dir'] = apply_ordering(
-            self.request, qs, self.SORTABLE, 'created', 'desc')
+            self.request, qs, self.SORTABLE, 'created', 'desc'
+        )
 
         ctx['picking_lists'] = qs
         ctx['status_choices'] = PickingList.Status.choices
@@ -704,9 +729,7 @@ class PickingListInquiryView(LoginRequiredMixin, TemplateView):
         return ctx
 
 
-class PickingListPrintView(
-    CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView
-):
+class PickingListPrintView(CurrentWarehouseScopedMixin, LoginRequiredMixin, DetailView):
     """ピッキングリスト印刷ビュー（帳票表示）。
 
     1枚のピッキングリストを帳票レイアウトで表示する。ピッキングリスト番号は
@@ -721,11 +744,13 @@ class PickingListPrintView(
     def get_queryset(self):
         # 明細は棚番順（sort_order）に固定して帳票化する
         items_qs = PickingListItem.objects.select_related(
-            'sku__product', 'location',
+            'sku__product',
+            'location',
             'outbound_order_item__outbound_order__customer',
         ).order_by('sort_order')
         return (
-            super().get_queryset()
+            super()
+            .get_queryset()
             .select_related('warehouse', 'area', 'assigned_to', 'created_by')
             .prefetch_related(Prefetch('items', queryset=items_qs))
         )
@@ -740,9 +765,7 @@ class PickingListPrintView(
         ctx['outbound_order'] = order
         # 出荷検品はこの出荷指示番号バーコードを梱包エリアで読み取って開始する。
         # 出荷明細書は検品完了後に発行されるため、検品開始時点ではまだ存在しない。
-        ctx['order_barcode_svg'] = (
-            code128_svg(order.outbound_order_code) if order else None
-        )
+        ctx['order_barcode_svg'] = code128_svg(order.outbound_order_code) if order else None
         return ctx
 
 
@@ -761,10 +784,12 @@ class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
 
     def get_queryset(self):
         items_qs = DeliveryNoteItem.objects.select_related(
-            'sku__product', 'outbound_order_item__location',
+            'sku__product',
+            'outbound_order_item__location',
         ).order_by('sku_code')
         return (
-            super().get_queryset()
+            super()
+            .get_queryset()
             .select_related('outbound_order__warehouse', 'customer')
             .prefetch_related(Prefetch('items', queryset=items_qs))
         )
@@ -779,26 +804,24 @@ class DeliveryNotePrintView(LoginRequiredMixin, DetailView):
 
 def _order_of_picking_list(picking_list):
     """ピッキングリストが属する出荷指示を返す（1リスト=1指示）。明細が無ければ None。"""
-    first = (
-        picking_list.items
-        .select_related('outbound_order_item__outbound_order__customer')
-        .first()
-    )
+    first = picking_list.items.select_related(
+        'outbound_order_item__outbound_order__customer'
+    ).first()
     return first.outbound_order_item.outbound_order if first else None
 
 
 def _picking_item_rows(picking_list):
     """ピッキング入口画面の明細表示用に、棚番順の行リストを返す。"""
     rows = []
-    for it in (picking_list.items
-               .select_related('sku__product', 'location')
-               .order_by('sort_order')):
-        rows.append({
-            'location': it.location.location_code,
-            'sku': it.sku.sku_code,
-            'name': it.sku.product.product_name,
-            'requested': it.quantity_requested,
-        })
+    for it in picking_list.items.select_related('sku__product', 'location').order_by('sort_order'):
+        rows.append(
+            {
+                'location': it.location.location_code,
+                'sku': it.sku.sku_code,
+                'name': it.sku.product.product_name,
+                'requested': it.quantity_requested,
+            }
+        )
     return rows
 
 
@@ -816,8 +839,7 @@ class OutboundPickingView(LoginRequiredMixin, View):
 
     def _scoped_lists(self):
         """現在ログイン中の倉庫スコープに絞った PickingList クエリセット。"""
-        qs = PickingList.objects.select_related(
-            'warehouse', 'area', 'assigned_to')
+        qs = PickingList.objects.select_related('warehouse', 'area', 'assigned_to')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -827,14 +849,9 @@ class OutboundPickingView(LoginRequiredMixin, View):
         code = request.GET.get('code', '').strip()
         ctx = {'code': code}
         if code:
-            picking_list = (
-                self._scoped_lists()
-                .filter(picking_list_code=code)
-                .first()
-            )
+            picking_list = self._scoped_lists().filter(picking_list_code=code).first()
             if picking_list is None:
-                ctx['lookup_error'] = (
-                    f'ピッキングリスト番号「{code}」は見つかりません。')
+                ctx['lookup_error'] = f'ピッキングリスト番号「{code}」は見つかりません。'
             else:
                 ctx['picking_list'] = picking_list
                 ctx['item_rows'] = _picking_item_rows(picking_list)
@@ -849,25 +866,22 @@ class OutboundPickingView(LoginRequiredMixin, View):
             picking_list = None
             if list_id.isdigit():
                 picking_list = (
-                    self._scoped_lists()
-                    .select_for_update(of=('self',))
-                    .filter(pk=list_id)
-                    .first()
+                    self._scoped_lists().select_for_update(of=('self',)).filter(pk=list_id).first()
                 )
             if picking_list is None:
                 messages.error(request, 'ピッキングリストが見つかりません。')
-                return HttpResponseRedirect(
-                    reverse('outbound:handheld_picking'))
-            if picking_list.status not in (PickingList.Status.PENDING,
-                                            PickingList.Status.IN_PROGRESS):
+                return HttpResponseRedirect(reverse('outbound:handheld_picking'))
+            if picking_list.status not in (
+                PickingList.Status.PENDING,
+                PickingList.Status.IN_PROGRESS,
+            ):
                 messages.info(
                     request,
                     f'ピッキングリスト {picking_list.picking_list_code} は現在'
                     f'「{picking_list.get_status_display()}」のため、'
                     f'ピッキングの対象外です。',
                 )
-                return HttpResponseRedirect(
-                    reverse('outbound:handheld_picking'))
+                return HttpResponseRedirect(reverse('outbound:handheld_picking'))
             # 別の担当者が作業中: 引き継ぎ(takeover)指定がなければ開始不可
             prev = picking_list.assigned_to
             blocked = bool(prev) and prev.pk != request.user.pk
@@ -878,8 +892,7 @@ class OutboundPickingView(LoginRequiredMixin, View):
                     f'ピッキングリスト {picking_list.picking_list_code} は '
                     f'{worker} がピッキング作業中です。',
                 )
-                return HttpResponseRedirect(
-                    reverse('outbound:handheld_picking'))
+                return HttpResponseRedirect(reverse('outbound:handheld_picking'))
             # 担当者として確保。担当者が変わるとき（新規・引き継ぎ）は開始時刻を更新
             if picking_list.assigned_to_id != request.user.pk:
                 picking_list.started_at = timezone.now()
@@ -888,10 +901,10 @@ class OutboundPickingView(LoginRequiredMixin, View):
             picking_list.save()
             if blocked and takeover:
                 worker = prev.display_name or prev.username
-                messages.info(
-                    request, f'{worker} からピッキング作業を引き継ぎました。')
+                messages.info(request, f'{worker} からピッキング作業を引き継ぎました。')
         return HttpResponseRedirect(
-            reverse('outbound:handheld_picking_work', args=[picking_list.pk]))
+            reverse('outbound:handheld_picking_work', args=[picking_list.pk])
+        )
 
 
 class OutboundPickingWorkView(LoginRequiredMixin, View):
@@ -911,8 +924,7 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
     template_name = 'a/outbound/handheld/picking_work.html'
 
     def _scoped_lists(self):
-        qs = PickingList.objects.select_related(
-            'warehouse', 'area', 'assigned_to')
+        qs = PickingList.objects.select_related('warehouse', 'area', 'assigned_to')
         wh = get_current_warehouse(self.request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -931,10 +943,8 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
                 f'ピッキングの対象外です。',
             )
             return HttpResponseRedirect(reverse('outbound:handheld_picking'))
-        if (picking_list.assigned_to_id
-                and picking_list.assigned_to_id != request.user.pk):
-            worker = (picking_list.assigned_to.display_name
-                      or picking_list.assigned_to.username)
+        if picking_list.assigned_to_id and picking_list.assigned_to_id != request.user.pk:
+            worker = picking_list.assigned_to.display_name or picking_list.assigned_to.username
             messages.error(
                 request,
                 f'ピッキングリスト {picking_list.picking_list_code} は '
@@ -959,16 +969,22 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
                     'picked': it.quantity_picked,
                     'short': max(0, it.quantity_requested - it.quantity_picked),
                 }
-                for it in (picking_list.items
-                           .select_related('sku__product', 'location')
-                           .order_by('sort_order'))
+                for it in (
+                    picking_list.items.select_related('sku__product', 'location').order_by(
+                        'sort_order'
+                    )
+                )
             ]
-            return render(request, self.template_name, {
-                'mode': 'summary',
-                'picking_list': picking_list,
-                'summary_items': summary_items,
-                'outbound_order': _order_of_picking_list(picking_list),
-            })
+            return render(
+                request,
+                self.template_name,
+                {
+                    'mode': 'summary',
+                    'picking_list': picking_list,
+                    'summary_items': summary_items,
+                    'outbound_order': _order_of_picking_list(picking_list),
+                },
+            )
         # 以降は IN_PROGRESS のみ
         guard = self._guard(request, picking_list)
         if guard:
@@ -978,28 +994,35 @@ class OutboundPickingWorkView(LoginRequiredMixin, View):
         items = []
         done_count = 0
         total = 0
-        for it in (picking_list.items
-                   .select_related('sku__product', 'location')
-                   .order_by('sort_order')):
+        for it in picking_list.items.select_related('sku__product', 'location').order_by(
+            'sort_order'
+        ):
             total += 1
             if it.picked_at is not None:
                 done_count += 1
                 continue
-            items.append({
-                'id': it.pk,
-                'location': it.location.location_code,
-                'sku': it.sku.sku_code,
-                'jan': it.sku.jan_code or '',
-                'name': it.sku.product.product_name,
-                'requested': it.quantity_requested,
-            })
-        return render(request, self.template_name, {
-            'picking_list': picking_list,
-            'items': items,
-            'done_count': done_count,
-            'total': total,
-            'outbound_order': _order_of_picking_list(picking_list),
-        })
+            items.append(
+                {
+                    'id': it.pk,
+                    'location': it.location.location_code,
+                    'sku': it.sku.sku_code,
+                    'jan': it.sku.jan_code or '',
+                    'name': it.sku.product.product_name,
+                    'requested': it.quantity_requested,
+                }
+            )
+        return render(
+            request,
+            self.template_name,
+            {
+                'picking_list': picking_list,
+                'items': items,
+                'done_count': done_count,
+                'total': total,
+                'outbound_order': _order_of_picking_list(picking_list),
+            },
+        )
+
 
 class OutboundPickingItemView(LoginRequiredMixin, View):
     """ピッキングの 1 明細を即時確定する API（fetch 用）。
@@ -1018,8 +1041,7 @@ class OutboundPickingItemView(LoginRequiredMixin, View):
     http_method_names = ['post']
 
     def _scoped_lists(self, request):
-        qs = PickingList.objects.select_related(
-            'warehouse', 'area', 'assigned_to')
+        qs = PickingList.objects.select_related('warehouse', 'area', 'assigned_to')
         wh = get_current_warehouse(request)
         if wh is not None:
             qs = qs.filter(warehouse=wh)
@@ -1042,39 +1064,51 @@ class OutboundPickingItemView(LoginRequiredMixin, View):
                 .first()
             )
             if picking_list is None:
-                return JsonResponse({
-                    'ok': False, 'error': 'ピッキングリストが見つかりません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': 'ピッキングリストが見つかりません。',
+                    }
+                )
             if picking_list.status != PickingList.Status.IN_PROGRESS:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'ピッキングリスト {picking_list.picking_list_code} は'
-                             f'「{picking_list.get_status_display()}」のためピッキングできません。',
-                })
-            if (picking_list.assigned_to_id
-                    and picking_list.assigned_to_id != request.user.pk):
-                worker = (picking_list.assigned_to.display_name
-                          or picking_list.assigned_to.username)
-                return JsonResponse({
-                    'ok': False, 'error': f'{worker} がピッキング作業中です。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'ピッキングリスト {picking_list.picking_list_code} は'
+                        f'「{picking_list.get_status_display()}」のためピッキングできません。',
+                    }
+                )
+            if picking_list.assigned_to_id and picking_list.assigned_to_id != request.user.pk:
+                worker = picking_list.assigned_to.display_name or picking_list.assigned_to.username
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'{worker} がピッキング作業中です。',
+                    }
+                )
 
-            item = (picking_list.items
-                    .select_related('sku').filter(pk=item_pk).first())
+            item = picking_list.items.select_related('sku').filter(pk=item_pk).first()
             if item is None:
-                return JsonResponse({
-                    'ok': False, 'error': '対象の明細が見つかりません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': '対象の明細が見つかりません。',
+                    }
+                )
             if item.picked_at is not None:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'{item.sku.sku_code} は既にピッキング済みです。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'{item.sku.sku_code} は既にピッキング済みです。',
+                    }
+                )
             if picked < 0 or picked > item.quantity_requested:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'実ピッキング数は 0 〜 {item.quantity_requested} の範囲で入力してください。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'実ピッキング数は 0 〜 {item.quantity_requested} の範囲で入力してください。',
+                    }
+                )
 
             now = timezone.now()
             item.quantity_picked = picked
@@ -1089,7 +1123,7 @@ class OutboundPickingItemView(LoginRequiredMixin, View):
 
             # 全明細が picked_at を持ったらリストを COMPLETED に
             remaining = picking_list.items.filter(picked_at__isnull=True).count()
-            all_done = (remaining == 0)
+            all_done = remaining == 0
             if all_done:
                 picking_list.status = PickingList.Status.COMPLETED
                 picking_list.completed_at = now
@@ -1098,24 +1132,22 @@ class OutboundPickingItemView(LoginRequiredMixin, View):
                 # ロックしてから「全リスト完了か」を判定する（既存ロジックと同じガード）
                 order = _order_of_picking_list(picking_list)
                 if order is not None:
-                    locked = (
-                        OutboundOrder.objects
-                        .select_for_update(of=('self',))
-                        .get(pk=order.pk)
-                    )
+                    locked = OutboundOrder.objects.select_for_update(of=('self',)).get(pk=order.pk)
                     unfinished = PickingList.objects.filter(
                         items__outbound_order_item__outbound_order=order,
-                        status__in=[PickingList.Status.PENDING,
-                                    PickingList.Status.IN_PROGRESS],
+                        status__in=[PickingList.Status.PENDING, PickingList.Status.IN_PROGRESS],
                     ).exists()
-                    if (not unfinished
-                            and locked.status == OutboundOrder.Status.PICKING_WAIT):
+                    if not unfinished and locked.status == OutboundOrder.Status.PICKING_WAIT:
                         locked.status = OutboundOrder.Status.INSPECTION_WAIT
                         locked.save()
 
-        return JsonResponse({
-            'ok': True, 'all_done': all_done, 'remaining': remaining,
-        })
+        return JsonResponse(
+            {
+                'ok': True,
+                'all_done': all_done,
+                'remaining': remaining,
+            }
+        )
 
 
 def _picked_qty_map(order):
@@ -1125,10 +1157,8 @@ def _picked_qty_map(order):
     自動仕分け）で生成された PickingListItem が1件ずつ対応する。その quantity_picked を
     引いて {outbound_order_item_id: quantity_picked} の形で返す。
     """
-    rows = (
-        PickingListItem.objects
-        .filter(outbound_order_item__outbound_order=order)
-        .values('outbound_order_item_id', 'quantity_picked')
+    rows = PickingListItem.objects.filter(outbound_order_item__outbound_order=order).values(
+        'outbound_order_item_id', 'quantity_picked'
     )
     return {r['outbound_order_item_id']: r['quantity_picked'] for r in rows}
 
@@ -1139,21 +1169,21 @@ def _inspection_items(order, picked_map):
     入口画面の明細テーブルと、作業画面の handheld ウィザード（JSON）で共用する。
     """
     rows = []
-    for it in (order.items
-               .select_related('sku__product', 'location')
-               .order_by('sku__sku_code')):
+    for it in order.items.select_related('sku__product', 'location').order_by('sku__sku_code'):
         picked = picked_map.get(it.pk, 0)
-        rows.append({
-            'id': it.pk,
-            'sku': it.sku.sku_code,
-            'jan': it.sku.jan_code or '',
-            'name': it.sku.product.product_name,
-            'location': it.location.location_code if it.location else '',
-            'ordered': it.quantity_ordered,
-            'picked': picked,
-            # 欠品数（指示に満たないピッキング不足分）。0 なら欠品なし
-            'short': max(0, it.quantity_ordered - picked),
-        })
+        rows.append(
+            {
+                'id': it.pk,
+                'sku': it.sku.sku_code,
+                'jan': it.sku.jan_code or '',
+                'name': it.sku.product.product_name,
+                'location': it.location.location_code if it.location else '',
+                'ordered': it.quantity_ordered,
+                'picked': picked,
+                # 欠品数（指示に満たないピッキング不足分）。0 なら欠品なし
+                'short': max(0, it.quantity_ordered - picked),
+            }
+        )
     return rows
 
 
@@ -1181,11 +1211,7 @@ class OutboundInspectionView(LoginRequiredMixin, View):
         code = request.GET.get('code', '').strip()
         ctx = {'code': code}
         if code:
-            order = (
-                self._scoped_orders()
-                .filter(outbound_order_code=code)
-                .first()
-            )
+            order = self._scoped_orders().filter(outbound_order_code=code).first()
             if order is None:
                 ctx['lookup_error'] = f'出荷指示番号「{code}」は見つかりません。'
             else:
@@ -1193,7 +1219,8 @@ class OutboundInspectionView(LoginRequiredMixin, View):
                 ctx['item_rows'] = _inspection_items(order, _picked_qty_map(order))
                 ctx['shipment'] = (
                     Shipment.objects.select_related('in_progress_by')
-                    .filter(outbound_order=order).first()
+                    .filter(outbound_order=order)
+                    .first()
                 )
         return render(request, self.template_name, ctx)
 
@@ -1212,8 +1239,7 @@ class OutboundInspectionView(LoginRequiredMixin, View):
                 )
             if order is None:
                 messages.error(request, '出荷指示が見つかりません。')
-                return HttpResponseRedirect(
-                    reverse('outbound:handheld_inspection'))
+                return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
             if order.status != OutboundOrder.Status.INSPECTION_WAIT:
                 messages.info(
                     request,
@@ -1221,19 +1247,20 @@ class OutboundInspectionView(LoginRequiredMixin, View):
                     f'「{order.get_status_display()}」のため、'
                     f'出荷検品の対象外です。',
                 )
-                return HttpResponseRedirect(
-                    reverse('outbound:handheld_inspection'))
+                return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
             # 出荷実績(Shipment)＝検品・梱包工程の作業成果物。初回開始で作成する。
             # order を行ロック済みなので二重作成は起きない。
             shipment = Shipment.objects.filter(outbound_order=order).first()
             if shipment is None:
                 # shipment_code は採番衝突に備えてリトライ付きで作成する
-                shipment = create_with_retry(lambda: Shipment.objects.create(
-                    shipment_code=Shipment.next_code(timezone.localdate()),
-                    outbound_order=order,
-                    status=Shipment.Status.INSPECTING,
-                    created_by=request.user,
-                ))
+                shipment = create_with_retry(
+                    lambda: Shipment.objects.create(
+                        shipment_code=Shipment.next_code(timezone.localdate()),
+                        outbound_order=order,
+                        status=Shipment.Status.INSPECTING,
+                        created_by=request.user,
+                    )
+                )
             # 別の担当者が作業中: 引き継ぎ(takeover)指定がなければ開始不可
             prev = shipment.in_progress_by
             blocked = bool(prev) and prev.pk != request.user.pk
@@ -1241,11 +1268,9 @@ class OutboundInspectionView(LoginRequiredMixin, View):
                 worker = prev.display_name or prev.username
                 messages.error(
                     request,
-                    f'出荷指示 {order.outbound_order_code} は {worker} が'
-                    f'出荷検品作業中です。',
+                    f'出荷指示 {order.outbound_order_code} は {worker} が出荷検品作業中です。',
                 )
-                return HttpResponseRedirect(
-                    reverse('outbound:handheld_inspection'))
+                return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
             # 担当者として確保。担当者が変わるとき（新規・引き継ぎ）は開始時刻を更新
             if shipment.in_progress_by_id != request.user.pk:
                 shipment.in_progress_at = timezone.now()
@@ -1253,10 +1278,8 @@ class OutboundInspectionView(LoginRequiredMixin, View):
             shipment.save()
             if blocked and takeover:
                 worker = prev.display_name or prev.username
-                messages.info(
-                    request, f'{worker} から出荷検品作業を引き継ぎました。')
-        return HttpResponseRedirect(
-            reverse('outbound:handheld_inspection_work', args=[order.pk]))
+                messages.info(request, f'{worker} から出荷検品作業を引き継ぎました。')
+        return HttpResponseRedirect(reverse('outbound:handheld_inspection_work', args=[order.pk]))
 
 
 class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
@@ -1302,12 +1325,10 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
         if shipment is None or shipment.in_progress_by_id != request.user.pk:
             if shipment is not None and shipment.in_progress_by_id:
-                worker = (shipment.in_progress_by.display_name
-                          or shipment.in_progress_by.username)
+                worker = shipment.in_progress_by.display_name or shipment.in_progress_by.username
                 messages.error(
                     request,
-                    f'出荷指示 {order.outbound_order_code} は {worker} が'
-                    f'出荷検品作業中です。',
+                    f'出荷指示 {order.outbound_order_code} は {worker} が出荷検品作業中です。',
                 )
             else:
                 messages.error(
@@ -1324,8 +1345,7 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             messages.error(request, '出荷指示が見つかりません。')
             return HttpResponseRedirect(reverse('outbound:handheld_inspection'))
         shipment = (
-            Shipment.objects.select_related('in_progress_by')
-            .filter(outbound_order=order).first()
+            Shipment.objects.select_related('in_progress_by').filter(outbound_order=order).first()
         )
         # SHIPPED の場合は最終結果サマリを読み取り専用で表示。
         # サマリは実際に出荷した数(quantity_shipped)で表示する（検品で下方修正された
@@ -1333,12 +1353,16 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
         if order.status == OutboundOrder.Status.SHIPPED:
             shipped_map = {it.pk: it.quantity_shipped for it in order.items.all()}
             summary_items = _inspection_items(order, shipped_map)
-            return render(request, self.template_name, {
-                'mode': 'summary',
-                'order': order,
-                'shipment': shipment,
-                'summary_items': summary_items,
-            })
+            return render(
+                request,
+                self.template_name,
+                {
+                    'mode': 'summary',
+                    'order': order,
+                    'shipment': shipment,
+                    'summary_items': summary_items,
+                },
+            )
         guard = self._guard(request, order, shipment)
         if guard:
             return guard
@@ -1355,10 +1379,17 @@ class OutboundInspectionWorkView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
                 continue
             # JSON に出すのは未検品のものだけ
             items.append(row)
-        return render(request, self.template_name, {
-            'order': order, 'shipment': shipment, 'items': items,
-            'done_count': done_count, 'total': total,
-        })
+        return render(
+            request,
+            self.template_name,
+            {
+                'order': order,
+                'shipment': shipment,
+                'items': items,
+                'done_count': done_count,
+                'total': total,
+            },
+        )
 
 
 class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, View):
@@ -1394,41 +1425,53 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
                 .first()
             )
             if order is None:
-                return JsonResponse({
-                    'ok': False, 'error': '出荷指示が見つかりません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': '出荷指示が見つかりません。',
+                    }
+                )
             if order.status != OutboundOrder.Status.INSPECTION_WAIT:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'出荷指示 {order.outbound_order_code} は'
-                             f'「{order.get_status_display()}」のため検品できません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'出荷指示 {order.outbound_order_code} は'
+                        f'「{order.get_status_display()}」のため検品できません。',
+                    }
+                )
             shipment = (
-                Shipment.objects
-                .select_for_update(of=('self',))
+                Shipment.objects.select_for_update(of=('self',))
                 .select_related('in_progress_by')
-                .filter(outbound_order=order).first()
+                .filter(outbound_order=order)
+                .first()
             )
             if shipment is None or shipment.in_progress_by_id != request.user.pk:
-                return JsonResponse({
-                    'ok': False,
-                    'error': '検品作業のロックが取れていません。先に「検品開始」を行ってください。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': '検品作業のロックが取れていません。先に「検品開始」を行ってください。',
+                    }
+                )
 
             item = (
-                order.items
-                .select_related('sku', 'location', 'reservation')
-                .filter(pk=item_pk).first()
+                order.items.select_related('sku', 'location', 'reservation')
+                .filter(pk=item_pk)
+                .first()
             )
             if item is None:
-                return JsonResponse({
-                    'ok': False, 'error': '対象の明細が見つかりません。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': '対象の明細が見つかりません。',
+                    }
+                )
             if item.inspected_at is not None:
-                return JsonResponse({
-                    'ok': False,
-                    'error': f'{item.sku.sku_code} は既に検品済みです。',
-                })
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': f'{item.sku.sku_code} は既に検品済みです。',
+                    }
+                )
 
             picked_map = _picked_qty_map(order)
             picked = picked_map.get(item.pk, 0)
@@ -1441,10 +1484,12 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             else:
                 raw = (request.POST.get('quantity_shipped') or '').strip()
                 if not raw.isdigit() or int(raw) > picked:
-                    return JsonResponse({
-                        'ok': False,
-                        'error': f'実出荷数は 0〜{picked}（ピッキング実績）で入力してください。',
-                    })
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': f'実出荷数は 0〜{picked}（ピッキング実績）で入力してください。',
+                        }
+                    )
                 shipped = int(raw)
 
             now = timezone.now()
@@ -1459,17 +1504,20 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
                 on_hand = balance.quantity if balance else 0
                 if shipped > on_hand:
                     loc = item.location.location_code if item.location else '—'
-                    return JsonResponse({
-                        'ok': False,
-                        'error': f'{item.sku.sku_code} は棚番 {loc} の在庫'
-                                 f'（{on_hand}）が実出荷数（{shipped}）に不足しています。'
-                                 f'在庫差異を解消してから再度お試しください。',
-                    })
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': f'{item.sku.sku_code} は棚番 {loc} の在庫'
+                            f'（{on_hand}）が実出荷数（{shipped}）に不足しています。'
+                            f'在庫差異を解消してから再度お試しください。',
+                        }
+                    )
                 quantity_before = balance.quantity
                 quantity_after = quantity_before - shipped
                 StockMovement.objects.create(
                     movement_type=StockMovement.MovementType.OUT,
-                    location=item.location, sku=item.sku,
+                    location=item.location,
+                    sku=item.sku,
                     quantity=-shipped,  # OUT は負の値で記録
                     quantity_before=quantity_before,
                     quantity_after=quantity_after,
@@ -1494,19 +1542,24 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
 
             # 全明細が inspected_at を持ったら出荷確定（ShipmentItem 集約・Shipment / Order 遷移）
             remaining = order.items.filter(inspected_at__isnull=True).count()
-            all_done = (remaining == 0)
+            all_done = remaining == 0
             if all_done:
                 self._finalize_shipment(order, shipment, request.user, now)
 
-        return JsonResponse({
-            'ok': True, 'all_done': all_done, 'remaining': remaining,
-        })
+        return JsonResponse(
+            {
+                'ok': True,
+                'all_done': all_done,
+                'remaining': remaining,
+            }
+        )
 
     def _finalize_shipment(self, order, shipment, user, now):
         """全明細検品完了時の最終処理: ShipmentItem 集約 + Shipment/Order 遷移。"""
         # 念のため残っている ACTIVE 引き当ても解放（per-item で取り逃した分の保険）
         StockReservation.objects.filter(
-            order=order, status=StockReservation.Status.ACTIVE,
+            order=order,
+            status=StockReservation.Status.ACTIVE,
         ).update(status=StockReservation.Status.RELEASED, released_at=now)
 
         # ShipmentItem は SKU 単位に集約する（出荷明細書は _ensure_delivery_note で別途集約）
@@ -1515,8 +1568,7 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
             qty = it.quantity_shipped or 0
             if qty <= 0:
                 continue
-            agg = by_sku.setdefault(
-                it.sku_id, {'sku': it.sku, 'ooi': it, 'qty': 0})
+            agg = by_sku.setdefault(it.sku_id, {'sku': it.sku, 'ooi': it, 'qty': 0})
             agg['qty'] += qty
         for agg in by_sku.values():
             if agg['qty'] <= 0:
@@ -1549,11 +1601,13 @@ class OutboundInspectionItemView(StocktakeLockGuardMixin, LoginRequiredMixin, Vi
 
 # ---- 出荷指示 CSV 入出力 ----
 
+
 class OutboundOrderCsvExportView(OrderCsvExportView):
     """出荷指示を CSV（ヘッダ＋明細フラット様式）でエクスポートする。
 
     照会画面と同じ検索条件（GET）を反映する。条件未指定なら全件出力。
     """
+
     spec = OUTBOUND_ORDER_SPEC
 
     def get_queryset(self, request):
@@ -1562,4 +1616,5 @@ class OutboundOrderCsvExportView(OrderCsvExportView):
 
 class OutboundOrderCsvImportView(OrderCsvImportView):
     """出荷指示を CSV でインポートする（新規作成のみ）。"""
+
     spec = OUTBOUND_ORDER_SPEC

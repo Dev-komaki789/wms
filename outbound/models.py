@@ -34,9 +34,7 @@ class OutboundOrder(models.Model):
         OMS_REQUEST = 'oms_request', 'OMS要求'
 
     outbound_order_code = models.CharField('出荷指示番号', max_length=30, unique=True)
-    warehouse = models.ForeignKey(
-        Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
-    )
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
     customer = models.ForeignKey(
         Customer,
         on_delete=models.SET_NULL,
@@ -44,9 +42,7 @@ class OutboundOrder(models.Model):
         blank=True,
         verbose_name='顧客',
     )
-    external_order_id = models.CharField(
-        'OMS注文番号', max_length=50, blank=True, db_index=True
-    )
+    external_order_id = models.CharField('OMS注文番号', max_length=50, blank=True, db_index=True)
     delivery_postal_code = models.CharField('配送先郵便番号', max_length=10, blank=True)
     delivery_address = models.CharField('配送先住所', max_length=255, blank=True)
     delivery_name = models.CharField('配送先名称', max_length=100, blank=True)
@@ -125,9 +121,9 @@ class OutboundOrder(models.Model):
             ) from e
         prefix = f'{code_prefix}-{date.strftime("%Y%m%d")}-'
         max_n = 0
-        for code in cls.objects.filter(
-            outbound_order_code__startswith=prefix
-        ).values_list('outbound_order_code', flat=True):
+        for code in cls.objects.filter(outbound_order_code__startswith=prefix).values_list(
+            'outbound_order_code', flat=True
+        ):
             m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
             if m:
                 max_n = max(max_n, int(m.group(1)))
@@ -142,9 +138,7 @@ class StockReservation(models.Model):
         RELEASED = 'released', '解放済み'
         EXPIRED = 'expired', '期限切れ'
 
-    location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, verbose_name='ロケーション'
-    )
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, verbose_name='ロケーション')
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
     quantity = models.IntegerField('引き当て数', validators=[MinValueValidator(1)])
     status = models.CharField(
@@ -182,9 +176,7 @@ class StockReservation(models.Model):
         verbose_name = '在庫引き当て'
         verbose_name_plural = '在庫引き当て'
         indexes = [
-            models.Index(
-                fields=['location', 'sku', 'status'], name='idx_reservations_lss'
-            ),
+            models.Index(fields=['location', 'sku', 'status'], name='idx_reservations_lss'),
             models.Index(fields=['status'], name='idx_reservations_status'),
         ]
 
@@ -217,12 +209,8 @@ class OutboundOrderItem(models.Model):
         blank=True,
         verbose_name='紐づく引き当て',
     )
-    quantity_ordered = models.IntegerField(
-        '指示数量', validators=[MinValueValidator(1)]
-    )
-    quantity_shipped = models.IntegerField(
-        '実出荷数', default=0, validators=[MinValueValidator(0)]
-    )
+    quantity_ordered = models.IntegerField('指示数量', validators=[MinValueValidator(1)])
+    quantity_shipped = models.IntegerField('実出荷数', default=0, validators=[MinValueValidator(0)])
     # 出荷検品の per-item コミット用。inspected_at に値が入っているとその明細は
     # 検品完了済み（再入場時のフィルタに使う）。skip（picked=0）の明細も
     # inspected_at をセットすることで「処理済み」を記録する。
@@ -230,7 +218,8 @@ class OutboundOrderItem(models.Model):
     inspected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         related_name='inspected_outbound_order_items',
         verbose_name='検品担当者',
     )
@@ -266,12 +255,8 @@ class PickingList(models.Model):
         COMPLETED = 'completed', '完了'
         CANCELLED = 'cancelled', '取消'
 
-    picking_list_code = models.CharField(
-        'ピッキングリスト番号', max_length=30, unique=True
-    )
-    warehouse = models.ForeignKey(
-        Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
-    )
+    picking_list_code = models.CharField('ピッキングリスト番号', max_length=30, unique=True)
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
     area = models.ForeignKey(Area, on_delete=models.PROTECT, verbose_name='対象エリア')
     picking_type = models.CharField(
         'ピッキング種別',
@@ -320,9 +305,9 @@ class PickingList(models.Model):
         """次のピッキングリスト番号（PL-YYYYMMDD-NNN）を生成する。"""
         prefix = f'PL-{date.strftime("%Y%m%d")}-'
         max_n = 0
-        for code in cls.objects.filter(
-            picking_list_code__startswith=prefix
-        ).values_list('picking_list_code', flat=True):
+        for code in cls.objects.filter(picking_list_code__startswith=prefix).values_list(
+            'picking_list_code', flat=True
+        ):
             m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
             if m:
                 max_n = max(max_n, int(m.group(1)))
@@ -348,13 +333,9 @@ class PickingListItem(models.Model):
     outbound_order_item = models.ForeignKey(
         OutboundOrderItem, on_delete=models.PROTECT, verbose_name='出荷指示明細'
     )
-    location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, verbose_name='ピッキング元'
-    )
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, verbose_name='ピッキング元')
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
-    quantity_requested = models.IntegerField(
-        '指示数量', validators=[MinValueValidator(1)]
-    )
+    quantity_requested = models.IntegerField('指示数量', validators=[MinValueValidator(1)])
     quantity_picked = models.IntegerField(
         '実ピッキング数', default=0, validators=[MinValueValidator(0)]
     )
@@ -463,9 +444,9 @@ class Shipment(models.Model):
         """次の出荷番号（SH-YYYYMMDD-NNN）を生成する。"""
         prefix = f'SH-{date.strftime("%Y%m%d")}-'
         max_n = 0
-        for code in cls.objects.filter(
-            shipment_code__startswith=prefix
-        ).values_list('shipment_code', flat=True):
+        for code in cls.objects.filter(shipment_code__startswith=prefix).values_list(
+            'shipment_code', flat=True
+        ):
             m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
             if m:
                 max_n = max(max_n, int(m.group(1)))
@@ -482,9 +463,7 @@ class ShipmentItem(models.Model):
         OutboundOrderItem, on_delete=models.PROTECT, verbose_name='出荷指示明細'
     )
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
-    quantity_shipped = models.IntegerField(
-        '出荷数量', validators=[MinValueValidator(1)]
-    )
+    quantity_shipped = models.IntegerField('出荷数量', validators=[MinValueValidator(1)])
     stock_movement = models.ForeignKey(
         StockMovement,
         on_delete=models.SET_NULL,
@@ -525,9 +504,7 @@ class DeliveryNote(models.Model):
     outbound_order = models.OneToOneField(
         OutboundOrder, on_delete=models.PROTECT, verbose_name='出荷指示'
     )
-    customer = models.ForeignKey(
-        Customer, on_delete=models.PROTECT, verbose_name='顧客'
-    )
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, verbose_name='顧客')
     issued_at = models.DateTimeField('発行日時', auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -544,9 +521,9 @@ class DeliveryNote(models.Model):
         """次の出荷明細書番号（DN-YYYYMMDD-NNN）を生成する。"""
         prefix = f'DN-{date.strftime("%Y%m%d")}-'
         max_n = 0
-        for code in cls.objects.filter(
-            delivery_note_code__startswith=prefix
-        ).values_list('delivery_note_code', flat=True):
+        for code in cls.objects.filter(delivery_note_code__startswith=prefix).values_list(
+            'delivery_note_code', flat=True
+        ):
             m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
             if m:
                 max_n = max(max_n, int(m.group(1)))
@@ -566,9 +543,7 @@ class DeliveryNoteItem(models.Model):
         OutboundOrderItem, on_delete=models.PROTECT, verbose_name='出荷指示明細'
     )
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
-    product_name = models.CharField(
-        '商品名（スナップショット）', max_length=200
-    )
+    product_name = models.CharField('商品名（スナップショット）', max_length=200)
     sku_code = models.CharField('SKUコード（スナップショット）', max_length=50)
     quantity = models.IntegerField('数量', validators=[MinValueValidator(1)])
     created_at = models.DateTimeField(auto_now_add=True)

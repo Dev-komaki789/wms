@@ -67,14 +67,13 @@ class ErrorLogInquiryView(LoginRequiredMixin, TemplateView):
                 qs = qs.filter(occurred_at__date__lte=date_to)
             agg = qs.aggregate(
                 total=Count('id'),
-                exception=Count(
-                    'id', filter=Q(error_type=ErrorLog.ErrorType.EXCEPTION)),
-                imported=Count(
-                    'id', filter=Q(error_type=ErrorLog.ErrorType.IMPORT)),
+                exception=Count('id', filter=Q(error_type=ErrorLog.ErrorType.EXCEPTION)),
+                imported=Count('id', filter=Q(error_type=ErrorLog.ErrorType.IMPORT)),
                 unresolved=Count('id', filter=Q(is_resolved=False)),
             )
             qs, ctx['sort'], ctx['dir'] = apply_ordering(
-                self.request, qs, self.SORTABLE, 'occurred', 'desc')
+                self.request, qs, self.SORTABLE, 'occurred', 'desc'
+            )
             page = paginate(self.request, qs)
             ctx['logs'] = page
             ctx['page_obj'] = page
@@ -119,5 +118,4 @@ class ErrorLogDetailView(LoginRequiredMixin, DetailView):
             log.resolved_at = timezone.now()
             messages.success(request, 'エラーログを「対応済み」にしました。')
         log.save(update_fields=['is_resolved', 'resolved_at'])
-        return HttpResponseRedirect(
-            reverse('core:error_log_detail', args=[log.pk]))
+        return HttpResponseRedirect(reverse('core:error_log_detail', args=[log.pk]))

@@ -57,7 +57,15 @@ class ProductAdmin(admin.ModelAdmin):
 
 @admin.register(Sku)
 class SkuAdmin(admin.ModelAdmin):
-    list_display = ('sku_code', 'product', 'jan_code', 'size_info', 'color_info', 'picking_type', 'is_active')
+    list_display = (
+        'sku_code',
+        'product',
+        'jan_code',
+        'size_info',
+        'color_info',
+        'picking_type',
+        'is_active',
+    )
     search_fields = ('sku_code', 'jan_code', 'product__product_name')
     list_filter = ('picking_type', 'is_active')
     autocomplete_fields = ('product',)

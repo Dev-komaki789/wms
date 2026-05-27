@@ -16,11 +16,23 @@ urlpatterns = [
     path('stocktakes/new/', views.StocktakeCreateView.as_view(), name='stocktake_create'),
     path('stocktakes/<int:pk>/', views.StocktakeDetailView.as_view(), name='stocktake_detail'),
     path('stocktakes/<int:pk>/start/', views.StocktakeStartView.as_view(), name='stocktake_start'),
-    path('stocktakes/<int:pk>/review/', views.StocktakeReviewView.as_view(), name='stocktake_review'),
-    path('stocktakes/<int:pk>/confirm/', views.StocktakeConfirmView.as_view(), name='stocktake_confirm'),
-    path('stocktakes/<int:pk>/cancel/', views.StocktakeCancelView.as_view(), name='stocktake_cancel'),
+    path(
+        'stocktakes/<int:pk>/review/', views.StocktakeReviewView.as_view(), name='stocktake_review'
+    ),
+    path(
+        'stocktakes/<int:pk>/confirm/',
+        views.StocktakeConfirmView.as_view(),
+        name='stocktake_confirm',
+    ),
+    path(
+        'stocktakes/<int:pk>/cancel/', views.StocktakeCancelView.as_view(), name='stocktake_cancel'
+    ),
     path('handheld/stocktake/', views.StocktakeCountView.as_view(), name='handheld_stocktake'),
-    path('handheld/stocktake/<int:pk>/', views.StocktakeCountWorkView.as_view(), name='handheld_stocktake_work'),
+    path(
+        'handheld/stocktake/<int:pk>/',
+        views.StocktakeCountWorkView.as_view(),
+        name='handheld_stocktake_work',
+    ),
     # AJAX API
     path('api/stock-check/', views.StockCheckAPIView.as_view(), name='api_stock_check'),
 ]

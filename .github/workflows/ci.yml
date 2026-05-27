@@ -40,6 +40,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      # ruff: コードスタイル/未使用import/低レベルバグの検出
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      # ruff: フォーマット崩れ検出（崩れていれば赤、ローカルで `ruff format` 実行）
+      - name: Ruff format
+        run: uv run ruff format --check .
+
       # Django のシステムチェック（設定・モデル・URL構成の整合性）
       - name: Django check
         run: uv run python manage.py check

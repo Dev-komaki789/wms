@@ -5,6 +5,7 @@ OMS 連携の注文番号は external_order_id に別途記録する。
 明細は需要（SKU × 数量）のみ。ピッキング元ロケーションと在庫引き当ては
 出荷起動工程で確定するため、登録画面では入力しない。
 """
+
 import re
 
 from django import forms
@@ -41,24 +42,32 @@ class OutboundOrderForm(forms.ModelForm):
         ]
         widgets = {
             'outbound_order_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: OO-20260517-001',
-                       'autocomplete': 'off', 'maxlength': '15',
-                       'pattern': r'OO-\d{8}-\d{3}',
-                       'title': 'OO-YYYYMMDD-NNN 形式'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: OO-20260517-001',
+                    'autocomplete': 'off',
+                    'maxlength': '15',
+                    'pattern': r'OO-\d{8}-\d{3}',
+                    'title': 'OO-YYYYMMDD-NNN 形式',
+                }
             ),
             # 顧客は検索モーダルで選択する（テンプレ側の独自UI＋hidden で送信）
             'customer': forms.HiddenInput(),
             'external_order_id': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: OMS-2026-000123',
-                       'autocomplete': 'off'}
+                attrs={**TEXT, 'placeholder': '例: OMS-2026-000123', 'autocomplete': 'off'}
             ),
             'deadline_at': forms.DateTimeInput(
                 attrs={**TEXT, 'type': 'datetime-local'},
                 format='%Y-%m-%dT%H:%M',
             ),
             'delivery_postal_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 100-0001', 'autocomplete': 'off',
-                       'inputmode': 'numeric', 'maxlength': '8'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: 100-0001',
+                    'autocomplete': 'off',
+                    'inputmode': 'numeric',
+                    'maxlength': '8',
+                }
             ),
             'delivery_address': forms.TextInput(attrs={**TEXT, 'autocomplete': 'off'}),
             'delivery_name': forms.TextInput(
@@ -104,9 +113,7 @@ class OutboundOrderForm(forms.ModelForm):
         if not code:
             raise forms.ValidationError('入力してください。')
         if not OUTBOUND_CODE_PATTERN.match(code):
-            raise forms.ValidationError(
-                '出荷指示番号は「OO-YYYYMMDD-NNN」形式で入力してください。'
-            )
+            raise forms.ValidationError('出荷指示番号は「OO-YYYYMMDD-NNN」形式で入力してください。')
         return code
 
 
@@ -121,11 +128,13 @@ class OutboundOrderItemForm(forms.ModelForm):
     sku_code = forms.CharField(
         label='SKU',
         max_length=13,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control font-monospace',
-            'placeholder': 'SKU コード',
-            'autocomplete': 'off',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control font-monospace',
+                'placeholder': 'SKU コード',
+                'autocomplete': 'off',
+            }
+        ),
     )
 
     class Meta:
@@ -134,8 +143,13 @@ class OutboundOrderItemForm(forms.ModelForm):
         fields = ['quantity_ordered']
         widgets = {
             'quantity_ordered': forms.NumberInput(
-                attrs={**TEXT, 'class': 'form-control text-end',
-                       'min': '1', 'max': '99999', 'placeholder': '数量'}
+                attrs={
+                    **TEXT,
+                    'class': 'form-control text-end',
+                    'min': '1',
+                    'max': '99999',
+                    'placeholder': '数量',
+                }
             ),
         }
 
@@ -154,14 +168,9 @@ class OutboundOrderItemForm(forms.ModelForm):
         if not code:
             raise forms.ValidationError('入力してください。')
         try:
-            self._sku = (
-                Sku.objects.select_related('product')
-                .get(sku_code=code, is_active=True)
-            )
+            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
         except Sku.DoesNotExist:
-            raise forms.ValidationError(
-                f'SKU「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def save(self, commit=True):
@@ -192,9 +201,7 @@ class BaseOutboundOrderItemFormSet(BaseInlineFormSet):
             if not code:
                 continue
             if code in seen:
-                form.add_error(
-                    'sku_code', f'SKU「{code}」が同じ出荷指示内で重複しています。'
-                )
+                form.add_error('sku_code', f'SKU「{code}」が同じ出荷指示内で重複しています。')
             else:
                 seen.add(code)
 

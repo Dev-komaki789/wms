@@ -3,6 +3,7 @@
 エンジンは core/order_csv.py。出荷指示番号は OO-YYYYMMDD-NNN（通常出荷）形式。
 返品出荷（RO-）は画面と同じくスコープ外。倉庫は取込時の現在倉庫に固定する。
 """
+
 import re
 
 from core.order_csv import Field, FkField, OrderCsvSpec, RowError
@@ -16,8 +17,7 @@ _CODE_RE = re.compile(r'^OO-\d{8}-\d{3}$')
 def _source_type(code):
     """出荷指示番号の書式を検証する（通常出荷 OO- のみ）。"""
     if not _CODE_RE.match(code):
-        raise RowError(
-            f'指示番号「{code}」は OO-YYYYMMDD-NNN 形式で入力してください。')
+        raise RowError(f'指示番号「{code}」は OO-YYYYMMDD-NNN 形式で入力してください。')
     return OutboundOrder.SourceType.MANUAL
 
 
@@ -34,10 +34,16 @@ OUTBOUND_ORDER_SPEC = OrderCsvSpec(
     code_to_source_type=_source_type,
     initial_status=OutboundOrder.Status.ALLOCATION_WAIT,
     header_fields=[
-        Field('指示番号', 'outbound_order_code',
-              note='OO-YYYYMMDD-NNN。明細をまとめるキー'),
-        FkField('顧客コード', 'customer', Customer, 'customer_code',
-                required=True, active_only=True, note='顧客のコードで参照（必須）'),
+        Field('指示番号', 'outbound_order_code', note='OO-YYYYMMDD-NNN。明細をまとめるキー'),
+        FkField(
+            '顧客コード',
+            'customer',
+            Customer,
+            'customer_code',
+            required=True,
+            active_only=True,
+            note='顧客のコードで参照（必須）',
+        ),
         Field('OMS注文番号', 'external_order_id'),
         Field('出荷期限', 'deadline_at', kind='datetime'),
         Field('配送先郵便番号', 'delivery_postal_code'),

@@ -1,4 +1,5 @@
 """テンプレートに「ロール」情報を流すコンテキストプロセッサ。"""
+
 from .permissions import is_handheld_worker
 
 

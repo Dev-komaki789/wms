@@ -11,6 +11,7 @@ MasterCsvImportView。
   UTF-8 / Shift_JIS を自動判定。全行を検証し、1行でもエラーがあれば一切確定
   しない（all-or-nothing）。検証は各モデルの full_clean を使う。
 """
+
 import csv
 import io
 import re
@@ -20,8 +21,17 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 
-from .models import (Area, Category, Customer, Location, Manufacturer,
-                     Product, Sku, Supplier, Warehouse)
+from .models import (
+    Area,
+    Category,
+    Customer,
+    Location,
+    Manufacturer,
+    Product,
+    Sku,
+    Supplier,
+    Warehouse,
+)
 
 # インポートで受け付ける文字コード（先頭から順に試す）
 CSV_ENCODINGS = ('utf-8-sig', 'cp932')
@@ -40,12 +50,14 @@ class RowError(Exception):
 
 # --- 列定義 -----------------------------------------------------------------
 
+
 @dataclass
 class Col:
     """単純列（文字列 / 数値 / 真偽 / 区分）。"""
-    header: str            # CSV のヘッダ名
-    field: str             # モデルのフィールド名
-    kind: str = 'str'      # 'str' | 'int' | 'bool' | 'choice'
+
+    header: str  # CSV のヘッダ名
+    field: str  # モデルのフィールド名
+    kind: str = 'str'  # 'str' | 'int' | 'bool' | 'choice'
     required: bool = False  # インポート時、空セルを許さない
     choices: object = None  # kind='choice' のとき TextChoices/IntegerChoices クラス
     default: object = None  # 空セル時に使う既定値（kind=int/bool/choice 用）
@@ -58,25 +70,27 @@ class Col:
 @dataclass
 class Fk:
     """外部キー列。参照先を lookup フィールドのコードで引く。"""
+
     header: str
-    field: str             # instance に set する FK 属性名
-    model: object          # 参照先モデル
-    lookup: str            # 参照先の検索フィールド
+    field: str  # instance に set する FK 属性名
+    model: object  # 参照先モデル
+    lookup: str  # 参照先の検索フィールド
     required: bool = True
-    scope: str = None      # 同じ行で先に解決済みの FK 属性で絞り込む（例: area→warehouse）
+    scope: str = None  # 同じ行で先に解決済みの FK 属性で絞り込む（例: area→warehouse）
 
 
 @dataclass
 class CsvSpec:
     """1マスタの CSV 定義。"""
-    key: str               # URL スラッグ
+
+    key: str  # URL スラッグ
     model: object
-    label: str             # 画面名（例: 'メーカー'）
-    list_url: str          # 一覧画面の URL 名
-    code_field: str        # 自然キーのコードフィールド
-    columns: list          # Col / Fk の並び（CSV の列順）
+    label: str  # 画面名（例: 'メーカー'）
+    list_url: str  # 一覧画面の URL 名
+    code_field: str  # 自然キーのコードフィールド
+    columns: list  # Col / Fk の並び（CSV の列順）
     warehouse_scoped: bool = False  # 自然キーが (warehouse, code) の複合キー
-    auto_number: object = None      # (instance)->code。None なら手動コード必須
+    auto_number: object = None  # (instance)->code。None なら手動コード必須
     extra_checks: list = field(default_factory=list)  # [(instance)->str|None]
     # 一覧/照会画面の検索条件を CSV にも反映するためのコールバック。
     # signature: (request, qs) -> qs。None なら絞り込みなし（全件出力）。
@@ -94,6 +108,7 @@ class CsvSpec:
 @dataclass
 class ImportReport:
     """インポート結果。ok=False のとき errors に (行番号, メッセージ) を持つ。"""
+
     ok: bool
     total: int = 0
     created: int = 0
@@ -102,6 +117,7 @@ class ImportReport:
 
 
 # --- 値の変換 ---------------------------------------------------------------
+
 
 def _to_bool(raw, col):
     s = raw.strip().lower()
@@ -173,6 +189,7 @@ def _export_value(col, obj):
 
 # --- エクスポート -----------------------------------------------------------
 
+
 def build_csv(spec, delimiter=',', qs=None):
     """spec のマスタを CSV（UTF-8 BOM付）の bytes で返す。
 
@@ -198,6 +215,7 @@ def build_csv(spec, delimiter=',', qs=None):
 
 
 # --- インポート -------------------------------------------------------------
+
 
 def _decode(raw_bytes):
     for enc in CSV_ENCODINGS:
@@ -235,6 +253,7 @@ def _process_row(spec, raw, seen):
     auto_pending は「自動採番待ち（コード空欄の新規行）」。コードの確定は
     確定フェーズ（トランザクション内）で行う。
     """
+
     def cell(header):
         return (raw.get(header) or '').strip()
 
@@ -268,8 +287,7 @@ def _process_row(spec, raw, seen):
         if not code:
             raise RowError(f'{code_col.header}は必須です。')
         warehouse = fk_vals.get('warehouse')
-        existing = spec.model.objects.filter(
-            warehouse=warehouse, **{spec.code_field: code}).first()
+        existing = spec.model.objects.filter(warehouse=warehouse, **{spec.code_field: code}).first()
         key = (warehouse.pk, code)
     elif not code:
         if spec.auto_number is None:
@@ -332,8 +350,7 @@ def import_csv(spec, raw_bytes, delimiter=None):
             errors=[(0, f'必要な列がありません: {"、".join(missing)}')],
         )
 
-    rows = [r for r in reader
-            if any((v or '').strip() for v in r.values())]
+    rows = [r for r in reader if any((v or '').strip() for v in r.values())]
     if not rows:
         return ImportReport(ok=False, errors=[(0, 'データ行がありません。')])
 
@@ -380,8 +397,7 @@ def column_guide(spec):
                 note = '自然キー。既存と一致すれば更新、無ければ新規'
                 required = True
         elif c.kind == 'choice':
-            note = '値: ' + ' / '.join(
-                label for _, label in c.choices.choices)
+            note = '値: ' + ' / '.join(label for _, label in c.choices.choices)
             required = c.required
         elif c.kind == 'bool':
             note = '有効 / 無効（true/false・1/0 も可）'
@@ -398,15 +414,18 @@ def column_guide(spec):
 
 # --- 8マスタの定義 ----------------------------------------------------------
 
+
 def _active_col():
-    return Col('有効', 'is_active', kind='bool', default=True,
-               true_label='有効', false_label='無効')
+    return Col(
+        '有効', 'is_active', kind='bool', default=True, true_label='有効', false_label='無効'
+    )
 
 
 def _check_area_code(instance):
     if not re.fullmatch(r'[A-Z]', instance.area_code or ''):
-        return (f'エリアコードは英大文字1文字（A〜Z）で入力してください'
-                f'（「{instance.area_code}」）。')
+        return (
+            f'エリアコードは英大文字1文字（A〜Z）で入力してください（「{instance.area_code}」）。'
+        )
     return None
 
 
@@ -430,7 +449,7 @@ def _apply_q_status(qs, request, code_field, name_field, extra_q_fields=None):
     q = g.get('q', '').strip()
     if q:
         cond = Q(**{f'{code_field}__icontains': q}) | Q(**{f'{name_field}__icontains': q})
-        for f in (extra_q_fields or []):
+        for f in extra_q_fields or []:
             cond |= Q(**{f'{f}__icontains': q})
         qs = qs.filter(cond)
     status = g.get('status', '')
@@ -446,8 +465,9 @@ def _filter_manufacturer(request, qs):
 
 
 def _filter_supplier(request, qs):
-    return _apply_q_status(qs, request, 'supplier_code', 'supplier_name',
-                           extra_q_fields=['contact_person'])
+    return _apply_q_status(
+        qs, request, 'supplier_code', 'supplier_name', extra_q_fields=['contact_person']
+    )
 
 
 def _filter_customer(request, qs):
@@ -538,22 +558,34 @@ def _filter_sku(request, qs):
 
 _SPECS = [
     CsvSpec(
-        key='area', model=Area, label='エリア', list_url='masters:area_list',
-        code_field='area_code', warehouse_scoped=True,
+        key='area',
+        model=Area,
+        label='エリア',
+        list_url='masters:area_list',
+        code_field='area_code',
+        warehouse_scoped=True,
         extra_checks=[_check_area_code],
         columns=[
             Fk('倉庫コード', 'warehouse', Warehouse, 'warehouse_code'),
             Col('エリアコード', 'area_code', is_code=True, transform=str.upper),
             Col('エリア名', 'area_name'),
-            Col('区分', 'location_type', kind='choice', choices=Area.LocationType,
-                default=Area.LocationType.STORAGE),
+            Col(
+                '区分',
+                'location_type',
+                kind='choice',
+                choices=Area.LocationType,
+                default=Area.LocationType.STORAGE,
+            ),
             _active_col(),
         ],
     ),
     CsvSpec(
-        key='location', model=Location, label='ロケーション',
+        key='location',
+        model=Location,
+        label='ロケーション',
         list_url='masters:location_list',
-        code_field='location_code', warehouse_scoped=True,
+        code_field='location_code',
+        warehouse_scoped=True,
         list_filter=_filter_location,
         columns=[
             Fk('倉庫コード', 'warehouse', Warehouse, 'warehouse_code'),
@@ -564,19 +596,20 @@ _SPECS = [
         ],
     ),
     CsvSpec(
-        key='category', model=Category, label='カテゴリ',
+        key='category',
+        model=Category,
+        label='カテゴリ',
         list_url='masters:category_list',
         code_field='category_code',
         auto_number=lambda inst: (
-            Category.next_child_code(inst.parent) if inst.parent_id
-            else Category.next_root_code()),
+            Category.next_child_code(inst.parent) if inst.parent_id else Category.next_root_code()
+        ),
         extra_checks=[_check_category_depth],
         list_filter=_filter_category,
         columns=[
             Col('カテゴリコード', 'category_code', is_code=True),
             Col('カテゴリ名', 'category_name', required=True),
-            Fk('親カテゴリコード', 'parent', Category, 'category_code',
-               required=False),
+            Fk('親カテゴリコード', 'parent', Category, 'category_code', required=False),
             Col('表示順', 'sort_order', kind='int', default=10),
             Col('商品の登録先', 'is_leaf', kind='bool', default=False),
             Col('説明', 'description'),
@@ -584,7 +617,9 @@ _SPECS = [
         ],
     ),
     CsvSpec(
-        key='manufacturer', model=Manufacturer, label='メーカー',
+        key='manufacturer',
+        model=Manufacturer,
+        label='メーカー',
         list_url='masters:manufacturer_list',
         code_field='manufacturer_code',
         list_filter=_filter_manufacturer,
@@ -596,7 +631,9 @@ _SPECS = [
         ],
     ),
     CsvSpec(
-        key='product', model=Product, label='商品',
+        key='product',
+        model=Product,
+        label='商品',
         list_url='masters:product_inquiry',
         code_field='product_code',
         auto_number=lambda inst: Product.next_product_code(),
@@ -605,14 +642,16 @@ _SPECS = [
             Col('商品コード', 'product_code', is_code=True),
             Col('商品名', 'product_name', required=True),
             Fk('カテゴリコード', 'category', Category, 'category_code'),
-            Fk('メーカーコード', 'manufacturer', Manufacturer,
-               'manufacturer_code', required=False),
+            Fk('メーカーコード', 'manufacturer', Manufacturer, 'manufacturer_code', required=False),
             Col('説明', 'description'),
             _active_col(),
         ],
     ),
     CsvSpec(
-        key='sku', model=Sku, label='SKU', list_url='masters:sku_inquiry',
+        key='sku',
+        model=Sku,
+        label='SKU',
+        list_url='masters:sku_inquiry',
         code_field='sku_code',
         auto_number=lambda inst: Sku.next_sku_code(),
         list_filter=_filter_sku,
@@ -623,13 +662,20 @@ _SPECS = [
             Col('サイズ', 'size_info'),
             Col('カラー', 'color_info'),
             Col('入数（ケース）', 'quantity_per_unit', kind='int', default=1),
-            Col('ピッキング種別', 'picking_type', kind='choice',
-                choices=Sku.PickingType, default=Sku.PickingType.TOTAL),
+            Col(
+                'ピッキング種別',
+                'picking_type',
+                kind='choice',
+                choices=Sku.PickingType,
+                default=Sku.PickingType.TOTAL,
+            ),
             _active_col(),
         ],
     ),
     CsvSpec(
-        key='supplier', model=Supplier, label='仕入先',
+        key='supplier',
+        model=Supplier,
+        label='仕入先',
         list_url='masters:supplier_list',
         code_field='supplier_code',
         list_filter=_filter_supplier,
@@ -645,15 +691,22 @@ _SPECS = [
         ],
     ),
     CsvSpec(
-        key='customer', model=Customer, label='顧客',
+        key='customer',
+        model=Customer,
+        label='顧客',
         list_url='masters:customer_list',
         code_field='customer_code',
         list_filter=_filter_customer,
         columns=[
             Col('顧客コード', 'customer_code', is_code=True),
             Col('顧客名', 'customer_name', required=True),
-            Col('顧客種別', 'customer_type', kind='choice', choices=Customer.Type,
-                default=Customer.Type.CORPORATE),
+            Col(
+                '顧客種別',
+                'customer_type',
+                kind='choice',
+                choices=Customer.Type,
+                default=Customer.Type.CORPORATE,
+            ),
             Col('業種', 'industry_type'),
             Col('郵便番号', 'postal_code'),
             Col('住所', 'address'),

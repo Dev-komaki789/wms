@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+from django.contrib.messages import constants as message_constants
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -31,7 +32,9 @@ SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()]
+ALLOWED_HOSTS = [
+    h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()
+]
 
 # HTTPS ドメインからの POST(ログイン・登録 等)を CSRF で弾かれないよう許可する。
 # Django 4 以降は HTTPS では必須。例: DJANGO_CSRF_TRUSTED_ORIGINS=https://example.com,https://www.example.com
@@ -50,7 +53,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.forms',  # FORM_RENDERER='TemplatesSetting' で標準ウィジェットを APP_DIRS から解決させる
-
     # WMS apps
     'accounts',
     'core',
@@ -167,7 +169,8 @@ STORAGES = {
     },
     'staticfiles': {
         'BACKEND': (
-            'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if DEBUG
             else 'whitenoise.storage.CompressedManifestStaticFilesStorage'
         ),
     },
@@ -183,7 +186,6 @@ LOGIN_URL = '/admin/login/'
 LOGIN_REDIRECT_URL = '/'
 
 # Django messages タグを Bootstrap alert のクラス名に合わせる
-from django.contrib.messages import constants as message_constants
 MESSAGE_TAGS = {
     message_constants.DEBUG: 'secondary',
     message_constants.INFO: 'info',

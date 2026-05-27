@@ -14,6 +14,7 @@
   - `/admin/logout/`            ログアウト
   - `/static/*`                 静的ファイル
 """
+
 from django.shortcuts import redirect
 
 from .permissions import is_handheld_worker

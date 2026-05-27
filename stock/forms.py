@@ -1,4 +1,5 @@
 """在庫操作系の Form。"""
+
 from django import forms
 from django.utils import timezone
 
@@ -20,43 +21,51 @@ class _StockOperationForm(forms.Form):
     location_code = forms.CharField(
         label='ロケーション',
         max_length=15,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': '棚番をスキャン',
-            'autocomplete': 'off',
-            'autofocus': 'autofocus',
-            'data-hh-lookup': 'location',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': '棚番をスキャン',
+                'autocomplete': 'off',
+                'autofocus': 'autofocus',
+                'data-hh-lookup': 'location',
+                'inputmode': 'text',
+            }
+        ),
     )
     sku_code = forms.CharField(
         label='SKU',
         max_length=13,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': 'SKU をスキャン',
-            'autocomplete': 'off',
-            'data-hh-lookup': 'sku',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': 'SKU をスキャン',
+                'autocomplete': 'off',
+                'data-hh-lookup': 'sku',
+                'inputmode': 'text',
+            }
+        ),
     )
     quantity = forms.IntegerField(
         label='数量',
         min_value=1,
         max_value=99999,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control hh-key text-end',
-            'placeholder': '0',
-            'inputmode': 'numeric',
-            'max': '99999',
-        }),
+        widget=forms.NumberInput(
+            attrs={
+                'class': 'form-control hh-key text-end',
+                'placeholder': '0',
+                'inputmode': 'numeric',
+                'max': '99999',
+            }
+        ),
     )
     note = forms.ChoiceField(
         label='理由',
         required=False,
-        widget=forms.Select(attrs={
-            'class': 'form-select',
-        }),
+        widget=forms.Select(
+            attrs={
+                'class': 'form-select',
+            }
+        ),
     )
 
     # 理由 Select の選択肢。サブクラスで上書きする。
@@ -74,9 +83,8 @@ class _StockOperationForm(forms.Form):
         if not code:
             raise forms.ValidationError('入力してください。')
         # 現在倉庫スコープで絞り込む（他倉庫のロケーションは対象外）
-        qs = (
-            Location.objects.select_related('warehouse', 'area')
-            .filter(location_code=code, is_active=True)
+        qs = Location.objects.select_related('warehouse', 'area').filter(
+            location_code=code, is_active=True
         )
         wh = get_current_warehouse(self._request) if self._request else None
         if wh is not None:
@@ -84,9 +92,7 @@ class _StockOperationForm(forms.Form):
         try:
             self._location = qs.get()
         except Location.DoesNotExist:
-            raise forms.ValidationError(
-                f'棚番「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'棚番「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean_sku_code(self):
@@ -94,14 +100,9 @@ class _StockOperationForm(forms.Form):
         if not code:
             raise forms.ValidationError('入力してください。')
         try:
-            self._sku = (
-                Sku.objects.select_related('product')
-                .get(sku_code=code, is_active=True)
-            )
+            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
         except Sku.DoesNotExist:
-            raise forms.ValidationError(
-                f'SKU「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
 
@@ -146,20 +147,14 @@ class UnplannedStockOutForm(_StockOperationForm):
         # 出庫元ロケーション × SKU の在庫紐づきを即時チェックする。
         # 入庫と違い、出庫はその棚に在庫が無ければ実行できないため。
         self.fields['sku_code'].widget.attrs['data-hh-lookup'] = 'stock'
-        self.fields['sku_code'].widget.attrs['data-hh-stock-loc'] = (
-            'id_location_code'
-        )
+        self.fields['sku_code'].widget.attrs['data-hh-stock-loc'] = 'id_location_code'
 
     def clean(self):
         cleaned = super().clean()
         quantity = cleaned.get('quantity')
         # location_code / sku_code が個別 clean を通過していれば _location/_sku が入る
         if self._location and self._sku and quantity:
-            balance = (
-                StockBalance.objects
-                .filter(location=self._location, sku=self._sku)
-                .first()
-            )
+            balance = StockBalance.objects.filter(location=self._location, sku=self._sku).first()
             on_hand = balance.quantity if balance else 0
             if quantity > on_hand:
                 self.add_error(
@@ -181,49 +176,57 @@ class StockTransferForm(forms.Form):
     from_location_code = forms.CharField(
         label='移動元ロケーション',
         max_length=15,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': '移動元の棚番をスキャン',
-            'autocomplete': 'off',
-            'autofocus': 'autofocus',
-            'data-hh-lookup': 'location',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': '移動元の棚番をスキャン',
+                'autocomplete': 'off',
+                'autofocus': 'autofocus',
+                'data-hh-lookup': 'location',
+                'inputmode': 'text',
+            }
+        ),
     )
     sku_code = forms.CharField(
         label='SKU',
         max_length=13,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': 'SKU をスキャン',
-            'autocomplete': 'off',
-            # 移動元ロケーション × SKU の在庫紐づきを即時チェックする
-            'data-hh-lookup': 'stock',
-            'data-hh-stock-loc': 'id_from_location_code',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': 'SKU をスキャン',
+                'autocomplete': 'off',
+                # 移動元ロケーション × SKU の在庫紐づきを即時チェックする
+                'data-hh-lookup': 'stock',
+                'data-hh-stock-loc': 'id_from_location_code',
+                'inputmode': 'text',
+            }
+        ),
     )
     quantity = forms.IntegerField(
         label='移動数',
         min_value=1,
         max_value=99999,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control hh-key text-end',
-            'placeholder': '0',
-            'inputmode': 'numeric',
-            'max': '99999',
-        }),
+        widget=forms.NumberInput(
+            attrs={
+                'class': 'form-control hh-key text-end',
+                'placeholder': '0',
+                'inputmode': 'numeric',
+                'max': '99999',
+            }
+        ),
     )
     to_location_code = forms.CharField(
         label='移動先ロケーション',
         max_length=15,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': '移動先の棚番をスキャン',
-            'autocomplete': 'off',
-            'data-hh-lookup': 'location',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': '移動先の棚番をスキャン',
+                'autocomplete': 'off',
+                'data-hh-lookup': 'location',
+                'inputmode': 'text',
+            }
+        ),
     )
 
     def __init__(self, *args, request=None, **kwargs):
@@ -235,9 +238,8 @@ class StockTransferForm(forms.Form):
 
     def _resolve_location(self, code):
         """棚番コードを現在倉庫スコープ・有効なロケーションに解決する。"""
-        qs = (
-            Location.objects.select_related('warehouse', 'area')
-            .filter(location_code=code, is_active=True)
+        qs = Location.objects.select_related('warehouse', 'area').filter(
+            location_code=code, is_active=True
         )
         wh = get_current_warehouse(self._request) if self._request else None
         if wh is not None:
@@ -250,9 +252,7 @@ class StockTransferForm(forms.Form):
             raise forms.ValidationError('入力してください。')
         self._from_location = self._resolve_location(code)
         if self._from_location is None:
-            raise forms.ValidationError(
-                f'棚番「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'棚番「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean_to_location_code(self):
@@ -261,9 +261,7 @@ class StockTransferForm(forms.Form):
             raise forms.ValidationError('入力してください。')
         self._to_location = self._resolve_location(code)
         if self._to_location is None:
-            raise forms.ValidationError(
-                f'棚番「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'棚番「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean_sku_code(self):
@@ -271,33 +269,29 @@ class StockTransferForm(forms.Form):
         if not code:
             raise forms.ValidationError('入力してください。')
         try:
-            self._sku = (
-                Sku.objects.select_related('product')
-                .get(sku_code=code, is_active=True)
-            )
+            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
         except Sku.DoesNotExist:
-            raise forms.ValidationError(
-                f'SKU「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
         cleaned = super().clean()
         quantity = cleaned.get('quantity')
         # 移動元と移動先が同じロケーションなら移動の意味がない
-        if (self._from_location and self._to_location
-                and self._from_location.pk == self._to_location.pk):
+        if (
+            self._from_location
+            and self._to_location
+            and self._from_location.pk == self._to_location.pk
+        ):
             self.add_error(
                 'to_location_code',
                 '移動元と移動先が同じロケーションです。',
             )
         # 移動元の在庫不足を弾く（確定時にもロック付きで再検証する）
         if self._from_location and self._sku and quantity:
-            balance = (
-                StockBalance.objects
-                .filter(location=self._from_location, sku=self._sku)
-                .first()
-            )
+            balance = StockBalance.objects.filter(
+                location=self._from_location, sku=self._sku
+            ).first()
             on_hand = balance.quantity if balance else 0
             if quantity > on_hand:
                 self.add_error(
@@ -322,12 +316,15 @@ class StocktakeSessionForm(forms.ModelForm):
             'stocktake_type': forms.Select(attrs={'class': 'form-select'}),
             'area': forms.Select(attrs={'class': 'form-select'}),
             'planned_at': forms.DateInput(
-                attrs={'class': 'form-control', 'type': 'date',
-                       'min': '2000-01-01', 'max': '2099-12-31'},
+                attrs={
+                    'class': 'form-control',
+                    'type': 'date',
+                    'min': '2000-01-01',
+                    'max': '2099-12-31',
+                },
             ),
             'note': forms.Textarea(
-                attrs={'class': 'form-control', 'rows': 2,
-                       'placeholder': '対象範囲・メモなど'},
+                attrs={'class': 'form-control', 'rows': 2, 'placeholder': '対象範囲・メモなど'},
             ),
         }
 
@@ -372,36 +369,42 @@ class StocktakeCountForm(forms.Form):
     location_code = forms.CharField(
         label='ロケーション',
         max_length=15,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': '棚番をスキャン',
-            'autocomplete': 'off',
-            'autofocus': 'autofocus',
-            'data-hh-lookup': 'location',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': '棚番をスキャン',
+                'autocomplete': 'off',
+                'autofocus': 'autofocus',
+                'data-hh-lookup': 'location',
+                'inputmode': 'text',
+            }
+        ),
     )
     sku_code = forms.CharField(
         label='SKU',
         max_length=13,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control hh-key',
-            'placeholder': 'SKU をスキャン',
-            'autocomplete': 'off',
-            'data-hh-lookup': 'sku',
-            'inputmode': 'text',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': 'SKU をスキャン',
+                'autocomplete': 'off',
+                'data-hh-lookup': 'sku',
+                'inputmode': 'text',
+            }
+        ),
     )
     counted_quantity = forms.IntegerField(
         label='実カウント数',
         min_value=0,
         max_value=99999,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control hh-key text-end',
-            'placeholder': '0',
-            'inputmode': 'numeric',
-            'max': '99999',
-        }),
+        widget=forms.NumberInput(
+            attrs={
+                'class': 'form-control hh-key text-end',
+                'placeholder': '0',
+                'inputmode': 'numeric',
+                'max': '99999',
+            }
+        ),
     )
 
     def __init__(self, *args, session=None, request=None, **kwargs):
@@ -416,9 +419,8 @@ class StocktakeCountForm(forms.Form):
         code = (self.cleaned_data.get('location_code') or '').strip()
         if not code:
             raise forms.ValidationError('入力してください。')
-        qs = (
-            Location.objects.select_related('warehouse', 'area')
-            .filter(location_code=code, is_active=True)
+        qs = Location.objects.select_related('warehouse', 'area').filter(
+            location_code=code, is_active=True
         )
         # セッションの倉庫スコープで絞る
         if self._session is not None:
@@ -426,8 +428,7 @@ class StocktakeCountForm(forms.Form):
         try:
             self._location = qs.get()
         except Location.DoesNotExist:
-            raise forms.ValidationError(
-                f'棚番「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'棚番「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean_sku_code(self):
@@ -435,13 +436,9 @@ class StocktakeCountForm(forms.Form):
         if not code:
             raise forms.ValidationError('入力してください。')
         try:
-            self._sku = (
-                Sku.objects.select_related('product')
-                .get(sku_code=code, is_active=True)
-            )
+            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
         except Sku.DoesNotExist:
-            raise forms.ValidationError(
-                f'SKU「{code}」は存在しないか、無効化されています。')
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
@@ -450,7 +447,8 @@ class StocktakeCountForm(forms.Form):
             try:
                 self._item = StocktakeItem.objects.get(
                     session=self._session,
-                    location=self._location, sku=self._sku,
+                    location=self._location,
+                    sku=self._sku,
                 )
             except StocktakeItem.DoesNotExist:
                 self.add_error(

@@ -14,6 +14,7 @@
   python manage.py seed_outbound_orders            # 既定倉庫 WH01 に3件作成
   python manage.py seed_outbound_orders --warehouse WH02
 """
+
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -35,7 +36,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--warehouse', default='WH01',
+            '--warehouse',
+            default='WH01',
             help='対象倉庫コード（既定: WH01）',
         )
 
@@ -45,41 +47,30 @@ class Command(BaseCommand):
         if warehouse is None:
             raise CommandError(f'倉庫「{wh_code}」が見つかりません。')
 
-        customer = (
-            Customer.objects.filter(is_active=True)
-            .order_by('customer_code').first()
-        )
+        customer = Customer.objects.filter(is_active=True).order_by('customer_code').first()
         if customer is None:
-            raise CommandError(
-                '有効な顧客がありません。先に顧客マスタを登録してください。')
+            raise CommandError('有効な顧客がありません。先に顧客マスタを登録してください。')
 
         # 出荷指示の登録者（created_by は必須・PROTECT）
-        user = (
-            get_user_model().objects
-            .filter(is_superuser=True).order_by('pk').first()
-        )
+        user = get_user_model().objects.filter(is_superuser=True).order_by('pk').first()
         if user is None:
             raise CommandError('スーパーユーザーが見つかりません。')
 
         # シナリオで使う SKU をまとめて引き、不足があれば中断する
         codes = {c for _, items in self.SCENARIOS for c, _ in items}
-        skus = {
-            s.sku_code: s
-            for s in Sku.objects.filter(sku_code__in=codes, is_active=True)
-        }
+        skus = {s.sku_code: s for s in Sku.objects.filter(sku_code__in=codes, is_active=True)}
         missing = codes - set(skus)
         if missing:
             raise CommandError(
-                f'SKU が見つかりません（無効化されている可能性）: '
-                f'{", ".join(sorted(missing))}')
+                f'SKU が見つかりません（無効化されている可能性）: {", ".join(sorted(missing))}'
+            )
 
         today = timezone.localdate()
         created = []
         with transaction.atomic():
             for label, items in self.SCENARIOS:
                 # next_code は同一トランザクション内の先行 INSERT も見て採番する
-                code = OutboundOrder.next_code(
-                    today, OutboundOrder.SourceType.MANUAL.value)
+                code = OutboundOrder.next_code(today, OutboundOrder.SourceType.MANUAL.value)
                 order = OutboundOrder.objects.create(
                     outbound_order_code=code,
                     warehouse=warehouse,
@@ -99,11 +90,10 @@ class Command(BaseCommand):
                     )
                 created.append((order, label, items))
 
-        self.stdout.write(self.style.SUCCESS(
-            f'{len(created)} 件の出荷指示を作成しました（倉庫 {wh_code}）:'))
+        self.stdout.write(
+            self.style.SUCCESS(f'{len(created)} 件の出荷指示を作成しました（倉庫 {wh_code}）:')
+        )
         for order, label, items in created:
             detail = ', '.join(f'{c}×{q}' for c, q in items)
-            self.stdout.write(
-                f'  {order.outbound_order_code}  {label}  [{detail}]')
-        self.stdout.write(
-            '「出荷起動 → ピッキング → 出荷検品」と画面操作で検証できます。')
+            self.stdout.write(f'  {order.outbound_order_code}  {label}  [{detail}]')
+        self.stdout.write('「出荷起動 → ピッキング → 出荷検品」と画面操作で検証できます。')

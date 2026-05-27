@@ -18,9 +18,7 @@ class StockBalance(models.Model):
     更新しない（古い在庫がまだ残っているため）。
     """
 
-    location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, verbose_name='ロケーション'
-    )
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, verbose_name='ロケーション')
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
     quantity = models.IntegerField(
         '在庫数',
@@ -29,7 +27,9 @@ class StockBalance(models.Model):
     )
     first_received_at = models.DateTimeField(
         '現在在庫の最古入荷日時',
-        null=True, blank=True, db_index=True,
+        null=True,
+        blank=True,
+        db_index=True,
         help_text='quantity が 0 → 正に切り替わった時刻。FIFO 引き当ての並び替えに使う。',
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -69,12 +69,8 @@ class StockMovement(models.Model):
         MANUAL_IN = 'manual_in', '計画外入庫'
         MANUAL_OUT = 'manual_out', '計画外出庫'
 
-    movement_type = models.CharField(
-        '種別', max_length=10, choices=MovementType.choices
-    )
-    location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, verbose_name='ロケーション'
-    )
+    movement_type = models.CharField('種別', max_length=10, choices=MovementType.choices)
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, verbose_name='ロケーション')
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
     quantity = models.IntegerField('数量', help_text='OUT/ADJ減の場合は負の値で記録')
     quantity_before = models.IntegerField('変動前在庫数')
@@ -172,9 +168,7 @@ class StockTransfer(models.Model):
         verbose_name = '棚間移動'
         verbose_name_plural = '棚間移動'
         indexes = [
-            models.Index(
-                fields=['-transferred_at'], name='idx_stock_transfers_at'
-            ),
+            models.Index(fields=['-transferred_at'], name='idx_stock_transfers_at'),
         ]
 
     def __str__(self):
@@ -207,19 +201,27 @@ class StocktakeSession(models.Model):
 
     session_code = models.CharField('棚卸番号', max_length=30, unique=True)
     warehouse = models.ForeignKey(
-        Warehouse, on_delete=models.PROTECT, verbose_name='倉庫',
+        Warehouse,
+        on_delete=models.PROTECT,
+        verbose_name='倉庫',
     )
     stocktake_type = models.CharField(
-        '種別', max_length=20, choices=StocktakeType.choices,
+        '種別',
+        max_length=20,
+        choices=StocktakeType.choices,
     )
     area = models.ForeignKey(
-        Area, on_delete=models.PROTECT,
-        null=True, blank=True,
+        Area,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
         verbose_name='対象エリア',
         help_text='循環棚卸のときの対象エリア（全数棚卸では空）',
     )
     status = models.CharField(
-        'ステータス', max_length=20, choices=Status.choices,
+        'ステータス',
+        max_length=20,
+        choices=Status.choices,
         default=Status.PLANNING,
     )
     planned_at = models.DateField('棚卸予定日')
@@ -229,11 +231,12 @@ class StocktakeSession(models.Model):
         '入出庫ロック中',
         default=False,
         help_text='全数棚卸の間に入出庫をロックする想定のフラグ'
-                  '（MVP では値の保持のみ。他の在庫変動画面では未参照）',
+        '（MVP では値の保持のみ。他の在庫変動画面では未参照）',
     )
     note = models.TextField('備考', blank=True)
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
         verbose_name='登録者',
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -256,9 +259,9 @@ class StocktakeSession(models.Model):
         """次の棚卸番号（ST-YYYYMMDD-NNN）を採番する。"""
         prefix = f'ST-{date.strftime("%Y%m%d")}-'
         max_n = 0
-        for code in cls.objects.filter(
-            session_code__startswith=prefix
-        ).values_list('session_code', flat=True):
+        for code in cls.objects.filter(session_code__startswith=prefix).values_list(
+            'session_code', flat=True
+        ):
             m = re.match(rf'^{re.escape(prefix)}(\d{{3}})$', code)
             if m:
                 max_n = max(max_n, int(m.group(1)))
@@ -274,11 +277,15 @@ class StocktakeItem(models.Model):
         ADJUSTED = 'adjusted', '調整済'
 
     session = models.ForeignKey(
-        StocktakeSession, on_delete=models.CASCADE,
-        related_name='items', verbose_name='棚卸セッション',
+        StocktakeSession,
+        on_delete=models.CASCADE,
+        related_name='items',
+        verbose_name='棚卸セッション',
     )
     location = models.ForeignKey(
-        Location, on_delete=models.PROTECT, verbose_name='ロケーション',
+        Location,
+        on_delete=models.PROTECT,
+        verbose_name='ロケーション',
     )
     sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
     system_quantity = models.IntegerField(
@@ -287,17 +294,23 @@ class StocktakeItem(models.Model):
         help_text='棚卸開始時点の StockBalance.quantity のスナップショット',
     )
     counted_quantity = models.IntegerField(
-        '実カウント数', null=True, blank=True,
+        '実カウント数',
+        null=True,
+        blank=True,
         validators=[MinValueValidator(0)],
     )
     status = models.CharField(
-        'ステータス', max_length=20, choices=Status.choices,
+        'ステータス',
+        max_length=20,
+        choices=Status.choices,
         default=Status.UNCOUNTED,
     )
     counted_at = models.DateTimeField('カウント日時', null=True, blank=True)
     counted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True,
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='counted_stocktake_items',
         verbose_name='カウント担当者',
     )
@@ -320,8 +333,7 @@ class StocktakeItem(models.Model):
         ]
 
     def __str__(self):
-        return (f'{self.session.session_code} / '
-                f'{self.location.location_code} / {self.sku.sku_code}')
+        return f'{self.session.session_code} / {self.location.location_code} / {self.sku.sku_code}'
 
     @property
     def difference(self):
@@ -335,15 +347,20 @@ class StocktakeAdjustment(models.Model):
     """棚卸で差異が出た明細と StockMovement.ADJ の紐付け（差異 != 0 のときのみ）。"""
 
     stocktake_item = models.OneToOneField(
-        StocktakeItem, on_delete=models.CASCADE,
-        related_name='adjustment', verbose_name='棚卸明細',
+        StocktakeItem,
+        on_delete=models.CASCADE,
+        related_name='adjustment',
+        verbose_name='棚卸明細',
     )
     stock_movement = models.OneToOneField(
-        StockMovement, on_delete=models.PROTECT,
-        related_name='stocktake_adjustment', verbose_name='在庫変動',
+        StockMovement,
+        on_delete=models.PROTECT,
+        related_name='stocktake_adjustment',
+        verbose_name='在庫変動',
     )
     approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
         verbose_name='承認者',
     )
     created_at = models.DateTimeField(auto_now_add=True)

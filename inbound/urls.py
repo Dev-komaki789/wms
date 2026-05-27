@@ -14,13 +14,28 @@ urlpatterns = [
     path('orders/<int:pk>/delete/', views.InboundOrderDeleteView.as_view(), name='order_delete'),
     # 実行系 (handheld) 画面群
     path('handheld/arrival/', views.InboundArrivalView.as_view(), name='handheld_arrival'),
-    path('handheld/receiving/<int:pk>/', views.InboundReceivingView.as_view(), name='handheld_receiving'),
+    path(
+        'handheld/receiving/<int:pk>/',
+        views.InboundReceivingView.as_view(),
+        name='handheld_receiving',
+    ),
     path('handheld/inspection/', views.InboundInspectionView.as_view(), name='handheld_inspection'),
-    path('handheld/inspection/<int:pk>/', views.InboundInspectionWorkView.as_view(), name='handheld_inspection_work'),
+    path(
+        'handheld/inspection/<int:pk>/',
+        views.InboundInspectionWorkView.as_view(),
+        name='handheld_inspection_work',
+    ),
     path('handheld/putaway/', views.InboundPutawayView.as_view(), name='handheld_putaway'),
-    path('handheld/putaway/<int:pk>/', views.InboundPutawayWorkView.as_view(), name='handheld_putaway_work'),
+    path(
+        'handheld/putaway/<int:pk>/',
+        views.InboundPutawayWorkView.as_view(),
+        name='handheld_putaway_work',
+    ),
     # 1 明細ごとの即時コミット API（fetch から呼ばれる）。
     # 全明細が確定したら入荷指示を COMPLETED に進める。
-    path('handheld/putaway/<int:order_pk>/item/<int:item_pk>/',
-         views.InboundPutawayItemView.as_view(), name='handheld_putaway_item'),
+    path(
+        'handheld/putaway/<int:order_pk>/item/<int:item_pk>/',
+        views.InboundPutawayItemView.as_view(),
+        name='handheld_putaway_item',
+    ),
 ]

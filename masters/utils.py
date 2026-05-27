@@ -1,4 +1,5 @@
 """マスタアプリ共通のユーティリティ。"""
+
 from .models import Warehouse
 
 

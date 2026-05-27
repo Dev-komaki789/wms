@@ -4,6 +4,7 @@
   id → business → is_active → created_at → updated_at
 TimestampMixin は使わず、各モデルで created_at/updated_at を末尾に明示。
 """
+
 import re
 
 from django.core.validators import MinValueValidator
@@ -46,9 +47,7 @@ class Area(models.Model):
         ],
     }
 
-    warehouse = models.ForeignKey(
-        Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
-    )
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
     area_code = models.CharField('エリアコード', max_length=20)
     area_name = models.CharField('エリア名', max_length=100, blank=True)
     location_type = models.CharField(
@@ -96,7 +95,7 @@ class Area(models.Model):
         prefix = f'{self.area_code}-'
         if not code.startswith(prefix):
             return {}
-        suffix = code[len(prefix):]
+        suffix = code[len(prefix) :]
         if self.location_type == self.LocationType.STORAGE:
             parts = suffix.split('-')
             if len(parts) == 3:
@@ -107,9 +106,7 @@ class Area(models.Model):
 
 
 class Location(models.Model):
-    warehouse = models.ForeignKey(
-        Warehouse, on_delete=models.PROTECT, verbose_name='倉庫'
-    )
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
     area = models.ForeignKey(Area, on_delete=models.PROTECT, verbose_name='エリア')
     location_code = models.CharField('棚番コード', max_length=30)
     location_name = models.CharField('表示名', max_length=100, blank=True)
@@ -248,7 +245,7 @@ class Category(models.Model):
         max_n = 0
         for code in cls.objects.filter(parent=parent).values_list('category_code', flat=True):
             if code.startswith(prefix):
-                suffix = code[len(prefix):]
+                suffix = code[len(prefix) :]
                 m = re.match(r'^(\d{2})$', suffix)
                 if m:
                     max_n = max(max_n, int(m.group(1)))
@@ -275,9 +272,7 @@ class Manufacturer(models.Model):
 class Product(models.Model):
     product_code = models.CharField('商品コード', max_length=50, unique=True)
     product_name = models.CharField('商品名', max_length=200)
-    category = models.ForeignKey(
-        Category, on_delete=models.PROTECT, verbose_name='カテゴリ'
-    )
+    category = models.ForeignKey(Category, on_delete=models.PROTECT, verbose_name='カテゴリ')
     manufacturer = models.ForeignKey(
         Manufacturer,
         on_delete=models.SET_NULL,

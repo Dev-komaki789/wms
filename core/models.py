@@ -17,25 +17,29 @@ class ErrorLog(models.Model):
         EXCEPTION = 'exception', '画面例外エラー'
         IMPORT = 'import', '取り込みエラー'
 
-    error_type = models.CharField(
-        '種別', max_length=20, choices=ErrorType.choices
-    )
+    error_type = models.CharField('種別', max_length=20, choices=ErrorType.choices)
     occurred_at = models.DateTimeField('発生日時', default=timezone.now)
     summary = models.CharField(
-        '概要', max_length=255,
+        '概要',
+        max_length=255,
         help_text='例外クラス＋メッセージ、または取り込みエラーの要約',
     )
     detail = models.TextField(
-        '詳細', blank=True,
+        '詳細',
+        blank=True,
         help_text='例外のトレースバック、または取り込みに失敗した行データ',
     )
     source = models.CharField(
-        '発生元', max_length=255, blank=True,
+        '発生元',
+        max_length=255,
+        blank=True,
         help_text='例外: リクエストパス / 取り込み: 取り込み元の名称',
     )
     request_method = models.CharField('HTTPメソッド', max_length=10, blank=True)
     reference = models.CharField(
-        '対象', max_length=100, blank=True,
+        '対象',
+        max_length=100,
+        blank=True,
         help_text='取り込みエラーの対象（OMS注文番号など）',
     )
     user = models.ForeignKey(

@@ -3,6 +3,7 @@
 入荷指示番号は WMS 内部の管理番号（IO/RT prefix のみ許可）。
 上位システム連携の番号は purchase_order_code / supplier_delivery_note_code に別途記録。
 """
+
 import re
 
 from django import forms
@@ -18,9 +19,7 @@ TEXT = {'class': 'form-control'}
 SELECT = {'class': 'form-select'}
 
 # inbound_order_code の許可パターン: 「{prefix}-YYYYMMDD-NNN」、prefix は model の定義から動的に組み立て
-_CODE_PREFIX_ALT = '|'.join(
-    re.escape(p) for p in InboundOrder.CODE_PREFIX_BY_SOURCE_TYPE.values()
-)
+_CODE_PREFIX_ALT = '|'.join(re.escape(p) for p in InboundOrder.CODE_PREFIX_BY_SOURCE_TYPE.values())
 INBOUND_CODE_PATTERN = re.compile(rf'^({_CODE_PREFIX_ALT})-\d{{8}}-\d{{3}}$')
 
 
@@ -40,10 +39,14 @@ class InboundOrderForm(forms.ModelForm):
         ]
         widgets = {
             'inbound_order_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: IO-20260514-001',
-                       'autocomplete': 'off', 'maxlength': '15',
-                       'pattern': rf'({_CODE_PREFIX_ALT})-\d{{8}}-\d{{3}}',
-                       'title': 'IO-YYYYMMDD-NNN（通常）または RT-YYYYMMDD-NNN（返品）形式'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: IO-20260514-001',
+                    'autocomplete': 'off',
+                    'maxlength': '15',
+                    'pattern': rf'({_CODE_PREFIX_ALT})-\d{{8}}-\d{{3}}',
+                    'title': 'IO-YYYYMMDD-NNN（通常）または RT-YYYYMMDD-NNN（返品）形式',
+                }
             ),
             # 仕入先は検索モーダルで選択する（テンプレ側の独自UI＋hidden で送信）
             'supplier': forms.HiddenInput(),
@@ -53,12 +56,10 @@ class InboundOrderForm(forms.ModelForm):
             ),
             'source_type': forms.Select(attrs=SELECT),
             'purchase_order_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: PO-202605-0001',
-                       'autocomplete': 'off'}
+                attrs={**TEXT, 'placeholder': '例: PO-202605-0001', 'autocomplete': 'off'}
             ),
             'supplier_delivery_note_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: DN-2026-0123',
-                       'autocomplete': 'off'}
+                attrs={**TEXT, 'placeholder': '例: DN-2026-0123', 'autocomplete': 'off'}
             ),
             'note': forms.Textarea(attrs={**TEXT, 'rows': '2'}),
         }
@@ -124,9 +125,7 @@ class InboundOrderForm(forms.ModelForm):
             if not cleaned.get('supplier'):
                 self.add_error('supplier', '通常入荷では仕入先を指定してください。')
             if not cleaned.get('expected_date'):
-                self.add_error(
-                    'expected_date', '通常入荷では入荷予定日を指定してください。'
-                )
+                self.add_error('expected_date', '通常入荷では入荷予定日を指定してください。')
         return cleaned
 
 
@@ -140,11 +139,13 @@ class InboundOrderItemForm(forms.ModelForm):
     sku_code = forms.CharField(
         label='SKU',
         max_length=13,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control font-monospace',
-            'placeholder': 'SKU コード',
-            'autocomplete': 'off',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control font-monospace',
+                'placeholder': 'SKU コード',
+                'autocomplete': 'off',
+            }
+        ),
     )
 
     class Meta:
@@ -153,12 +154,15 @@ class InboundOrderItemForm(forms.ModelForm):
         fields = ['quantity_expected', 'is_crossdock']
         widgets = {
             'quantity_expected': forms.NumberInput(
-                attrs={**TEXT, 'class': 'form-control text-end',
-                       'min': '1', 'max': '99999', 'placeholder': '数量'}
+                attrs={
+                    **TEXT,
+                    'class': 'form-control text-end',
+                    'min': '1',
+                    'max': '99999',
+                    'placeholder': '数量',
+                }
             ),
-            'is_crossdock': forms.CheckboxInput(
-                attrs={'class': 'form-check-input'}
-            ),
+            'is_crossdock': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -176,14 +180,9 @@ class InboundOrderItemForm(forms.ModelForm):
         if not code:
             raise forms.ValidationError('入力してください。')
         try:
-            self._sku = (
-                Sku.objects.select_related('product')
-                .get(sku_code=code, is_active=True)
-            )
+            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
         except Sku.DoesNotExist:
-            raise forms.ValidationError(
-                f'SKU「{code}」は存在しないか、無効化されています。'
-            )
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
         return code
 
     def save(self, commit=True):
@@ -214,9 +213,7 @@ class BaseInboundOrderItemFormSet(BaseInlineFormSet):
             if not code:
                 continue
             if code in seen:
-                form.add_error(
-                    'sku_code', f'SKU「{code}」が同じ入荷指示内で重複しています。'
-                )
+                form.add_error('sku_code', f'SKU「{code}」が同じ入荷指示内で重複しています。')
             else:
                 seen.add(code)
 

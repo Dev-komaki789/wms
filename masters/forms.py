@@ -3,13 +3,24 @@
 ウィジェットに Bootstrap 5 のクラスを付与する。
 これにより各フォームテンプレートは `{{ field }}` を直接書くだけでよい。
 """
+
 import itertools
 import re
 
 from django import forms
 from django.core.validators import MaxValueValidator
 
-from .models import Area, Category, Customer, Location, Manufacturer, Product, Sku, Supplier, Warehouse
+from .models import (
+    Area,
+    Category,
+    Customer,
+    Location,
+    Manufacturer,
+    Product,
+    Sku,
+    Supplier,
+    Warehouse,
+)
 from .utils import get_current_warehouse
 from .widgets import StatusToggleWidget
 
@@ -35,12 +46,16 @@ class AreaForm(forms.ModelForm):
         widgets = {
             'warehouse': forms.Select(attrs=SELECT),
             'area_code': forms.TextInput(
-                attrs={**TEXT, 'maxlength': '1', 'placeholder': '例: A',
-                       'autocomplete': 'off',
-                       'pattern': '[A-Z]',
-                       'style': 'text-transform: uppercase',
-                       'title': '英大文字 A〜Z を 1 文字',
-                       'oninput': 'this.value = this.value.toUpperCase()'}
+                attrs={
+                    **TEXT,
+                    'maxlength': '1',
+                    'placeholder': '例: A',
+                    'autocomplete': 'off',
+                    'pattern': '[A-Z]',
+                    'style': 'text-transform: uppercase',
+                    'title': '英大文字 A〜Z を 1 文字',
+                    'oninput': 'this.value = this.value.toUpperCase()',
+                }
             ),
             'area_name': forms.TextInput(attrs=TEXT),
             'location_type': forms.RadioSelect,
@@ -108,24 +123,36 @@ class LocationForm(forms.ModelForm):
 
     # セグメント入力欄。区分に応じて表示・必須が変わる（個別の required は clean() で判定）
     aisle = forms.CharField(
-        label='通路', required=False, max_length=2,
-        widget=forms.TextInput(attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '2',
-                                       'placeholder': '00'}),
+        label='通路',
+        required=False,
+        max_length=2,
+        widget=forms.TextInput(
+            attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '2', 'placeholder': '00'}
+        ),
     )
     rack = forms.CharField(
-        label='ラック', required=False, max_length=2,
-        widget=forms.TextInput(attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '2',
-                                       'placeholder': '00'}),
+        label='ラック',
+        required=False,
+        max_length=2,
+        widget=forms.TextInput(
+            attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '2', 'placeholder': '00'}
+        ),
     )
     level = forms.CharField(
-        label='段', required=False, max_length=2,
-        widget=forms.TextInput(attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '2',
-                                       'placeholder': '00'}),
+        label='段',
+        required=False,
+        max_length=2,
+        widget=forms.TextInput(
+            attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '2', 'placeholder': '00'}
+        ),
     )
     seq = forms.CharField(
-        label='連番', required=False, max_length=3,
-        widget=forms.TextInput(attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '3',
-                                       'placeholder': '000'}),
+        label='連番',
+        required=False,
+        max_length=3,
+        widget=forms.TextInput(
+            attrs={**SEGMENT_INPUT_ATTRS, 'maxlength': '3', 'placeholder': '000'}
+        ),
     )
 
     class Meta:
@@ -141,9 +168,8 @@ class LocationForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # エリア dropdown は現在倉庫のものだけに限定（他倉庫のエリアにロケーションを作れないように）
-        area_qs = (
-            Area.objects.select_related('warehouse')
-            .order_by('warehouse__warehouse_code', 'area_code')
+        area_qs = Area.objects.select_related('warehouse').order_by(
+            'warehouse__warehouse_code', 'area_code'
         )
         current_wh = get_current_warehouse()
         if current_wh is not None:
@@ -193,7 +219,9 @@ class LocationForm(forms.ModelForm):
             segments[key] = padded
 
         # セグメントエラーがあればここで終了
-        if any(self.has_error(k) for k, _, _ in Area.LOCATION_CODE_SEGMENTS.get(area.location_type, [])):
+        if any(
+            self.has_error(k) for k, _, _ in Area.LOCATION_CODE_SEGMENTS.get(area.location_type, [])
+        ):
             return cleaned
 
         location_code = area.format_location_code(**segments)
@@ -226,19 +254,21 @@ def _bulk_range_field(label, digits):
     digits 桁までに制限する。maxlength で入力時に桁数を制限し、max_value で
     送信時にも検証する（単一登録フォームのセグメント入力と同じ方式）。
     """
-    max_val = 10 ** digits - 1
+    max_val = 10**digits - 1
     return forms.IntegerField(
         label=label,
         required=False,
         min_value=1,
         max_value=max_val,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control text-center font-monospace',
-            'inputmode': 'numeric',
-            'pattern': r'\d*',
-            'maxlength': str(digits),
-            'autocomplete': 'off',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control text-center font-monospace',
+                'inputmode': 'numeric',
+                'pattern': r'\d*',
+                'maxlength': str(digits),
+                'autocomplete': 'off',
+            }
+        ),
     )
 
 
@@ -286,9 +316,8 @@ class LocationBulkCreateForm(forms.Form):
         self._area = None
         self._codes = []
         # エリア dropdown は現在倉庫スコープに限定（単一登録フォームと同じ規約）
-        area_qs = (
-            Area.objects.select_related('warehouse')
-            .order_by('warehouse__warehouse_code', 'area_code')
+        area_qs = Area.objects.select_related('warehouse').order_by(
+            'warehouse__warehouse_code', 'area_code'
         )
         current_wh = get_current_warehouse()
         if current_wh is not None:
@@ -323,15 +352,13 @@ class LocationBulkCreateForm(forms.Form):
             if lo is None or hi is None:
                 continue
             if lo > hi:
-                self.add_error(
-                    f'{key}_to', f'{label}の終了は開始以上にしてください。')
+                self.add_error(f'{key}_to', f'{label}の終了は開始以上にしてください。')
                 continue
             bounds[key] = (lo, hi)
-            total *= (hi - lo + 1)
+            total *= hi - lo + 1
 
         # セグメントにエラーがあればここで終了
-        if any(self.has_error(f'{k}_from') or self.has_error(f'{k}_to')
-               for k, _, _ in seg_defs):
+        if any(self.has_error(f'{k}_from') or self.has_error(f'{k}_to') for k, _, _ in seg_defs):
             return cleaned
 
         if total > self.MAX_BULK:
@@ -343,8 +370,7 @@ class LocationBulkCreateForm(forms.Form):
         # 全組み合わせの棚番コードを生成する
         seg_keys = [k for k, _, _ in seg_defs]
         codes = []
-        for combo in itertools.product(
-                *(range(bounds[k][0], bounds[k][1] + 1) for k in seg_keys)):
+        for combo in itertools.product(*(range(bounds[k][0], bounds[k][1] + 1) for k in seg_keys)):
             segments = {k: str(v) for k, v in zip(seg_keys, combo)}
             codes.append(area.format_location_code(**segments))
         self._area = area
@@ -364,8 +390,12 @@ class CategoryForm(forms.ModelForm):
     class Meta:
         model = Category
         fields = [
-            'parent', 'category_name', 'description',
-            'sort_order', 'is_leaf', 'is_active',
+            'parent',
+            'category_name',
+            'description',
+            'sort_order',
+            'is_leaf',
+            'is_active',
         ]
         labels = {
             'is_active': STATUS_LABEL,
@@ -373,9 +403,7 @@ class CategoryForm(forms.ModelForm):
         }
         widgets = {
             'parent': forms.Select(attrs=SELECT),
-            'category_name': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 研削工具'}
-            ),
+            'category_name': forms.TextInput(attrs={**TEXT, 'placeholder': '例: 研削工具'}),
             'description': forms.Textarea(attrs={**TEXT, 'rows': '3'}),
             'sort_order': forms.NumberInput(attrs={**TEXT, 'min': '1', 'max': '9999'}),
             'is_leaf': forms.RadioSelect(
@@ -399,14 +427,14 @@ class CategoryForm(forms.ModelForm):
             qs = qs.exclude(pk__in=exclude_ids)
         # 親の depth が MAX_DEPTH - 2 以下 (=自分が MAX_DEPTH - 1 以下) のみ親候補
         eligible_ids = [c.pk for c in qs if c.depth < Category.MAX_DEPTH - 1]
-        self.fields['parent'].queryset = (
-            Category.objects.filter(pk__in=eligible_ids).order_by('sort_order', 'category_code')
+        self.fields['parent'].queryset = Category.objects.filter(pk__in=eligible_ids).order_by(
+            'sort_order', 'category_code'
         )
         self.fields['parent'].empty_label = '— ルート（大カテゴリとして登録）—'
         # 親 select の各選択肢にカテゴリ名とカテゴリコードを併記する
         # （同名カテゴリの区別・階層の把握をしやすくする）
-        self.fields['parent'].label_from_instance = (
-            lambda c: f'{c.category_name}（{c.category_code}）'
+        self.fields['parent'].label_from_instance = lambda c: (
+            f'{c.category_name}（{c.category_code}）'
         )
 
     def clean(self):
@@ -476,7 +504,11 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = [
-            'category', 'manufacturer', 'product_name', 'description', 'is_active',
+            'category',
+            'manufacturer',
+            'product_name',
+            'description',
+            'is_active',
         ]
         labels = {'is_active': STATUS_LABEL}
         widgets = {
@@ -538,23 +570,28 @@ class SkuForm(forms.ModelForm):
     class Meta:
         model = Sku
         fields = [
-            'product', 'jan_code', 'size_info', 'color_info',
-            'quantity_per_unit', 'picking_type', 'is_active',
+            'product',
+            'jan_code',
+            'size_info',
+            'color_info',
+            'quantity_per_unit',
+            'picking_type',
+            'is_active',
         ]
         labels = {'is_active': STATUS_LABEL}
         widgets = {
             'product': forms.Select(attrs=SELECT),
             'jan_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 4901234567890',
-                       'maxlength': '13', 'autocomplete': 'off',
-                       'inputmode': 'numeric'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: 4901234567890',
+                    'maxlength': '13',
+                    'autocomplete': 'off',
+                    'inputmode': 'numeric',
+                }
             ),
-            'size_info': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: M / 100mm / 1.5L'}
-            ),
-            'color_info': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: ブラック / 赤'}
-            ),
+            'size_info': forms.TextInput(attrs={**TEXT, 'placeholder': '例: M / 100mm / 1.5L'}),
+            'color_info': forms.TextInput(attrs={**TEXT, 'placeholder': '例: ブラック / 赤'}),
             'quantity_per_unit': forms.NumberInput(attrs={**TEXT, 'min': '1', 'max': '99999'}),
             'picking_type': forms.RadioSelect,
             'is_active': StatusToggleWidget(),
@@ -597,9 +634,13 @@ class SupplierForm(forms.ModelForm):
     class Meta:
         model = Supplier
         fields = [
-            'supplier_code', 'supplier_name',
-            'contact_person', 'phone_number', 'email',
-            'postal_code', 'address',
+            'supplier_code',
+            'supplier_name',
+            'contact_person',
+            'phone_number',
+            'email',
+            'postal_code',
+            'address',
             'is_active',
         ]
         labels = {'is_active': STATUS_LABEL}
@@ -610,31 +651,33 @@ class SupplierForm(forms.ModelForm):
             'supplier_name': forms.TextInput(
                 attrs={**TEXT, 'placeholder': '例: アオゾラ資材株式会社'}
             ),
-            'contact_person': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 山田太郎'}
-            ),
+            'contact_person': forms.TextInput(attrs={**TEXT, 'placeholder': '例: 山田太郎'}),
             'phone_number': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 03-1234-5678', 'inputmode': 'tel',
-                       'maxlength': '15'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: 03-1234-5678',
+                    'inputmode': 'tel',
+                    'maxlength': '15',
+                }
             ),
-            'email': forms.EmailInput(
-                attrs={**TEXT, 'placeholder': 'example@supplier.co.jp'}
-            ),
+            'email': forms.EmailInput(attrs={**TEXT, 'placeholder': 'example@supplier.co.jp'}),
             'postal_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 100-0001',
-                       'inputmode': 'numeric', 'autocomplete': 'postal-code',
-                       'maxlength': '8'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: 100-0001',
+                    'inputmode': 'numeric',
+                    'autocomplete': 'postal-code',
+                    'maxlength': '8',
+                }
             ),
-            'address': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}
-            ),
+            'address': forms.TextInput(attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}),
             'is_active': StatusToggleWidget(),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # 実形式に合わせて桁数を絞る（model max_length の auto-maxlength を上書き）
-        self.fields['postal_code'].widget.attrs['maxlength'] = '8'   # 例 100-0001
+        self.fields['postal_code'].widget.attrs['maxlength'] = '8'  # 例 100-0001
         self.fields['phone_number'].widget.attrs['maxlength'] = '15'
 
 
@@ -642,9 +685,12 @@ class CustomerForm(forms.ModelForm):
     class Meta:
         model = Customer
         fields = [
-            'customer_code', 'customer_name',
-            'customer_type', 'industry_type',
-            'postal_code', 'address',
+            'customer_code',
+            'customer_name',
+            'customer_type',
+            'industry_type',
+            'postal_code',
+            'address',
             'is_active',
         ]
         labels = {'is_active': STATUS_LABEL}
@@ -660,17 +706,19 @@ class CustomerForm(forms.ModelForm):
                 attrs={**TEXT, 'placeholder': '例: 製造業 / 小売業 / 建設業'}
             ),
             'postal_code': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 100-0001',
-                       'inputmode': 'numeric', 'autocomplete': 'postal-code',
-                       'maxlength': '8'}
+                attrs={
+                    **TEXT,
+                    'placeholder': '例: 100-0001',
+                    'inputmode': 'numeric',
+                    'autocomplete': 'postal-code',
+                    'maxlength': '8',
+                }
             ),
-            'address': forms.TextInput(
-                attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}
-            ),
+            'address': forms.TextInput(attrs={**TEXT, 'placeholder': '例: 東京都千代田区...'}),
             'is_active': StatusToggleWidget(),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # 郵便番号は実形式の 8 桁まで（model max_length の auto-maxlength を上書き）
-        self.fields['postal_code'].widget.attrs['maxlength'] = '8'   # 例 100-0001
+        self.fields['postal_code'].widget.attrs['maxlength'] = '8'  # 例 100-0001

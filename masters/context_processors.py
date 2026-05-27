@@ -1,4 +1,5 @@
 """テンプレート全体に注入するコンテキスト。"""
+
 from .utils import get_current_warehouse
 
 

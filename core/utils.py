@@ -1,4 +1,5 @@
 """core アプリの共通ユーティリティ。"""
+
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 
@@ -68,7 +69,9 @@ class GetPageMixin:
 
     def paginate_queryset(self, queryset, page_size):
         paginator = self.get_paginator(
-            queryset, page_size, orphans=self.get_paginate_orphans(),
+            queryset,
+            page_size,
+            orphans=self.get_paginate_orphans(),
             allow_empty_first_page=self.get_allow_empty(),
         )
         page = paginator.get_page(self.request.GET.get(self.page_kwarg))
