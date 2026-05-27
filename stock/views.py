@@ -657,9 +657,10 @@ class StockCheckAPIView(LoginRequiredMixin, View):
     """ロケーション × SKU の在庫紐づきチェック API（AJAX 用）。
 
     棚間移動などで、スキャンした SKU が移動元の棚に在庫として実在するかを
-    その場で検証するためのエンドポイント。SKU の実在・ロケーションの実在
-    （現在倉庫スコープ）・その組み合わせの在庫数（StockBalance.quantity）を返す。
-    棚に在庫が無い（on_hand=0）場合、呼び出し側でエラー表示する。
+    その場で検証するためのエンドポイント。SKU の実在（sku_code/jan_code どちら
+    でも一致）・ロケーションの実在（現在倉庫スコープ）・その組み合わせの在庫数
+    （StockBalance.quantity）を返す。棚に在庫が無い（on_hand=0）場合、呼び出し
+    側でエラー表示する。
     """
 
     def get(self, request):
@@ -670,7 +671,7 @@ class StockCheckAPIView(LoginRequiredMixin, View):
         if sku_code:
             sku = (
                 Sku.objects.select_related('product')
-                .filter(sku_code=sku_code, is_active=True)
+                .filter(Q(sku_code=sku_code) | Q(jan_code=sku_code), is_active=True)
                 .first()
             )
 

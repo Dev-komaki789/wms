@@ -10,6 +10,7 @@ import re
 
 from django import forms
 from django.core.validators import MaxValueValidator
+from django.db.models import Q
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
 
@@ -163,14 +164,17 @@ class OutboundOrderItemForm(forms.ModelForm):
             self.fields['sku_code'].initial = self.instance.sku.sku_code
 
     def clean_sku_code(self):
-        """sku_code を SKU マスタで引いて Sku インスタンスを self._sku に保持。"""
+        """sku_code/jan_code どちらでも引いて Sku インスタンスを self._sku に保持。"""
         code = (self.cleaned_data.get('sku_code') or '').strip()
         if not code:
             raise forms.ValidationError('入力してください。')
-        try:
-            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
-        except Sku.DoesNotExist:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+        self._sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
+        if self._sku is None:
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
     def save(self, commit=True):

@@ -100,10 +100,15 @@ class _StockOperationForm(forms.Form):
         code = (self.cleaned_data.get('sku_code') or '').strip()
         if not code:
             raise forms.ValidationError('入力してください。')
-        try:
-            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
-        except Sku.DoesNotExist:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+        # sku_code か jan_code のどちらでも一致を許容（現場で JAN シールをスキャン
+        # した場合にも通す）。SkuLookupAPIView も同じ条件で判定している。
+        self._sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
+        if self._sku is None:
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
 
@@ -269,10 +274,14 @@ class StockTransferForm(forms.Form):
         code = (self.cleaned_data.get('sku_code') or '').strip()
         if not code:
             raise forms.ValidationError('入力してください。')
-        try:
-            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
-        except Sku.DoesNotExist:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+        # sku_code か jan_code のどちらでも一致を許容
+        self._sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
+        if self._sku is None:
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):
@@ -520,10 +529,14 @@ class StocktakeCountForm(forms.Form):
         code = (self.cleaned_data.get('sku_code') or '').strip()
         if not code:
             raise forms.ValidationError('入力してください。')
-        try:
-            self._sku = Sku.objects.select_related('product').get(sku_code=code, is_active=True)
-        except Sku.DoesNotExist:
-            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+        # sku_code か jan_code のどちらでも一致を許容
+        self._sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
+        if self._sku is None:
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
         return code
 
     def clean(self):

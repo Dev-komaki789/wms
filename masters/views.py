@@ -1083,15 +1083,19 @@ class SkuLookupAPIView(LoginRequiredMixin, View):
     """SKU コードの実在チェック API（AJAX 用）。
 
     handheld 画面でスキャンした SKU をその場で検証するためのエンドポイント。
-    SKU コードの完全一致で1件引き、有効（is_active）なものだけを「実在」とみなす。
-    フォームの clean_sku_code と同じ条件で判定する。
+    sku_code または jan_code の完全一致で1件引き、有効（is_active）なものだけを
+    「実在」とみなす。フォームの clean_sku_code と同じ条件で判定する。
     """
 
     def get(self, request):
         code = (request.GET.get('code') or '').strip()
         if not code:
             return JsonResponse({'found': False})
-        sku = Sku.objects.select_related('product').filter(sku_code=code, is_active=True).first()
+        sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
         if sku is None:
             return JsonResponse({'found': False})
         return JsonResponse(
