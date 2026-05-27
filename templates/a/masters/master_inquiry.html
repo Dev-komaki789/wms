@@ -9,6 +9,22 @@
     <i class="bi bi-pin-map-fill me-2 text-primary"></i>エリア・ロケーション照会
   </h2>
   <div class="d-flex gap-2">
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle"
+              data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="bi bi-download"></i> CSV出力
+      </button>
+      <ul class="dropdown-menu">
+        <li><h6 class="dropdown-header small">
+          {% if searched %}絞り込み結果（{{ loc_stats.total }} 件）{% else %}全件{% endif %}を出力
+        </h6></li>
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'location' %}?{{ request.GET.urlencode }}&delimiter=comma">カンマ区切り（,）</a></li>
+        <li><a class="dropdown-item" href="{% url 'masters:csv_export' 'location' %}?{{ request.GET.urlencode }}&delimiter=caret">キャレット区切り（^）</a></li>
+      </ul>
+    </div>
+    <a href="{% url 'masters:csv_import' 'location' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-upload"></i> CSV取込
+    </a>
     <a href="{% url 'masters:area_list' %}" class="btn btn-outline-primary btn-sm">
       <i class="bi bi-grid-3x3"></i> エリア管理
     </a>

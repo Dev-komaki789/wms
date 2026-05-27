@@ -486,6 +486,33 @@ def _filter_product(request, qs):
     return qs
 
 
+def _filter_location(request, qs):
+    """MasterInquiryView（エリア・ロケーション照会）の検索条件を反映する。
+
+    LocationListView 側はフィルタUIを持たないが、エリア・ロケーション照会では
+    loc_* プレフィックスで絞り込みが行えるので、その条件を CSV にも反映する。
+    """
+    g = request.GET
+    loc_q = g.get('loc_q', '').strip()
+    if loc_q:
+        qs = qs.filter(location_code__icontains=loc_q)
+    loc_warehouse = g.get('loc_warehouse', '')
+    if loc_warehouse:
+        qs = qs.filter(warehouse_id=loc_warehouse)
+    loc_area = g.get('loc_area', '')
+    if loc_area:
+        qs = qs.filter(area_id=loc_area)
+    loc_type = g.get('loc_type', '')
+    if loc_type:
+        qs = qs.filter(area__location_type=loc_type)
+    loc_status = g.get('loc_status', '')
+    if loc_status == 'active':
+        qs = qs.filter(is_active=True)
+    elif loc_status == 'inactive':
+        qs = qs.filter(is_active=False)
+    return qs
+
+
 def _filter_sku(request, qs):
     # SkuInquiryView と同じ: s_q / s_product / s_picking / s_status
     g = request.GET
@@ -527,6 +554,7 @@ _SPECS = [
         key='location', model=Location, label='ロケーション',
         list_url='masters:location_list',
         code_field='location_code', warehouse_scoped=True,
+        list_filter=_filter_location,
         columns=[
             Fk('倉庫コード', 'warehouse', Warehouse, 'warehouse_code'),
             Fk('エリアコード', 'area', Area, 'area_code', scope='warehouse'),
