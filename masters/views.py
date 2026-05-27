@@ -1111,7 +1111,11 @@ class MasterCsvExportView(LoginRequiredMixin, View):
         if spec is None:
             raise Http404('未知のマスタです。')
         delimiter = DELIMITERS.get(request.GET.get('delimiter'), ',')
-        content = build_csv(spec, delimiter=delimiter)
+        # 一覧/照会画面の検索条件を反映（spec.list_filter があれば適用、無ければ全件）
+        qs = spec.model.objects.all()
+        if spec.list_filter:
+            qs = spec.list_filter(request, qs)
+        content = build_csv(spec, delimiter=delimiter, qs=qs)
         response = HttpResponse(content, content_type='text/csv')
         filename = f'{entity}_{timezone.localdate():%Y%m%d}.csv'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'

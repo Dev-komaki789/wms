@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 
 from .models import (Area, Category, Customer, Location, Manufacturer,
                      Product, Sku, Supplier, Warehouse)
@@ -77,6 +78,9 @@ class CsvSpec:
     warehouse_scoped: bool = False  # 自然キーが (warehouse, code) の複合キー
     auto_number: object = None      # (instance)->code。None なら手動コード必須
     extra_checks: list = field(default_factory=list)  # [(instance)->str|None]
+    # 一覧/照会画面の検索条件を CSV にも反映するためのコールバック。
+    # signature: (request, qs) -> qs。None なら絞り込みなし（全件出力）。
+    list_filter: object = None
 
     @property
     def headers(self):
@@ -169,12 +173,14 @@ def _export_value(col, obj):
 
 # --- エクスポート -----------------------------------------------------------
 
-def build_csv(spec, delimiter=','):
-    """spec のマスタ全件を CSV（UTF-8 BOM付）の bytes で返す。
+def build_csv(spec, delimiter=',', qs=None):
+    """spec のマスタを CSV（UTF-8 BOM付）の bytes で返す。
 
-    delimiter で区切り文字を選べる（',' または '^'）。
+    `qs` に絞り込み済み queryset を渡すと、その範囲だけを出力する。
+    省略時は全件出力。delimiter で区切り文字を選べる（',' または '^'）。
     """
-    qs = spec.model.objects.all()
+    if qs is None:
+        qs = spec.model.objects.all()
     fk_fields = [c.field for c in spec.columns if isinstance(c, Fk)]
     if fk_fields:
         qs = qs.select_related(*fk_fields)
@@ -413,6 +419,96 @@ def _check_category_depth(instance):
     return None
 
 
+# --- 一覧/照会画面の検索条件を CSV にも反映するフィルタ関数 ---
+# 各 list / inquiry ビューと同じキー・同じ意味で絞り込む（WYSIWYG）。
+# 一覧画面に絞り込みUIが無いマスタ（Area / Location）は list_filter 未設定＝全件。
+
+
+def _apply_q_status(qs, request, code_field, name_field, extra_q_fields=None):
+    """共通: キーワード(q) と 有効/無効(status) で絞る。extra_q_fields は追加の検索対象。"""
+    g = request.GET
+    q = g.get('q', '').strip()
+    if q:
+        cond = Q(**{f'{code_field}__icontains': q}) | Q(**{f'{name_field}__icontains': q})
+        for f in (extra_q_fields or []):
+            cond |= Q(**{f'{f}__icontains': q})
+        qs = qs.filter(cond)
+    status = g.get('status', '')
+    if status == 'active':
+        qs = qs.filter(is_active=True)
+    elif status == 'inactive':
+        qs = qs.filter(is_active=False)
+    return qs
+
+
+def _filter_manufacturer(request, qs):
+    return _apply_q_status(qs, request, 'manufacturer_code', 'manufacturer_name')
+
+
+def _filter_supplier(request, qs):
+    return _apply_q_status(qs, request, 'supplier_code', 'supplier_name',
+                           extra_q_fields=['contact_person'])
+
+
+def _filter_customer(request, qs):
+    qs = _apply_q_status(qs, request, 'customer_code', 'customer_name')
+    ctype = request.GET.get('customer_type', '')
+    if ctype.isdigit():
+        qs = qs.filter(customer_type=int(ctype))
+    return qs
+
+
+def _filter_category(request, qs):
+    # CategoryListView と同じ: q（コード/名称）+ 有効/無効
+    return _apply_q_status(qs, request, 'category_code', 'category_name')
+
+
+def _filter_product(request, qs):
+    # ProductInquiryView と同じ: p_q / p_category / p_manufacturer / p_status
+    g = request.GET
+    p_q = g.get('p_q', '').strip()
+    if p_q:
+        qs = qs.filter(Q(product_code__icontains=p_q) | Q(product_name__icontains=p_q))
+    p_category = g.get('p_category', '')
+    if p_category:
+        qs = qs.filter(category_id=p_category)
+    p_manufacturer = g.get('p_manufacturer', '').strip()
+    if p_manufacturer:
+        qs = qs.filter(
+            Q(manufacturer__manufacturer_name__icontains=p_manufacturer)
+            | Q(manufacturer__manufacturer_code__icontains=p_manufacturer)
+        )
+    p_status = g.get('p_status', '')
+    if p_status == 'active':
+        qs = qs.filter(is_active=True)
+    elif p_status == 'inactive':
+        qs = qs.filter(is_active=False)
+    return qs
+
+
+def _filter_sku(request, qs):
+    # SkuInquiryView と同じ: s_q / s_product / s_picking / s_status
+    g = request.GET
+    s_q = g.get('s_q', '').strip()
+    if s_q:
+        qs = qs.filter(Q(sku_code__icontains=s_q) | Q(jan_code__icontains=s_q))
+    s_product = g.get('s_product', '').strip()
+    if s_product:
+        qs = qs.filter(
+            Q(product__product_name__icontains=s_product)
+            | Q(product__product_code__icontains=s_product)
+        )
+    s_picking = g.get('s_picking', '')
+    if s_picking:
+        qs = qs.filter(picking_type=s_picking)
+    s_status = g.get('s_status', '')
+    if s_status == 'active':
+        qs = qs.filter(is_active=True)
+    elif s_status == 'inactive':
+        qs = qs.filter(is_active=False)
+    return qs
+
+
 _SPECS = [
     CsvSpec(
         key='area', model=Area, label='エリア', list_url='masters:area_list',
@@ -447,6 +543,7 @@ _SPECS = [
             Category.next_child_code(inst.parent) if inst.parent_id
             else Category.next_root_code()),
         extra_checks=[_check_category_depth],
+        list_filter=_filter_category,
         columns=[
             Col('カテゴリコード', 'category_code', is_code=True),
             Col('カテゴリ名', 'category_name', required=True),
@@ -462,6 +559,7 @@ _SPECS = [
         key='manufacturer', model=Manufacturer, label='メーカー',
         list_url='masters:manufacturer_list',
         code_field='manufacturer_code',
+        list_filter=_filter_manufacturer,
         columns=[
             Col('メーカーコード', 'manufacturer_code', is_code=True),
             Col('メーカー名', 'manufacturer_name', required=True),
@@ -474,6 +572,7 @@ _SPECS = [
         list_url='masters:product_inquiry',
         code_field='product_code',
         auto_number=lambda inst: Product.next_product_code(),
+        list_filter=_filter_product,
         columns=[
             Col('商品コード', 'product_code', is_code=True),
             Col('商品名', 'product_name', required=True),
@@ -488,6 +587,7 @@ _SPECS = [
         key='sku', model=Sku, label='SKU', list_url='masters:sku_inquiry',
         code_field='sku_code',
         auto_number=lambda inst: Sku.next_sku_code(),
+        list_filter=_filter_sku,
         columns=[
             Col('SKUコード', 'sku_code', is_code=True),
             Fk('商品コード', 'product', Product, 'product_code'),
@@ -504,6 +604,7 @@ _SPECS = [
         key='supplier', model=Supplier, label='仕入先',
         list_url='masters:supplier_list',
         code_field='supplier_code',
+        list_filter=_filter_supplier,
         columns=[
             Col('仕入先コード', 'supplier_code', is_code=True),
             Col('仕入先名', 'supplier_name', required=True),
@@ -519,6 +620,7 @@ _SPECS = [
         key='customer', model=Customer, label='顧客',
         list_url='masters:customer_list',
         code_field='customer_code',
+        list_filter=_filter_customer,
         columns=[
             Col('顧客コード', 'customer_code', is_code=True),
             Col('顧客名', 'customer_name', required=True),
