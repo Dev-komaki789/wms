@@ -1,0 +1,105 @@
+{% extends 'a/handheld_base.html' %}
+{% load static %}
+
+{% block title %}在庫照会 - 結果{% endblock %}
+{% block page_title %}<i class="bi bi-search me-1"></i>在庫照会 - 結果{% endblock %}
+
+{% comment %}
+在庫照会の結果ページ。検索フォームは別画面（stock:handheld_inquiry）にあり、
+ここは結果表示に専念する。上部に検索条件＋「再検索」リンクを置き、検索画面に
+戻るときは GET で前回条件を URL に乗せて引き継ぐ。
+{% endcomment %}
+
+{# 戻るボタンはホームではなく検索画面に戻す（業務動線を1段戻すのが自然） #}
+{% block back_url %}{% url 'stock:handheld_inquiry' %}?location_code={{ form.cleaned_data.location_code|default:'' }}&sku_code={{ form.cleaned_data.sku_code|default:'' }}{% endblock %}
+
+{% block hh_content %}
+{# 検索条件サマリ + 再検索リンク #}
+<div class="mb-3">
+  <div class="small text-muted mb-1">検索条件</div>
+  <div class="mb-2">
+    {% if searched_loc %}
+      <span class="badge bg-info-subtle text-info-emphasis me-1">
+        <i class="bi bi-geo-alt-fill me-1"></i>棚番 {{ searched_loc.location_code }}
+      </span>
+    {% endif %}
+    {% if searched_sku %}
+      <span class="badge bg-info-subtle text-info-emphasis">
+        <i class="bi bi-upc-scan me-1"></i>SKU {{ searched_sku.sku_code }}
+      </span>
+    {% endif %}
+    {% if not searched_loc and not searched_sku %}
+      <span class="text-danger small">検索条件が不正です。</span>
+    {% endif %}
+  </div>
+  <a href="{% url 'stock:handheld_inquiry' %}?location_code={{ form.cleaned_data.location_code|default:'' }}&sku_code={{ form.cleaned_data.sku_code|default:'' }}"
+     class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-pencil-square me-1"></i>再検索
+  </a>
+</div>
+
+<hr class="my-3">
+
+{# 検証エラー（不正な棚番/SKUなど） #}
+{% if form.errors %}
+  <div class="alert alert-danger small">
+    {% for field, errors in form.errors.items %}
+      {{ errors|join:" " }}
+    {% endfor %}
+  </div>
+{% elif rows %}
+  <div class="mb-2 small text-muted">{{ rows|length }} 件</div>
+  {% for row in rows %}
+    <div class="card mb-2 shadow-sm">
+      <div class="card-body p-2">
+        {# 棚番（メイン） + エリア名（補助） #}
+        <div class="d-flex justify-content-between align-items-baseline mb-1">
+          <div>
+            <i class="bi bi-geo-alt-fill text-primary me-1"></i>
+            <span class="hh-cell">{{ row.location.location_code }}</span>
+          </div>
+          <span class="small text-muted text-truncate ms-2">
+            {{ row.location.area.area_name|default:row.location.area.area_code }}
+          </span>
+        </div>
+        {# SKU + 商品名・色・サイズ #}
+        <div class="mb-2">
+          <i class="bi bi-upc-scan text-primary me-1"></i>
+          <span class="hh-cell">{{ row.sku.sku_code }}</span>
+          <div class="small text-muted ms-3 text-truncate">
+            {{ row.sku.product.product_name }}
+            {% if row.sku.color_info %} / {{ row.sku.color_info }}{% endif %}
+            {% if row.sku.size_info %} / {{ row.sku.size_info }}{% endif %}
+          </div>
+        </div>
+        {# 数量3つを横並びで（在庫 / 引当 / 出荷可能） #}
+        <div class="row g-1 text-center border-top pt-2">
+          <div class="col-4">
+            <div class="small text-muted">在庫</div>
+            <div class="hh-cell">{{ row.quantity }}</div>
+          </div>
+          <div class="col-4">
+            <div class="small text-muted">引当</div>
+            <div class="hh-cell {% if row.reserved %}text-warning{% else %}text-muted{% endif %}">{{ row.reserved }}</div>
+          </div>
+          <div class="col-4">
+            <div class="small text-muted">出荷可能</div>
+            <div class="hh-cell {% if row.available > 0 %}text-success{% else %}text-muted{% endif %}">{{ row.available }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="alert alert-warning text-center mb-0">
+    <i class="bi bi-exclamation-circle me-1"></i>
+    {% if searched_loc and searched_sku %}
+      {{ searched_loc.location_code }} に {{ searched_sku.sku_code }} の在庫はありません。
+    {% elif searched_loc %}
+      棚番「{{ searched_loc.location_code }}」に在庫がありません。
+    {% elif searched_sku %}
+      SKU「{{ searched_sku.sku_code }}」の在庫がありません。
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

@@ -153,29 +153,50 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
 
 
 class HandheldStockInquiryView(LoginRequiredMixin, TemplateView):
-    """ハンディ/スマホ向け在庫照会画面。
+    """ハンディ/スマホ向け在庫照会の検索フォーム画面。
 
-    棚番・SKU の片方または両方で StockBalance を検索する read-only 画面。
-    PC 版 StockInquiryView との違い:
-      - スマホ筐体に収まるカード並びで表示（テーブルでなく）。
-      - 入力欄は棚番と SKU の2つだけ。SKU は sku_code/jan_code どちらでも一致。
-      - 連続スキャン前提のため、ページネーション/並び替えは省略。
-      - 両方指定時は在庫 0 行も表示する（「この棚にこの商品は無い」を伝える）。
-        片方のみのときは在庫 > 0 の行に絞る（在庫 0 の行は意味が薄い）。
+    入力欄は棚番と SKU の2つだけ。検索ボタンを押すと結果ページに遷移する。
+    結果ページからの「再検索」では GET で前回条件を引き継ぐので、フォームに
+    初期値として復元する（検証は走らせない＝戻ってきた時にエラーは出さない）。
     """
 
     template_name = 'a/handheld/stock_inquiry.html'
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        # 結果画面からの「再検索」で値を引き継ぐ。初期表示では空。
+        initial = {
+            'location_code': g.get('location_code', ''),
+            'sku_code': g.get('sku_code', ''),
+        }
+        ctx['form'] = HandheldStockInquiryForm(initial=initial, request=self.request)
+        return ctx
+
+
+class HandheldStockInquiryResultView(LoginRequiredMixin, TemplateView):
+    """ハンディ/スマホ向け在庫照会の結果画面。
+
+    GET で棚番・SKU を受け取って StockBalance を検索する read-only 画面。
+    PC 版 StockInquiryView との違い:
+      - スマホ筐体に収まるカード並びで表示（テーブルでなく）。
+      - 入力欄は持たず、結果のみに専念。再検索は検索画面に戻ってもらう。
+      - 並び替え/ページネーションは省略（スマホ筐体内をスクロール）。
+      - 両方指定時は在庫 0 行も表示する（「この棚にこの商品は無い」を伝える）。
+        片方のみのときは在庫 > 0 の行に絞る。
+    """
+
+    template_name = 'a/handheld/stock_inquiry_result.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
         form = HandheldStockInquiryForm(self.request.GET or None, request=self.request)
         ctx['form'] = form
-        ctx['searched'] = bool(self.request.GET)
         ctx['rows'] = []
         ctx['searched_loc'] = None
         ctx['searched_sku'] = None
 
-        if not self.request.GET or not form.is_valid():
+        if not form.is_valid():
             return ctx
 
         loc = form._location

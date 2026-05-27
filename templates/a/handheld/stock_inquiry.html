@@ -4,20 +4,20 @@
 {% block title %}在庫照会{% endblock %}
 {% block page_title %}<i class="bi bi-search me-1"></i>在庫照会{% endblock %}
 
-{% block hh_content %}
-{# 棚番・SKU の片方／両方で在庫を検索する read-only 画面。
-   form は GET（検索条件は URL に残る → ブックマーク・戻る操作で再現できる）。 #}
-<form method="get" autocomplete="off">
-  {% if form.non_field_errors %}
-    <div class="alert alert-danger small">{{ form.non_field_errors|join:" " }}</div>
-  {% endif %}
+{% comment %}
+棚番・SKU の片方／両方で在庫を検索する read-only 画面（フォームのみ）。
+検索ボタンで結果ページ（stock:handheld_inquiry_result）へ GET 遷移する。
+結果画面からの「再検索」では URL に検索条件が乗って戻ってくるので、ビュー側
+で initial に流して入力欄に復元する。
+{% endcomment %}
 
+{% block hh_content %}
+<form method="get" autocomplete="off" action="{% url 'stock:handheld_inquiry_result' %}">
   <div class="mb-3">
     <label class="form-label" for="{{ form.location_code.id_for_label }}">
       <i class="bi bi-geo-alt-fill text-primary me-1"></i>{{ form.location_code.label }}
     </label>
     {{ form.location_code }}
-    {% if form.location_code.errors %}<div class="invalid-feedback d-block">{{ form.location_code.errors|join:" " }}</div>{% endif %}
   </div>
 
   <div class="mb-3">
@@ -25,89 +25,22 @@
       <i class="bi bi-upc-scan text-primary me-1"></i>{{ form.sku_code.label }}
     </label>
     {{ form.sku_code }}
-    {% if form.sku_code.errors %}<div class="invalid-feedback d-block">{{ form.sku_code.errors|join:" " }}</div>{% endif %}
   </div>
 
   <div class="d-flex gap-2 mb-3">
-    <button type="submit" class="btn btn-primary btn-hh flex-grow-1">
+    <button type="submit" class="btn btn-primary btn-lg fw-semibold flex-grow-1">
       <i class="bi bi-search me-1"></i> 検索
     </button>
-    {# クリア = 検索条件を捨ててこの画面の素の URL に遷移。連続検索の起点。 #}
+    {# クリア = 入力欄を捨ててこの画面の素の URL に遷移。 #}
     <a href="{% url 'stock:handheld_inquiry' %}"
-       class="btn btn-outline-secondary btn-hh"
-       style="flex: 0 0 35%;">
-      <i class="bi bi-x-lg me-1"></i> クリア
+       class="btn btn-outline-secondary btn-lg">
+      <i class="bi bi-x-lg"></i>
     </a>
   </div>
 </form>
 
-<div class="text-muted small text-center mb-3">
+<div class="text-muted small text-center">
   <i class="bi bi-info-circle me-1"></i>
   棚番か SKU の少なくとも一方を入力してください。両方入れるとピンポイント検索になります。
 </div>
-
-{% if searched and form.is_valid %}
-  <hr class="my-3">
-  <div class="mb-2 small text-muted">
-    検索条件：
-    {% if searched_loc %}<span class="badge bg-info-subtle text-info-emphasis me-1">棚番 {{ searched_loc.location_code }}</span>{% endif %}
-    {% if searched_sku %}<span class="badge bg-info-subtle text-info-emphasis">SKU {{ searched_sku.sku_code }}</span>{% endif %}
-  </div>
-
-  {% if rows %}
-    <div class="mb-2 small text-muted">{{ rows|length }} 件</div>
-    {% for row in rows %}
-      <div class="card mb-2 shadow-sm">
-        <div class="card-body p-2">
-          {# 棚番（メイン） + エリア名（補助） #}
-          <div class="d-flex justify-content-between align-items-baseline mb-1">
-            <div>
-              <i class="bi bi-geo-alt-fill text-primary me-1"></i>
-              <span class="hh-cell">{{ row.location.location_code }}</span>
-            </div>
-            <span class="small text-muted text-truncate ms-2">
-              {{ row.location.area.area_name|default:row.location.area.area_code }}
-            </span>
-          </div>
-          {# SKU + 商品名・色・サイズ #}
-          <div class="mb-2">
-            <i class="bi bi-upc-scan text-primary me-1"></i>
-            <span class="hh-cell">{{ row.sku.sku_code }}</span>
-            <div class="small text-muted ms-3 text-truncate">
-              {{ row.sku.product.product_name }}
-              {% if row.sku.color_info %} / {{ row.sku.color_info }}{% endif %}
-              {% if row.sku.size_info %} / {{ row.sku.size_info }}{% endif %}
-            </div>
-          </div>
-          {# 数量3つを横並びで（在庫 / 引当 / 出荷可能） #}
-          <div class="row g-1 text-center border-top pt-2">
-            <div class="col-4">
-              <div class="small text-muted">在庫</div>
-              <div class="hh-cell">{{ row.quantity }}</div>
-            </div>
-            <div class="col-4">
-              <div class="small text-muted">引当</div>
-              <div class="hh-cell {% if row.reserved %}text-warning{% else %}text-muted{% endif %}">{{ row.reserved }}</div>
-            </div>
-            <div class="col-4">
-              <div class="small text-muted">出荷可能</div>
-              <div class="hh-cell {% if row.available > 0 %}text-success{% else %}text-muted{% endif %}">{{ row.available }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    {% endfor %}
-  {% else %}
-    <div class="alert alert-warning text-center mb-0">
-      <i class="bi bi-exclamation-circle me-1"></i>
-      {% if searched_loc and searched_sku %}
-        {{ searched_loc.location_code }} に {{ searched_sku.sku_code }} の在庫はありません。
-      {% elif searched_loc %}
-        棚番「{{ searched_loc.location_code }}」に在庫がありません。
-      {% elif searched_sku %}
-        SKU「{{ searched_sku.sku_code }}」の在庫がありません。
-      {% endif %}
-    </div>
-  {% endif %}
-{% endif %}
 {% endblock %}

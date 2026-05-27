@@ -81,9 +81,9 @@
       {% if not is_handheld_worker %}
       {% include 'a/_menu_card.html' with url='inbound:order_inquiry' icon='bi-clipboard-plus' label='入荷指示' %}
       {% endif %}
-      {% include 'a/_menu_card.html' with url='inbound:handheld_arrival' icon='bi-box-arrow-in-right' label='入荷受け入れ' %}
-      {% include 'a/_menu_card.html' with url='inbound:handheld_inspection' icon='bi-check2-square' label='入荷検品' %}
-      {% include 'a/_menu_card.html' with url='inbound:handheld_putaway' icon='bi-box-seam' label='棚入れ' %}
+      {% include 'a/_menu_card.html' with url='inbound:handheld_arrival' icon='bi-box-arrow-in-right' label='入荷受け入れ' handheld=True %}
+      {% include 'a/_menu_card.html' with url='inbound:handheld_inspection' icon='bi-check2-square' label='入荷検品' handheld=True %}
+      {% include 'a/_menu_card.html' with url='inbound:handheld_putaway' icon='bi-box-seam' label='棚入れ' handheld=True %}
     </div>
   </div>
   <div class="col-md-6">
@@ -97,8 +97,8 @@
       {% include 'a/_menu_card.html' with url='outbound:launch' icon='bi-rocket-takeoff' label='出荷起動' %}
       {% include 'a/_menu_card.html' with url='outbound:picking_list_inquiry' icon='bi-printer' label='ピッキングリスト印刷' %}
       {% endif %}
-      {% include 'a/_menu_card.html' with url='outbound:handheld_picking' icon='bi-hand-index-thumb' label='ピッキング' %}
-      {% include 'a/_menu_card.html' with url='outbound:handheld_inspection' icon='bi-shield-check' label='出荷検品' %}
+      {% include 'a/_menu_card.html' with url='outbound:handheld_picking' icon='bi-hand-index-thumb' label='ピッキング' handheld=True %}
+      {% include 'a/_menu_card.html' with url='outbound:handheld_inspection' icon='bi-shield-check' label='出荷検品' handheld=True %}
     </div>
   </div>
 </div>
@@ -113,13 +113,13 @@
   {% include 'a/_menu_card.html' with url='stock:movement_inquiry' icon='bi-clock-history' label='入出庫履歴照会' %}
   {% endif %}
   {% include 'a/_menu_card.html' with url='stock:handheld_inquiry' icon='bi-search' label='在庫照会' handheld=True %}
-  {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' %}
-  {% include 'a/_menu_card.html' with url='stock:handheld_out' icon='bi-box-arrow-up' label='計画外出庫' %}
-  {% include 'a/_menu_card.html' with url='stock:handheld_transfer' icon='bi-arrow-left-right' label='棚間移動' %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' handheld=True %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_out' icon='bi-box-arrow-up' label='計画外出庫' handheld=True %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_transfer' icon='bi-arrow-left-right' label='棚間移動' handheld=True %}
   {% if not is_handheld_worker %}
   {% include 'a/_menu_card.html' with url='stock:stocktake_inquiry' icon='bi-clipboard-check' label='棚卸照会' %}
   {% endif %}
-  {% include 'a/_menu_card.html' with url='stock:handheld_stocktake' icon='bi-clipboard-check' label='棚卸カウント' %}
+  {% include 'a/_menu_card.html' with url='stock:handheld_stocktake' icon='bi-clipboard-check' label='棚卸カウント' handheld=True %}
 </div>
 
 {% if not is_handheld_worker %}

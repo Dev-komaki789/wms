@@ -13,6 +13,11 @@ urlpatterns = [
         views.HandheldStockInquiryView.as_view(),
         name='handheld_inquiry',
     ),
+    path(
+        'handheld/inquiry/result/',
+        views.HandheldStockInquiryResultView.as_view(),
+        name='handheld_inquiry_result',
+    ),
     path('handheld/in/', views.UnplannedStockInView.as_view(), name='handheld_in'),
     path('handheld/out/', views.UnplannedStockOutView.as_view(), name='handheld_out'),
     path('handheld/transfer/', views.StockTransferView.as_view(), name='handheld_transfer'),
