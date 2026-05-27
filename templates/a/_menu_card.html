@@ -7,6 +7,8 @@
   - icon:     bootstrap-icons のクラス名（例: 'bi-box'）
   - label:    カードの表示テキスト
   - disabled: True なら「準備中」表示でクリック不可
+  - handheld: True ならカード右上に「ハンディ」バッジを表示
+              （PC 版と同名のメニュー（例: 在庫照会）を区別するため）
 
 url か href のいずれか必須（disabled=True の場合は不要）。
 {% endcomment %}
@@ -22,7 +24,10 @@ url か href のいずれか必須（disabled=True の場合は不要）。
   {% else %}
     <a href="{% if url %}{% url url %}{% else %}{{ href }}{% endif %}"
        class="menu-card card shadow-sm h-100 border text-decoration-none text-center text-reset">
-      <div class="card-body py-3">
+      <div class="card-body py-3 position-relative">
+        {% if handheld %}
+          <span class="badge bg-info-subtle text-info-emphasis position-absolute top-0 end-0 m-1 small">ハンディ</span>
+        {% endif %}
         <i class="bi {{ icon }} d-block text-primary" style="font-size: 1.75rem"></i>
         <div class="mt-2 fw-semibold">{{ label }}</div>
       </div>

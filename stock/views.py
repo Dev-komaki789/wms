@@ -17,6 +17,7 @@ from masters.utils import get_current_warehouse
 from outbound.models import OutboundOrder, StockReservation
 
 from .forms import (
+    HandheldStockInquiryForm,
     StockTransferForm,
     StocktakeCountForm,
     StocktakeSessionForm,
@@ -148,6 +149,72 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
 
         ctx['area_types'] = Area.LocationType.choices
         ctx['filters'] = f
+        return ctx
+
+
+class HandheldStockInquiryView(LoginRequiredMixin, TemplateView):
+    """ハンディ/スマホ向け在庫照会画面。
+
+    棚番・SKU の片方または両方で StockBalance を検索する read-only 画面。
+    PC 版 StockInquiryView との違い:
+      - スマホ筐体に収まるカード並びで表示（テーブルでなく）。
+      - 入力欄は棚番と SKU の2つだけ。SKU は sku_code/jan_code どちらでも一致。
+      - 連続スキャン前提のため、ページネーション/並び替えは省略。
+      - 両方指定時は在庫 0 行も表示する（「この棚にこの商品は無い」を伝える）。
+        片方のみのときは在庫 > 0 の行に絞る（在庫 0 の行は意味が薄い）。
+    """
+
+    template_name = 'a/handheld/stock_inquiry.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        form = HandheldStockInquiryForm(self.request.GET or None, request=self.request)
+        ctx['form'] = form
+        ctx['searched'] = bool(self.request.GET)
+        ctx['rows'] = []
+        ctx['searched_loc'] = None
+        ctx['searched_sku'] = None
+
+        if not self.request.GET or not form.is_valid():
+            return ctx
+
+        loc = form._location
+        sku = form._sku
+        ctx['searched_loc'] = loc
+        ctx['searched_sku'] = sku
+
+        qs = StockBalance.objects.select_related(
+            'location', 'location__area', 'sku', 'sku__product'
+        )
+        if loc:
+            qs = qs.filter(location=loc)
+        if sku:
+            qs = qs.filter(sku=sku)
+        # 棚×SKU 同時指定なら在庫 0 でも表示（「ここにこの商品は無い」を確認するため）。
+        # 片方のみの検索では在庫 > 0 の行に絞る。
+        if not (loc and sku):
+            qs = qs.filter(quantity__gt=0)
+
+        # 引当数・出荷可能数: PC 版照会と同じ subquery で算出する
+        reserved_subquery = (
+            StockReservation.objects.filter(
+                location=OuterRef('location'),
+                sku=OuterRef('sku'),
+                status=StockReservation.Status.ACTIVE,
+            )
+            .values('location', 'sku')
+            .annotate(total=Sum('quantity'))
+            .values('total')
+        )
+        qs = (
+            qs.annotate(
+                reserved=Coalesce(Subquery(reserved_subquery, output_field=IntegerField()), 0),
+            )
+            .annotate(available=F('quantity') - F('reserved'))
+            .order_by('location__location_code', 'sku__sku_code')
+        )
+
+        ctx['rows'] = list(qs)
         return ctx
 
 

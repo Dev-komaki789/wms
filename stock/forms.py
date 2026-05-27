@@ -1,6 +1,7 @@
 """在庫操作系の Form。"""
 
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from masters.models import Area, Location, Sku
@@ -299,6 +300,90 @@ class StockTransferForm(forms.Form):
                     f'在庫不足です。{self._from_location.location_code} の '
                     f'{self._sku.sku_code} 在庫は {on_hand} 個です。',
                 )
+        return cleaned
+
+
+class HandheldStockInquiryForm(forms.Form):
+    """ハンディ/スマホ向け在庫照会の検索フォーム。
+
+    棚番・SKU の少なくとも一方は必須（両方任意では検索意味がない）。
+    SKU 欄は sku_code でも jan_code でも一致する（PC 版照会と同じ規約）。
+    解決した結果は self._location / self._sku に保持し、ビュー側で使う。
+
+    `data-hh-lookup` 属性を付けて camera_scan.js のカメラボタン自動付与の対象に
+    する。Enter 検証 (handheld_scan.js) は使わない（このフォームは検索なので
+    Enter で素直に submit したい）。
+    """
+
+    location_code = forms.CharField(
+        label='棚番',
+        max_length=15,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': '棚番をスキャン',
+                'autocomplete': 'off',
+                'autofocus': 'autofocus',
+                'data-hh-lookup': 'location',
+                'inputmode': 'text',
+            }
+        ),
+    )
+    sku_code = forms.CharField(
+        label='SKU / JAN',
+        max_length=13,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control hh-key',
+                'placeholder': 'SKU か JAN をスキャン',
+                'autocomplete': 'off',
+                'data-hh-lookup': 'sku',
+                'inputmode': 'text',
+            }
+        ),
+    )
+
+    def __init__(self, *args, request=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._request = request
+        self._location = None
+        self._sku = None
+
+    def clean_location_code(self):
+        code = (self.cleaned_data.get('location_code') or '').strip()
+        if not code:
+            return ''
+        qs = Location.objects.select_related('warehouse', 'area').filter(
+            location_code=code, is_active=True
+        )
+        wh = get_current_warehouse(self._request) if self._request else None
+        if wh is not None:
+            qs = qs.filter(warehouse=wh)
+        self._location = qs.first()
+        if self._location is None:
+            raise forms.ValidationError(f'棚番「{code}」は存在しないか、無効化されています。')
+        return code
+
+    def clean_sku_code(self):
+        code = (self.cleaned_data.get('sku_code') or '').strip()
+        if not code:
+            return ''
+        self._sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
+        if self._sku is None:
+            raise forms.ValidationError(f'SKU / JAN「{code}」は存在しないか、無効化されています。')
+        return code
+
+    def clean(self):
+        cleaned = super().clean()
+        # どちらも空 → 検索条件なしなのでエラー
+        if not cleaned.get('location_code') and not cleaned.get('sku_code'):
+            raise forms.ValidationError('棚番か SKU / JAN のどちらかを入力してください。')
         return cleaned
 
 
