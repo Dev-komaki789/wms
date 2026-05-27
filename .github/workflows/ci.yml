@@ -1,0 +1,49 @@
+name: CI
+
+# master への push と、master への PR でCIを走らせる。
+# 手動実行(workflow_dispatch)も可能（Actions タブから Run workflow）。
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # settings.py が読み込み時に必須とする環境変数をダミーで与える。
+    # check / makemigrations --check は実DBに接続しないので、POSTGRES_* は
+    # パース可能なダミー値があれば足りる。
+    env:
+      DJANGO_SECRET_KEY: ci-dummy-secret-key-not-for-production
+      DJANGO_DEBUG: 'True'
+      POSTGRES_DB: ci
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # Django のシステムチェック（設定・モデル・URL構成の整合性）
+      - name: Django check
+        run: uv run python manage.py check
+
+      # マイグレーション漏れ検出（モデル変更したのに makemigrations 忘れ）
+      - name: Migrations are up to date
+        run: uv run python manage.py makemigrations --check --dry-run
