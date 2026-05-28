@@ -67,6 +67,9 @@
   function fail(input, msg) {
     state[input.id] = 'ng';
     setMsg(input, msg, false);
+    // 振動でフィードバック（Android のみ。iOS Safari は非対応）。
+    // サーバー側エラーより控えめに 2回。handheld_base.html の messages 系と差をつける。
+    if ('vibrate' in navigator) navigator.vibrate([80, 60, 80]);
     input.focus();
     input.select();
   }

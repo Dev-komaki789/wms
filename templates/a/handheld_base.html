@@ -244,4 +244,18 @@
 </div>
 {# ハンディ画面共通: バーコード入力欄にカメラスキャンボタンを自動付与する #}
 <script src="{% static 'js/camera_scan.js' %}"></script>
+{# Django messages（処理結果）が出ているときに振動でフィードバック。
+   Web Vibration API は Android のみ動作（iOS Safari は非対応・無視される）。
+   複数同時表示なら最も強いものを優先（danger > warning > success）。 #}
+<script>
+  (function () {
+    if (!('vibrate' in navigator)) return;
+    const alerts = document.querySelectorAll('.hh-main .alert');
+    if (alerts.length === 0) return;
+    const has = (cls) => Array.from(alerts).some(a => a.classList.contains(cls));
+    if (has('alert-danger'))       navigator.vibrate([80, 60, 80, 60, 80]);  // 短く3回（エラー）
+    else if (has('alert-warning')) navigator.vibrate([80, 60, 80]);            // 短く2回（注意）
+    else if (has('alert-success')) navigator.vibrate(120);                     // 短く1回（成功）
+  })();
+</script>
 {% endblock %}
