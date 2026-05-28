@@ -80,7 +80,7 @@
 <form method="get" class="card shadow-sm mb-3 bc-toolbar">
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label fw-semibold" for="bc-kind">
           <i class="bi bi-collection me-1"></i>種類
         </label>
@@ -91,7 +91,14 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold" for="bc-q">
+          <i class="bi bi-search me-1"></i>コード絞り込み（部分一致）
+        </label>
+        <input type="text" class="form-control" id="bc-q" name="q" value="{{ q }}"
+               placeholder="例: AGV / 20260527 / OO-2026">
+      </div>
+      <div class="col-md-2">
         <label class="form-label fw-semibold" for="bc-limit">
           <i class="bi bi-stack me-1"></i>枚数
         </label>
@@ -101,7 +108,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-5 d-flex align-items-end gap-2">
+      <div class="col-md-3 d-flex align-items-end gap-2">
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-eye me-1"></i>表示
         </button>
@@ -117,8 +124,8 @@
     </div>
     <div class="small text-muted mt-2">
       <i class="bi bi-info-circle me-1"></i>
-      棚番／SKU は昇順、ピッキングNo／出荷Noは新しい順で取得します。
-      棚番は現在倉庫スコープに絞られます（その他は倉庫を跨ぐので絞り込みなし）。
+      棚番／SKU は昇順、入荷指示No／出荷No／ピッキングNoは新しい順で取得します。
+      棚番のみ現在倉庫スコープに絞られます。SKU の絞り込みは sku_code / jan_code どちらでも一致します。
     </div>
   </div>
 </form>
