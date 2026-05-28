@@ -1,0 +1,150 @@
+{% extends 'a/base.html' %}
+
+{% block title %}デモ用バーコード印刷{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* === カード型レイアウト（2 列 × 5 行 = 10 枚/A4） === */
+  .bc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm 6mm;
+    padding: 0;
+  }
+  .bc-card {
+    border: 1px dashed #999;
+    border-radius: 4px;
+    padding: 8mm 6mm 6mm;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    /* 1枚あたり高さは A4 ≈ 297mm − 上下マージン から逆算。5 行に揃える */
+    min-height: 47mm;
+    background: #fff;
+  }
+  .bc-card .bc-svg svg {
+    width: 100%;
+    max-width: 86mm;
+    height: 14mm;
+    display: block;
+  }
+  .bc-card .bc-code {
+    font-family: var(--bs-font-monospace, monospace);
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: .04em;
+    margin-top: 3mm;
+    word-break: break-all;
+  }
+  .bc-card .bc-subtitle {
+    color: #555;
+    font-size: .8rem;
+    margin-top: 2mm;
+    line-height: 1.3;
+    /* 商品名等が長い場合は2行で切り詰める */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* === 印刷時 === */
+  @media print {
+    /* 印刷時はナビバー・操作ボタンを消す */
+    nav.navbar, .bc-toolbar, .alert { display: none !important; }
+    main.container { max-width: 100% !important; padding: 0 !important; }
+    body { background: #fff; }
+    /* カード10枚で1ページ。10枚目の後は改ページ */
+    .bc-grid { gap: 6mm 6mm; }
+    .bc-card { border: 1px dashed #aaa; break-inside: avoid; }
+    /* 10枚ごとに改ページ（CSSの構文上、各カードを :nth-child(10n) で指定） */
+    .bc-card:nth-child(10n) { break-after: page; }
+    @page { size: A4 portrait; margin: 8mm; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-3 bc-toolbar">
+  <h3 class="mb-1">
+    <i class="bi bi-upc me-2 text-primary"></i>デモ用バーコード印刷
+  </h3>
+  <div class="text-muted small">
+    棚番・SKU・ピッキングNo・出荷No を Code128 のラベルシートとして印刷します（デモ用）。
+  </div>
+</div>
+
+{# ========== 選択フォーム ========== #}
+<form method="get" class="card shadow-sm mb-3 bc-toolbar">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold" for="bc-kind">
+          <i class="bi bi-collection me-1"></i>種類
+        </label>
+        <select class="form-select" id="bc-kind" name="kind">
+          <option value="">— 選択してください —</option>
+          {% for value, label in kind_choices %}
+            <option value="{{ value }}" {% if kind == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold" for="bc-limit">
+          <i class="bi bi-stack me-1"></i>枚数
+        </label>
+        <select class="form-select" id="bc-limit" name="limit">
+          {% for n in limit_choices %}
+            <option value="{{ n }}" {% if limit == n %}selected{% endif %}>{{ n }} 枚</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-5 d-flex align-items-end gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-eye me-1"></i>表示
+        </button>
+        {% if print_mode %}
+          <button type="button" class="btn btn-outline-primary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i>印刷
+          </button>
+          <a href="{% url 'core:barcode_print' %}" class="btn btn-link">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>リセット
+          </a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="small text-muted mt-2">
+      <i class="bi bi-info-circle me-1"></i>
+      棚番／SKU は昇順、ピッキングNo／出荷Noは新しい順で取得します。
+      棚番は現在倉庫スコープに絞られます（その他は倉庫を跨ぐので絞り込みなし）。
+    </div>
+  </div>
+</form>
+
+{# ========== 印刷シート ========== #}
+{% if print_mode %}
+  {% if items %}
+    <div class="alert alert-info small bc-toolbar">
+      <i class="bi bi-printer me-1"></i>
+      {{ items|length }} 枚を表示しています。「印刷」ボタンまたはブラウザの印刷機能（Ctrl+P）で A4 に出力できます。
+    </div>
+    <div class="bc-grid">
+      {% for item in items %}
+        <div class="bc-card">
+          <div class="bc-svg">{{ item.svg|safe }}</div>
+          <div class="bc-code">{{ item.code }}</div>
+          {% if item.subtitle %}
+            <div class="bc-subtitle">{{ item.subtitle }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-circle me-1"></i>該当データがありません。
+    </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

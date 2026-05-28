@@ -6,6 +6,11 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import DetailView, TemplateView
 
+from masters.models import Location, Sku
+from masters.utils import get_current_warehouse
+from outbound.models import OutboundOrder, PickingList
+from outbound.utils import code128_svg
+
 from .models import ErrorLog
 from .utils import apply_ordering, paginate, parse_query_date
 
@@ -119,3 +124,106 @@ class ErrorLogDetailView(LoginRequiredMixin, DetailView):
             messages.success(request, 'エラーログを「対応済み」にしました。')
         log.save(update_fields=['is_resolved', 'resolved_at'])
         return HttpResponseRedirect(reverse('core:error_log_detail', args=[log.pk]))
+
+
+class BarcodePrintView(LoginRequiredMixin, TemplateView):
+    """デモ用バーコード印刷画面。
+
+    棚番／SKU／ピッキングNo／出荷No を Code128 でカード型に並べた A4 印刷
+    シートを生成する。バーコード SVG は outbound.utils.code128_svg を流用。
+
+    GET ?kind なし → 種類選択画面（同テンプレ内の選択フォーム）
+    GET ?kind=... → 印刷シート（カード型 2x5=10枚/A4）
+
+    管理者向けデモ機能。is_handheld_worker には見せない（メニュー側で制御）。
+    現在倉庫スコープがあれば棚番だけそれで絞る。SKU や伝票は倉庫を跨ぐので絞らない。
+    """
+
+    template_name = 'a/core/barcode_print.html'
+
+    KIND_CHOICES = (
+        ('location', '棚番（ロケーション）'),
+        ('sku', 'SKU'),
+        ('picking', 'ピッキングNo'),
+        ('outbound', '出荷No'),
+    )
+    LIMIT_CHOICES = (10, 20, 50, 100)
+    DEFAULT_LIMIT = 20
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        kind = g.get('kind', '')
+        try:
+            limit = int(g.get('limit', self.DEFAULT_LIMIT))
+        except ValueError:
+            limit = self.DEFAULT_LIMIT
+        limit = max(1, min(limit, 200))  # 上限ガード（200枚 = 20 ページまで）
+
+        ctx['kind'] = kind
+        ctx['limit'] = limit
+        ctx['kind_choices'] = self.KIND_CHOICES
+        ctx['limit_choices'] = self.LIMIT_CHOICES
+        ctx['print_mode'] = kind in dict(self.KIND_CHOICES)
+        ctx['items'] = []
+
+        if not ctx['print_mode']:
+            return ctx
+
+        # 種類別にコードと補助情報を1リストに揃える。テンプレ側は dict 共通形式で
+        # 描画する（code / svg / subtitle）。
+        items = []
+        wh = get_current_warehouse(self.request)
+
+        if kind == 'location':
+            qs = Location.objects.select_related('area').filter(is_active=True)
+            if wh is not None:
+                qs = qs.filter(warehouse=wh)
+            for loc in qs.order_by('location_code')[:limit]:
+                items.append(
+                    {
+                        'code': loc.location_code,
+                        'svg': code128_svg(loc.location_code),
+                        'subtitle': loc.area.area_name or loc.area.area_code,
+                    }
+                )
+        elif kind == 'sku':
+            qs = Sku.objects.select_related('product').filter(is_active=True)
+            for sku in qs.order_by('sku_code')[:limit]:
+                parts = [sku.product.product_name]
+                if sku.color_info:
+                    parts.append(sku.color_info)
+                if sku.size_info:
+                    parts.append(sku.size_info)
+                items.append(
+                    {
+                        'code': sku.sku_code,
+                        'svg': code128_svg(sku.sku_code),
+                        'subtitle': ' / '.join(parts),
+                    }
+                )
+        elif kind == 'picking':
+            qs = PickingList.objects.select_related('order').order_by('-picking_list_code')[:limit]
+            for pl in qs:
+                items.append(
+                    {
+                        'code': pl.picking_list_code,
+                        'svg': code128_svg(pl.picking_list_code),
+                        'subtitle': pl.order.outbound_order_code if pl.order_id else '',
+                    }
+                )
+        elif kind == 'outbound':
+            qs = OutboundOrder.objects.select_related('customer').order_by('-outbound_order_code')[
+                :limit
+            ]
+            for order in qs:
+                items.append(
+                    {
+                        'code': order.outbound_order_code,
+                        'svg': code128_svg(order.outbound_order_code),
+                        'subtitle': order.customer.customer_name if order.customer_id else '',
+                    }
+                )
+
+        ctx['items'] = items
+        return ctx
