@@ -63,7 +63,8 @@
         <label class="form-label small text-muted mb-1">移動日（To）</label>
         <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to }}">
       </div>
-      <div class="col-12 d-flex justify-content-end gap-2">
+      {# 検索条件7個 + ボタンで col-md-2 × 8 = 16col。2 行目の右端にボタンが収まる。 #}
+      <div class="col-md-3 d-flex align-items-end gap-2">
         <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-search"></i> 検索
         </button>
@@ -117,7 +118,7 @@
           {% sort_th 'SKUコード' 'sku' sort dir align='start' %}
           {% sort_th '商品' 'product' sort dir align='start' %}
           {% sort_th '数量' 'qty' sort dir align='end' %}
-          {% sort_th '在庫変動' 'after' sort dir align='end' %}
+          {% sort_th '在庫変動' 'after' sort dir align='center' %}
           {% sort_th '作業内容' 'reference' sort dir align='start' %}
           {% sort_th '操作ユーザー' 'user' sort dir align='start' %}
           {% sort_th '備考' 'note' sort dir align='start' %}
@@ -154,7 +155,7 @@
               <span class="font-monospace fw-bold text-danger">{{ m.quantity }}</span>
             {% endif %}
           </td>
-          <td class="text-end text-nowrap font-monospace small text-muted">
+          <td class="text-center text-nowrap font-monospace small text-muted">
             {{ m.quantity_before }} <i class="bi bi-arrow-right mx-1"></i> <span class="text-dark">{{ m.quantity_after }}</span>
           </td>
           <td class="text-start text-nowrap">
