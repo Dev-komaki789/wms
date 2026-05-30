@@ -591,16 +591,33 @@ class SkuReorderSettingForm(forms.ModelForm):
         model = SkuReorderSetting
         fields = ['warehouse', 'reorder_point', 'reorder_qty', 'safety_stock', 'is_active']
         labels = {'is_active': 'ステータス'}
+        # 数量は最大 6 桁 (999999) を上限とする。HTML5 の max 属性 + サーバー側
+        # MaxValueValidator (__init__ で追加) の二段構えで弾く。
         widgets = {
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
             'reorder_point': forms.NumberInput(
-                attrs={'class': 'form-control text-end', 'min': '0', 'placeholder': '例: 20'}
+                attrs={
+                    'class': 'form-control text-end',
+                    'min': '0',
+                    'max': '999999',
+                    'placeholder': '例: 20',
+                }
             ),
             'reorder_qty': forms.NumberInput(
-                attrs={'class': 'form-control text-end', 'min': '1', 'placeholder': '例: 50'}
+                attrs={
+                    'class': 'form-control text-end',
+                    'min': '1',
+                    'max': '999999',
+                    'placeholder': '例: 50',
+                }
             ),
             'safety_stock': forms.NumberInput(
-                attrs={'class': 'form-control text-end', 'min': '0', 'placeholder': '例: 10'}
+                attrs={
+                    'class': 'form-control text-end',
+                    'min': '0',
+                    'max': '999999',
+                    'placeholder': '例: 10',
+                }
             ),
             # 他マスタと同じ btn-check セグメンテッドボタン
             'is_active': StatusToggleWidget(),
@@ -612,6 +629,11 @@ class SkuReorderSettingForm(forms.ModelForm):
         self.fields['warehouse'].queryset = Warehouse.objects.filter(is_active=True).order_by(
             'warehouse_code'
         )
+        # 数量系は最大 6 桁 (999999) を上限とする。サーバー側の保険。
+        from django.core.validators import MaxValueValidator
+
+        for fname in ('reorder_point', 'reorder_qty', 'safety_stock'):
+            self.fields[fname].validators.append(MaxValueValidator(999999))
         # 編集時: 既存 SKU のコードを pre-fill。SKU・倉庫はキー項目なので変更不可。
         if self.instance.pk and self.instance.sku_id:
             self.fields['sku_code'].initial = self.instance.sku.sku_code

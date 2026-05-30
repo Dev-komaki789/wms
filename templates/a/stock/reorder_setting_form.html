@@ -61,29 +61,29 @@
 
       <h6 class="text-muted text-uppercase small fw-bold mb-3 mt-4">発注パラメータ</h6>
       <div class="row">
-        <div class="col-md-4 mb-3">
+        <div class="col-md-2 mb-3">
           <label class="form-label d-block" for="{{ form.reorder_point.id_for_label }}">
             {{ form.reorder_point.label }} <span class="text-danger">*</span>
           </label>
           {{ form.reorder_point }}
-          <div class="form-text">現在庫がこの数を下回るとアラート発火</div>
+          <div class="form-text">下回るとアラート発火</div>
           {% if form.reorder_point.errors %}<div class="invalid-feedback d-block">{{ form.reorder_point.errors|join:" " }}</div>{% endif %}
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-2 mb-3">
           <label class="form-label d-block" for="{{ form.reorder_qty.id_for_label }}">
             {{ form.reorder_qty.label }} <span class="text-danger">*</span>
           </label>
           {{ form.reorder_qty }}
-          <div class="form-text">アラートからの入荷指示生成時にこの数で起票される</div>
+          <div class="form-text">入荷指示にこの数で起票</div>
           {% if form.reorder_qty.errors %}<div class="invalid-feedback d-block">{{ form.reorder_qty.errors|join:" " }}</div>{% endif %}
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-2 mb-3">
           <label class="form-label d-block" for="{{ form.safety_stock.id_for_label }}">
             {{ form.safety_stock.label }}
             <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">参考</span>
           </label>
           {{ form.safety_stock }}
-          <div class="form-text">参考値（発注点の算出基準）。発火条件には使わない</div>
+          <div class="form-text">参考値（発火条件外）</div>
           {% if form.safety_stock.errors %}<div class="invalid-feedback d-block">{{ form.safety_stock.errors|join:" " }}</div>{% endif %}
         </div>
       </div>
