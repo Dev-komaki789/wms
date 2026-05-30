@@ -26,6 +26,22 @@
       if (!el.getAttribute('max')) el.max = '9999-12-31';
     });
 
+    // <input type="number"> は maxlength が効かないので、max 属性が
+    // 設定された数値入力欄に対し、入力イベントで上限を超えた値を即座に
+    // クリップする（タイプした瞬間に上限を超えた桁数を入れさせない）。
+    document.addEventListener('input', function (e) {
+      const el = e.target;
+      if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
+      const max = el.getAttribute('max');
+      if (max == null || max === '') return;
+      const maxNum = Number(max);
+      if (!Number.isFinite(maxNum)) return;
+      const v = el.value;
+      if (v && Number(v) > maxNum) {
+        el.value = String(maxNum);
+      }
+    });
+
     // 最初の入力フィールドに自動フォーカス。
     // 一覧画面や削除確認画面など、入力フィールドが無い場合は何もしない。
     const firstField = document.querySelector(
