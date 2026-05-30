@@ -95,6 +95,24 @@
   let candidate = '';     // 連続一致を数えている候補値
   let candidateHits = 0;
 
+  // 検出は「映像の中央 GUIDE_W × GUIDE_H 領域」内のコードに限定する。
+  // 視界の端に偶然映ったバーコードを誤って拾わないための対策。
+  // CSS の .hh-cam-guide も同じ比率に揃えて視覚と検出を一致させる
+  // （handheld_base.html を見ること）。
+  const GUIDE_W = 0.65;
+  const GUIDE_H = 0.25;
+
+  function isCenterInGuide(bb, vw, vh) {
+    if (!bb || !vw || !vh) return false;
+    const cx = bb.x + bb.width / 2;
+    const cy = bb.y + bb.height / 2;
+    const gw = vw * GUIDE_W;
+    const gh = vh * GUIDE_H;
+    const gx = (vw - gw) / 2;
+    const gy = (vh - gh) / 2;
+    return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+  }
+
   function ensureModal() {
     if (modal) return;
     modal = document.createElement('div');
@@ -195,7 +213,17 @@
         try {
           const results = await detector.detect(video);
           if (results && results.length > 0) {
-            const value = (results[0].rawValue || '').trim();
+            // ガイド枠（中央 GUIDE_W × GUIDE_H）内に中心があるコードのみ採用。
+            // 視界の端に映った別バーコードはここで弾く。複数が枠内なら最初の1つ。
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            let value = '';
+            for (const r of results) {
+              if (isCenterInGuide(r.boundingBox, vw, vh)) {
+                value = (r.rawValue || '').trim();
+                if (value) break;
+              }
+            }
             if (value) registerCandidate(value);
           }
         } catch (e) {

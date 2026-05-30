@@ -180,13 +180,15 @@
     height: 100%;
     object-fit: cover;
   }
-  /* 中央に半透明の読み取りガイド枠（バーコードを枠内に合わせやすくする） */
+  /* 中央に半透明の読み取りガイド枠。サイズは camera_scan.js の GUIDE_W/GUIDE_H
+     と揃える（検出はこの枠内に中心があるコードだけ採用するため、視覚と検出を
+     一致させる）。枠を狭めると枠外バーコードの誤読を確実に弾ける。 */
   .hh-cam-guide {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 78%;
-    height: 30%;
+    width: 65%;
+    height: 25%;
     transform: translate(-50%, -50%);
     border: 2px solid rgba(255,255,255,.9);
     border-radius: .5rem;
