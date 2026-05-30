@@ -90,58 +90,106 @@
 </div>
 
 {% if not object %}
-{# 新規登録時のみ: SKU 欄で Enter / blur 時に実在チェック。
-   サーバー側でもバリデーションするが、入力直後にフィードバックを出すことで
-   「Enter を押したけど何の反応もなく submit された」体験を防ぐ。 #}
+{% comment %}
+新規登録時のみ: SKU 欄で Enter / blur 時に実在チェック。
+サーバー側でもバリデーションするが、入力直後にフィードバックを出すことで
+「Enter を押したけど何の反応もなく submit された」体験を防ぐ。
+SKU が ✗ のままでは form submit を止めて入力欄にフォーカスを戻す。
+{% endcomment %}
 <script>
 (function () {
   const input = document.getElementById('{{ form.sku_code.id_for_label }}');
   if (!input || input.disabled) return;
   const url = '{% url "masters:api_sku_lookup" %}';
+  const form = input.form;
   const msg = document.createElement('div');
   msg.className = 'small mt-1';
   input.insertAdjacentElement('afterend', msg);
   let lastCode = '';
+  let validated = false;  // 直近のチェック結果。NG なら submit を止める
+
+  function setValid(d) {
+    if (d.found) {
+      msg.textContent = '✓ ' + d.sku_code + '（' + (d.product_name || '') + '）';
+      msg.className = 'small mt-1 text-success';
+      input.classList.remove('is-invalid');
+      input.classList.add('is-valid');
+      validated = true;
+    } else {
+      msg.textContent = '✗ SKU「' + input.value.trim() + '」は存在しません';
+      msg.className = 'small mt-1 text-danger';
+      input.classList.add('is-invalid');
+      input.classList.remove('is-valid');
+      validated = false;
+    }
+  }
 
   function lookup() {
     const code = input.value.trim();
-    if (!code || code === lastCode) return;
+    if (!code) { lastCode = ''; validated = false; return Promise.resolve(); }
+    if (code === lastCode) return Promise.resolve();
     lastCode = code;
     msg.textContent = '確認中…';
     msg.className = 'small mt-1 text-muted';
-    fetch(url + '?code=' + encodeURIComponent(code),
-          {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    return fetch(url + '?code=' + encodeURIComponent(code),
+                 {headers: {'X-Requested-With': 'XMLHttpRequest'}})
       .then(r => r.json())
-      .then(d => {
-        if (d.found) {
-          msg.textContent = '✓ ' + d.sku_code + '（' + (d.product_name || '') + '）';
-          msg.className = 'small mt-1 text-success';
-          input.classList.remove('is-invalid');
-          input.classList.add('is-valid');
-        } else {
-          msg.textContent = '✗ SKU「' + code + '」は存在しません';
-          msg.className = 'small mt-1 text-danger';
-          input.classList.add('is-invalid');
-          input.classList.remove('is-valid');
-        }
-      })
+      .then(setValid)
       .catch(() => {
         msg.textContent = '通信エラー';
         msg.className = 'small mt-1 text-danger';
+        validated = false;
       });
   }
 
-  // Enter で「送信」ではなく「実在チェック」を行う（誤送信防止）。
+  // Enter は送信ではなく実在チェックに割り当て、他のリスナーにも伝播させない
+  // （wms.js の Enter キー移動などが反応しないように stopPropagation）。
+  // チェックの結果が NG ならその場に留まる。
   input.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); lookup(); }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    e.stopPropagation();
+    lookup();
   });
-  input.addEventListener('blur', lookup);
+  // blur 時にチェック → NG なら focus を即座に戻す
+  // （ただし「キャンセル」ボタン等への意図的な移動は止めない＝form 内のフィールド
+  // やボタン以外への移動は許す）。
+  input.addEventListener('blur', function (e) {
+    lookup().then(() => {
+      if (!validated && input.value.trim()) {
+        // 次のフォーカス先が同じ form 内の入力欄/ボタンなら戻す
+        const next = e.relatedTarget;
+        if (next && form && form.contains(next)) {
+          setTimeout(() => input.focus(), 0);
+        }
+      }
+    });
+  });
   input.addEventListener('input', function () {
     if (input.value.trim() !== lastCode) {
       msg.textContent = '';
       input.classList.remove('is-valid', 'is-invalid');
+      validated = false;
     }
   });
+  // form submit 時の最終チェック: 未検証 or NG なら止めて入力欄に戻す
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (!validated) {
+        e.preventDefault();
+        // まだチェックしていない場合は今チェック
+        lookup().then(() => {
+          if (validated) {
+            // 検証通ったので改めて submit
+            form.submit();
+          } else {
+            input.focus();
+            input.select();
+          }
+        });
+      }
+    });
+  }
 })();
 </script>
 {% endif %}
