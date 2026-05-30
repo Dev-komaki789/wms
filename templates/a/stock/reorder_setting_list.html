@@ -6,7 +6,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h2 class="mb-0">
-    <i class="bi bi-bell-fill me-2 text-primary"></i>発注設定
+    <i class="bi bi-bell me-2 text-primary"></i>発注設定
   </h2>
   <a href="{% url 'stock:reorder_setting_create' %}" class="btn btn-primary">
     <i class="bi bi-plus-lg"></i> 新規登録
@@ -54,9 +54,9 @@
   <table class="table table-hover align-middle mb-0">
     <thead class="table-light">
       <tr>
-        {% sort_th 'SKU' 'sku' sort dir align='start' %}
+        {% sort_th 'SKU' 'sku' sort dir align='start' width='130px' %}
         {% sort_th '商品名' 'product' sort dir align='start' %}
-        {% sort_th '倉庫' 'warehouse' sort dir align='start' %}
+        {% sort_th '倉庫' 'warehouse' sort dir align='start' width='110px' %}
         {% sort_th '発注点' 'point' sort dir align='end' width='90px' %}
         {% sort_th '推奨発注数' 'qty' sort dir align='end' width='110px' %}
         {% sort_th '安全在庫' 'safety' sort dir align='end' width='100px' %}
@@ -70,9 +70,9 @@
       <tr>
         <td class="text-start font-monospace">{{ s.sku.sku_code }}</td>
         <td class="text-start">{{ s.sku.product.product_name }}</td>
-        <td class="text-start small">
+        <td class="text-start small"
+            title="{{ s.warehouse.warehouse_code }}：{{ s.warehouse.warehouse_name }}">
           <span class="font-monospace">{{ s.warehouse.warehouse_code }}</span>
-          <span class="text-muted">：{{ s.warehouse.warehouse_name }}</span>
         </td>
         <td class="text-end font-monospace">{{ s.reorder_point }}</td>
         <td class="text-end font-monospace">{{ s.reorder_qty }}</td>

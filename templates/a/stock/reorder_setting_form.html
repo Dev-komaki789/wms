@@ -72,14 +72,11 @@
         </div>
       </div>
 
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">ステータス</h6>
       <div class="mb-4">
-        <div class="form-check">
-          {{ form.is_active }}
-          <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
-            {{ form.is_active.label }}
-          </label>
-          <div class="form-text">無効にすると、この SKU×倉庫ではアラートが発火しなくなる</div>
-        </div>
+        {{ form.is_active }}
+        <div class="form-text">無効にすると、この SKU × 倉庫ではアラートが発火しなくなる</div>
+        {% if form.is_active.errors %}<div class="invalid-feedback d-block">{{ form.is_active.errors|join:" " }}</div>{% endif %}
       </div>
 
       <div class="d-flex gap-2 justify-content-end">
@@ -91,4 +88,61 @@
     </form>
   </div>
 </div>
+
+{% if not object %}
+{# 新規登録時のみ: SKU 欄で Enter / blur 時に実在チェック。
+   サーバー側でもバリデーションするが、入力直後にフィードバックを出すことで
+   「Enter を押したけど何の反応もなく submit された」体験を防ぐ。 #}
+<script>
+(function () {
+  const input = document.getElementById('{{ form.sku_code.id_for_label }}');
+  if (!input || input.disabled) return;
+  const url = '{% url "masters:api_sku_lookup" %}';
+  const msg = document.createElement('div');
+  msg.className = 'small mt-1';
+  input.insertAdjacentElement('afterend', msg);
+  let lastCode = '';
+
+  function lookup() {
+    const code = input.value.trim();
+    if (!code || code === lastCode) return;
+    lastCode = code;
+    msg.textContent = '確認中…';
+    msg.className = 'small mt-1 text-muted';
+    fetch(url + '?code=' + encodeURIComponent(code),
+          {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(r => r.json())
+      .then(d => {
+        if (d.found) {
+          msg.textContent = '✓ ' + d.sku_code + '（' + (d.product_name || '') + '）';
+          msg.className = 'small mt-1 text-success';
+          input.classList.remove('is-invalid');
+          input.classList.add('is-valid');
+        } else {
+          msg.textContent = '✗ SKU「' + code + '」は存在しません';
+          msg.className = 'small mt-1 text-danger';
+          input.classList.add('is-invalid');
+          input.classList.remove('is-valid');
+        }
+      })
+      .catch(() => {
+        msg.textContent = '通信エラー';
+        msg.className = 'small mt-1 text-danger';
+      });
+  }
+
+  // Enter で「送信」ではなく「実在チェック」を行う（誤送信防止）。
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); lookup(); }
+  });
+  input.addEventListener('blur', lookup);
+  input.addEventListener('input', function () {
+    if (input.value.trim() !== lastCode) {
+      msg.textContent = '';
+      input.classList.remove('is-valid', 'is-invalid');
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

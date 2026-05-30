@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from masters.models import Area, Location, Sku, Warehouse
 from masters.utils import get_current_warehouse
+from masters.widgets import StatusToggleWidget
 
 from .models import SkuReorderSetting, StockBalance, StocktakeItem, StocktakeSession
 
@@ -589,7 +590,7 @@ class SkuReorderSettingForm(forms.ModelForm):
     class Meta:
         model = SkuReorderSetting
         fields = ['warehouse', 'reorder_point', 'reorder_qty', 'safety_stock', 'is_active']
-        labels = {'is_active': '有効'}
+        labels = {'is_active': 'ステータス'}
         widgets = {
             'warehouse': forms.Select(attrs={'class': 'form-select'}),
             'reorder_point': forms.NumberInput(
@@ -601,7 +602,8 @@ class SkuReorderSettingForm(forms.ModelForm):
             'safety_stock': forms.NumberInput(
                 attrs={'class': 'form-control text-end', 'min': '0', 'placeholder': '例: 10'}
             ),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            # 他マスタと同じ btn-check セグメンテッドボタン
+            'is_active': StatusToggleWidget(),
         }
 
     def __init__(self, *args, **kwargs):

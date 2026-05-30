@@ -1,15 +1,18 @@
 """stock アプリのシグナル群。
 
-主目的: 在庫変動 (StockMovement の保存) を契機に発注アラート (ReorderAlert)
-を自動生成 / 自動クローズする。
+主目的: 在庫変動を契機に発注アラート (ReorderAlert) を自動生成 / 自動クローズ
+する。
 
 発火タイミング:
-  - StockMovement.post_save:
-      影響を受けた (sku × warehouse) の現在庫を再計算し、有効な
+  - StockBalance.post_save:
+      在庫数が更新されたら (sku × warehouse) の現在庫を再集計し、有効な
       SkuReorderSetting があれば reorder_point を下回っているかチェック。
       下回っていて、かつ同じ (sku × warehouse) の open なアラートが無ければ
       新しい ReorderAlert(status=open) を1件作る。
       既に open がある場合は重複作成しない（クローズ後に再度下回ったら新規）。
+
+      ※ StockMovement.post_save にすると StockBalance.save() より先に走って
+      しまい古い値で集計してしまうので、必ず StockBalance 側で受ける。
 
   - InboundOrder.post_save:
       この入荷指示に紐付いた reorder_alerts のうち、入荷指示が
@@ -23,17 +26,13 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 
-@receiver(post_save, sender='stock.StockMovement')
+@receiver(post_save, sender='stock.StockBalance')
 def maybe_create_reorder_alert(sender, instance, created, **kwargs):
-    """StockMovement が記録されたら、対象 SKU × 倉庫の発注点を下回ったか確認。
+    """StockBalance が更新されたら、対象 SKU × 倉庫の発注点を下回ったか確認。
 
-    新規の StockMovement のみ対象（既存レコードの後追い更新では発火しない）。
-    update_fields による絞り込みは StockMovement 側で使われていないので、
-    `created` フラグだけ見れば足りる。
+    新規作成・更新どちらでも発火させる（quantity=0 で新規作成されることも
+    あるため）。集計には instance を含む全ロケの最新値を使うので順序依存しない。
     """
-    if not created:
-        return
-
     # 文字列参照（apps.get_model）を使うのは循環 import 対策。
     from django.apps import apps
 
@@ -42,7 +41,7 @@ def maybe_create_reorder_alert(sender, instance, created, **kwargs):
     ReorderAlert = apps.get_model('stock', 'ReorderAlert')
 
     sku = instance.sku
-    # location.warehouse がこの StockMovement が起きた倉庫。
+    # location.warehouse がこの StockBalance がある倉庫。
     warehouse = instance.location.warehouse
 
     # 有効な発注設定が無ければ何もしない（多くの SKU はそもそも対象外）
@@ -50,7 +49,8 @@ def maybe_create_reorder_alert(sender, instance, created, **kwargs):
     if setting is None:
         return
 
-    # 倉庫内の現在庫合計（複数ロケーション合算）
+    # 倉庫内の現在庫合計（複数ロケーション合算）。post_save 時点では instance も
+    # 含めて DB 反映済みなので、集計でそのまま正しい値が出る。
     current_qty = (
         StockBalance.objects.filter(sku=sku, location__warehouse=warehouse).aggregate(
             total=Sum('quantity')
