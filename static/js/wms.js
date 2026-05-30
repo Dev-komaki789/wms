@@ -26,29 +26,26 @@
       if (!el.getAttribute('max')) el.max = '9999-12-31';
     });
 
-    // <input type="number"> 共通の入力サニタイズ:
-    //   (a) max 属性を超える値は即座にクリップ（maxlength が効かないため）
-    //   (b) 先頭ゼロを正規化（"000"→"0", "0123"→"123"）
-    //       「0」を連発して見かけ上の桁数を増やせるのを防ぐ。
-    // programmatic な value 代入は input イベントを再発火させない仕様なので
-    // 無限ループにはならない。
+    // <input type="number"> 共通の入力サニタイズ。
+    // maxlength が効かないので、max 属性の桁数を上限にタイプ中に切り詰める。
+    // 例: max="999999" の欄に「1234567」と打つと「123456」で止まる。
+    // 999999 へのクリップ（値そのものを丸める）はしない。あくまで桁数制限。
     document.addEventListener('input', function (e) {
       const el = e.target;
       if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
-
-      // (a) max 超過クリップ
       const max = el.getAttribute('max');
-      if (max != null && max !== '') {
-        const maxNum = Number(max);
-        if (Number.isFinite(maxNum)) {
-          const v = el.value;
-          if (v && Number(v) > maxNum) {
-            el.value = String(maxNum);
-          }
-        }
+      if (max == null || max === '') return;
+      const maxLen = String(max).length;
+      if (el.value.length > maxLen) {
+        el.value = el.value.slice(0, maxLen);
       }
+    });
 
-      // (b) 先頭ゼロの正規化
+    // 先頭ゼロの正規化は Enter キー / 離脱（blur）時のみ実行する。
+    // 入力中（input イベント）には触らないので、000 や 001 と打っている途中も
+    // そのまま見えて、確定操作で「0」「1」に整う。
+    function normalizeLeadingZero(el) {
+      if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
       const v = el.value;
       if (/^0\d/.test(v)) {
         // 「0123」「001」など → 先頭ゼロを全部消す
@@ -57,6 +54,12 @@
         // 「000」など 0 の連続のみ → 「0」1つに
         el.value = '0';
       }
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') normalizeLeadingZero(e.target);
+    });
+    document.addEventListener('focusout', function (e) {
+      normalizeLeadingZero(e.target);
     });
 
     // 最初の入力フィールドに自動フォーカス。
