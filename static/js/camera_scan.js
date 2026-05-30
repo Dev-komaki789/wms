@@ -95,21 +95,38 @@
   let candidate = '';     // 連続一致を数えている候補値
   let candidateHits = 0;
 
-  // 検出は「映像の中央 GUIDE_W × GUIDE_H 領域」内のコードに限定する。
+  // 検出はガイド枠（CSS .hh-cam-guide）内に中心があるコードに限定する。
   // 視界の端に偶然映ったバーコードを誤って拾わないための対策。
-  // CSS の .hh-cam-guide も同じ比率に揃えて視覚と検出を一致させる
-  // （handheld_base.html を見ること）。
+  // GUIDE_W / GUIDE_H は CSS の .hh-cam-guide の幅・高さ比率と必ず一致させる。
   const GUIDE_W = 0.65;
   const GUIDE_H = 0.25;
 
-  function isCenterInGuide(bb, vw, vh) {
-    if (!bb || !vw || !vh) return false;
+  // BarcodeDetector の boundingBox は video.videoWidth × videoHeight（元映像
+  // 解像度）の座標系。一方 CSS の .hh-cam-guide は表示エリア（video の
+  // clientWidth × clientHeight）に対する比率で配置されている。
+  // video は object-fit:cover で表示されるため元映像の一部だけが表示されて
+  // いる状態で、両者の座標系は単純比例しない。
+  // ここで「表示中に見えている元映像の領域」を逆算し、その中の中央
+  // GUIDE_W × GUIDE_H をガイド枠とみなす。
+  function isCenterInGuide(bb, video) {
+    if (!bb || !video) return false;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const cw = video.clientWidth, ch = video.clientHeight;
+    if (!vw || !vh || !cw || !ch) return false;
+    // object-fit:cover のスケール（表示エリアを覆うように拡大）
+    const scale = Math.max(cw / vw, ch / vh);
+    // 元映像のうち、実際に画面に見えている領域（中央部のみ）
+    const visibleW = cw / scale;
+    const visibleH = ch / scale;
+    const offsetX = (vw - visibleW) / 2;
+    const offsetY = (vh - visibleH) / 2;
+    // ガイド枠を元映像座標に変換（見えている領域の中央 GUIDE_W × GUIDE_H）
+    const gw = visibleW * GUIDE_W;
+    const gh = visibleH * GUIDE_H;
+    const gx = offsetX + (visibleW - gw) / 2;
+    const gy = offsetY + (visibleH - gh) / 2;
     const cx = bb.x + bb.width / 2;
     const cy = bb.y + bb.height / 2;
-    const gw = vw * GUIDE_W;
-    const gh = vh * GUIDE_H;
-    const gx = (vw - gw) / 2;
-    const gy = (vh - gh) / 2;
     return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
   }
 
@@ -213,13 +230,11 @@
         try {
           const results = await detector.detect(video);
           if (results && results.length > 0) {
-            // ガイド枠（中央 GUIDE_W × GUIDE_H）内に中心があるコードのみ採用。
-            // 視界の端に映った別バーコードはここで弾く。複数が枠内なら最初の1つ。
-            const vw = video.videoWidth;
-            const vh = video.videoHeight;
+            // ガイド枠内に中心があるコードのみ採用。視界の端に映った別バーコードは
+            // ここで弾く。複数が枠内なら最初の1つ。
             let value = '';
             for (const r of results) {
-              if (isCenterInGuide(r.boundingBox, vw, vh)) {
+              if (isCenterInGuide(r.boundingBox, video)) {
                 value = (r.rawValue || '').trim();
                 if (value) break;
               }
