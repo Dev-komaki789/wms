@@ -26,19 +26,36 @@
       if (!el.getAttribute('max')) el.max = '9999-12-31';
     });
 
-    // <input type="number"> は maxlength が効かないので、max 属性が
-    // 設定された数値入力欄に対し、入力イベントで上限を超えた値を即座に
-    // クリップする（タイプした瞬間に上限を超えた桁数を入れさせない）。
+    // <input type="number"> 共通の入力サニタイズ:
+    //   (a) max 属性を超える値は即座にクリップ（maxlength が効かないため）
+    //   (b) 先頭ゼロを正規化（"000"→"0", "0123"→"123"）
+    //       「0」を連発して見かけ上の桁数を増やせるのを防ぐ。
+    // programmatic な value 代入は input イベントを再発火させない仕様なので
+    // 無限ループにはならない。
     document.addEventListener('input', function (e) {
       const el = e.target;
       if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
+
+      // (a) max 超過クリップ
       const max = el.getAttribute('max');
-      if (max == null || max === '') return;
-      const maxNum = Number(max);
-      if (!Number.isFinite(maxNum)) return;
+      if (max != null && max !== '') {
+        const maxNum = Number(max);
+        if (Number.isFinite(maxNum)) {
+          const v = el.value;
+          if (v && Number(v) > maxNum) {
+            el.value = String(maxNum);
+          }
+        }
+      }
+
+      // (b) 先頭ゼロの正規化
       const v = el.value;
-      if (v && Number(v) > maxNum) {
-        el.value = String(maxNum);
+      if (/^0\d/.test(v)) {
+        // 「0123」「001」など → 先頭ゼロを全部消す
+        el.value = v.replace(/^0+/, '');
+      } else if (/^0{2,}$/.test(v)) {
+        // 「000」など 0 の連続のみ → 「0」1つに
+        el.value = '0';
       }
     });
 
