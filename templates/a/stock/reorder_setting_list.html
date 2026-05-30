@@ -55,13 +55,13 @@
     <thead class="table-light">
       <tr>
         {% sort_th 'SKU' 'sku' sort dir align='start' width='130px' %}
-        {% sort_th '商品名' 'product' sort dir align='start' %}
+        {% sort_th '商品名' 'product' sort dir align='start' width='260px' %}
         {% sort_th '倉庫' 'warehouse' sort dir align='start' width='110px' %}
         {% sort_th '発注点' 'point' sort dir align='end' width='90px' %}
         {% sort_th '推奨発注数' 'qty' sort dir align='end' width='110px' %}
         {% sort_th '安全在庫' 'safety' sort dir align='end' width='100px' %}
         {% sort_th 'ステータス' 'status' sort dir align='center' width='100px' %}
-        {% sort_th '更新日時' 'updated' sort dir align='end' width='130px' %}
+        {% sort_th '更新日時' 'updated' sort dir align='end' width='150px' %}
         <th class="text-center" style="width: 160px">操作</th>
       </tr>
     </thead>
@@ -69,7 +69,8 @@
       {% for s in settings_list %}
       <tr>
         <td class="text-start font-monospace">{{ s.sku.sku_code }}</td>
-        <td class="text-start">{{ s.sku.product.product_name }}</td>
+        <td class="text-start text-truncate" style="max-width: 260px"
+            title="{{ s.sku.product.product_name }}">{{ s.sku.product.product_name }}</td>
         <td class="text-start small"
             title="{{ s.warehouse.warehouse_code }}：{{ s.warehouse.warehouse_name }}">
           <span class="font-monospace">{{ s.warehouse.warehouse_code }}</span>
@@ -84,7 +85,7 @@
             <span class="badge bg-secondary">無効</span>
           {% endif %}
         </td>
-        <td class="text-end text-muted small font-monospace">{{ s.updated_at|date:"Y/m/d H:i" }}</td>
+        <td class="text-end text-muted small font-monospace text-nowrap">{{ s.updated_at|date:"Y/m/d H:i" }}</td>
         <td class="text-center">
           <a href="{% url 'stock:reorder_setting_update' s.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
           <a href="{% url 'stock:reorder_setting_delete' s.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
