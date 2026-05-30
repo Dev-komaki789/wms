@@ -79,11 +79,12 @@
         {% if form.is_active.errors %}<div class="invalid-feedback d-block">{{ form.is_active.errors|join:" " }}</div>{% endif %}
       </div>
 
+      {# 他マスタフォームと同じ「保存ボタン（左）→ キャンセル（右）」の順 #}
       <div class="d-flex gap-2 justify-content-end">
-        <a href="{% url 'stock:reorder_setting_list' %}" class="btn btn-outline-secondary">キャンセル</a>
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-check-lg me-1"></i>{% if object %}更新{% else %}登録{% endif %}
         </button>
+        <a href="{% url 'stock:reorder_setting_list' %}" class="btn btn-outline-secondary">キャンセル</a>
       </div>
     </form>
   </div>

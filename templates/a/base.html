@@ -36,6 +36,10 @@
        印刷時は各印刷テンプレの main.container{padding:0} でリセットされる。 */
     main.container { padding-bottom: 1.5rem; }
 
+    /* 数値セル（text-end）が列の右端に貼り付いて見えるのを防ぐ。
+       一覧テーブル全般の共通余白として、右寄せセルだけ右パディングを足す。 */
+    .table > :not(caption) > * > .text-end { padding-right: 1rem; }
+
     /* 一覧・照会テーブルを枠内でスクロール（縦長でもページ全体が伸びない）。
        見出し行は枠の上端に固定。ページ送り UI は枠の外に置く。 */
     .table-scroll { max-height: 60vh; overflow: auto; }
