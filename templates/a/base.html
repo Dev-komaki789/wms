@@ -41,13 +41,10 @@
     .table > :not(caption) > * > .text-end { padding-right: 1rem; }
 
     /* 右寄せの数値入力（form-control + text-end）はブラウザのスピンボタン
-       （上下矢印）の上に数字が乗ってしまうので、右パディング＋スピンボタン
-       自体の左マージンの両方で離す。Chrome/Edge は ::-webkit-inner-spin-button
-       が効く。Firefox は spin button のサイズが小さく重なりにくいので
-       padding 側だけで十分。 */
-    input[type="number"].form-control.text-end { padding-right: 2.5rem; }
+       （上下矢印）の上に数字が乗ってしまうので、スピンボタンに左マージンを
+       付けて数字と離す。padding は通常どおりにして数字を枠の右寄りに保つ。 */
     input[type="number"].form-control.text-end::-webkit-inner-spin-button {
-      margin-left: 0.5rem;
+      margin-left: 0.75rem;
     }
 
     /* 一覧・照会テーブルを枠内でスクロール（縦長でもページ全体が伸びない）。
