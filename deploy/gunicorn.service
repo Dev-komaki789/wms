@@ -14,9 +14,14 @@ After=network.target
 User=ubuntu
 Group=www-data
 WorkingDirectory=/home/ubuntu/wms
-# uv sync で作られる venv 内の gunicorn を直接起動する
+# uv sync で作られる venv 内の gunicorn を直接起動する。
+# --preload: worker を fork する前にアプリを1回読み込んで共有する。
+#   3 worker でも初回のコールドスタートが1回で済み、メモリも CoW で抑えられる。
+# --timeout 60: 重い集計クエリ等で worker が殺されないようデフォルト30秒から延長。
 ExecStart=/home/ubuntu/wms/.venv/bin/gunicorn \
     --workers 3 \
+    --preload \
+    --timeout 60 \
     --bind 127.0.0.1:8000 \
     config.wsgi:application
 Restart=always
