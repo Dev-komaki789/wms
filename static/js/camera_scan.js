@@ -95,39 +95,41 @@
   let candidate = '';     // 連続一致を数えている候補値
   let candidateHits = 0;
 
-  // 検出はガイド枠（CSS .hh-cam-guide）内に中心があるコードに限定する。
+  // 検出はガイド枠（CSS .hh-cam-guide）内のピクセルのみに限定する。
   // 視界の端に偶然映ったバーコードを誤って拾わないための対策。
   // GUIDE_W / GUIDE_H は CSS の .hh-cam-guide の幅・高さ比率と必ず一致させる。
   const GUIDE_W = 0.65;
   const GUIDE_H = 0.25;
 
-  // BarcodeDetector の boundingBox は video.videoWidth × videoHeight（元映像
-  // 解像度）の座標系。一方 CSS の .hh-cam-guide は表示エリア（video の
-  // clientWidth × clientHeight）に対する比率で配置されている。
-  // video は object-fit:cover で表示されるため元映像の一部だけが表示されて
-  // いる状態で、両者の座標系は単純比例しない。
-  // ここで「表示中に見えている元映像の領域」を逆算し、その中の中央
-  // GUIDE_W × GUIDE_H をガイド枠とみなす。
-  function isCenterInGuide(bb, video) {
-    if (!bb || !video) return false;
+  // 検出用の作業 Canvas。毎フレーム、video のうち「画面に映っている部分」の
+  // 中央 GUIDE_W × GUIDE_H をここにコピーし、その Canvas に対して
+  // BarcodeDetector を走らせる。Canvas に存在しないピクセル（＝枠外の映像）は
+  // 物理的に検出されないので、boundingBox での判定より確実に枠外を排除できる。
+  const cropCanvas = document.createElement('canvas');
+  const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
+
+  // video から「画面に見えている領域の中央 GUIDE_W × GUIDE_H」を切り出して
+  // Canvas に描く。video が object-fit:cover で表示されるため、元映像の一部
+  // しか画面に映っていない点を考慮し、元映像 (videoWidth × videoHeight) の
+  // どこを切るかを逆算する。
+  function drawGuideToCanvas(video) {
     const vw = video.videoWidth, vh = video.videoHeight;
     const cw = video.clientWidth, ch = video.clientHeight;
-    if (!vw || !vh || !cw || !ch) return false;
-    // object-fit:cover のスケール（表示エリアを覆うように拡大）
+    if (!vw || !vh || !cw || !ch) return null;
     const scale = Math.max(cw / vw, ch / vh);
-    // 元映像のうち、実際に画面に見えている領域（中央部のみ）
     const visibleW = cw / scale;
     const visibleH = ch / scale;
     const offsetX = (vw - visibleW) / 2;
     const offsetY = (vh - visibleH) / 2;
-    // ガイド枠を元映像座標に変換（見えている領域の中央 GUIDE_W × GUIDE_H）
-    const gw = visibleW * GUIDE_W;
-    const gh = visibleH * GUIDE_H;
-    const gx = offsetX + (visibleW - gw) / 2;
-    const gy = offsetY + (visibleH - gh) / 2;
-    const cx = bb.x + bb.width / 2;
-    const cy = bb.y + bb.height / 2;
-    return cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh;
+    const cropW = visibleW * GUIDE_W;
+    const cropH = visibleH * GUIDE_H;
+    const cropX = offsetX + (visibleW - cropW) / 2;
+    const cropY = offsetY + (visibleH - cropH) / 2;
+    cropCanvas.width = Math.max(1, Math.round(cropW));
+    cropCanvas.height = Math.max(1, Math.round(cropH));
+    cropCtx.drawImage(video, cropX, cropY, cropW, cropH,
+                      0, 0, cropCanvas.width, cropCanvas.height);
+    return cropCanvas;
   }
 
   function ensureModal() {
@@ -228,18 +230,15 @@
       if (!busy && video.readyState >= 2 && video.videoWidth > 0) {
         busy = true;
         try {
-          const results = await detector.detect(video);
-          if (results && results.length > 0) {
-            // ガイド枠内に中心があるコードのみ採用。視界の端に映った別バーコードは
-            // ここで弾く。複数が枠内なら最初の1つ。
-            let value = '';
-            for (const r of results) {
-              if (isCenterInGuide(r.boundingBox, video)) {
-                value = (r.rawValue || '').trim();
-                if (value) break;
-              }
+          // 画面のガイド枠に当たる部分だけを Canvas に切り出してから検出する。
+          // 枠外のバーコードは Canvas に入らないので物理的に検出されない。
+          const crop = drawGuideToCanvas(video);
+          if (crop) {
+            const results = await detector.detect(crop);
+            if (results && results.length > 0) {
+              const value = (results[0].rawValue || '').trim();
+              if (value) registerCandidate(value);
             }
-            if (value) registerCandidate(value);
           }
         } catch (e) {
           // 検出途中の一時エラーは無視（連続検出で吸収される）
