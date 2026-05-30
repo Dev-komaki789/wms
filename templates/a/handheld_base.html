@@ -180,9 +180,10 @@
     height: 100%;
     object-fit: cover;
   }
-  /* 中央に半透明の読み取りガイド枠。サイズは camera_scan.js の GUIDE_W/GUIDE_H
-     と揃える（検出はこの枠内に中心があるコードだけ採用するため、視覚と検出を
-     一致させる）。枠を狭めると枠外バーコードの誤読を確実に弾ける。 */
+  /* 中央に半透明の読み取りガイド枠。サイズは camera_scan.js の DOM 切り抜き
+     基準と一致する（CSS のこの要素を getBoundingClientRect() で測って Canvas
+     に切り抜くため、ここを変えるだけで検出範囲も連動する）。
+     枠線色は最新JSが反映されたかを実機で識別しやすくするため蛍光シアン。 */
   .hh-cam-guide {
     position: absolute;
     top: 50%;
@@ -190,7 +191,7 @@
     width: 65%;
     height: 25%;
     transform: translate(-50%, -50%);
-    border: 2px solid rgba(255,255,255,.9);
+    border: 3px solid #00e5ff;
     border-radius: .5rem;
     box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
     pointer-events: none;
