@@ -101,35 +101,60 @@
   const GUIDE_W = 0.65;
   const GUIDE_H = 0.25;
 
-  // 検出用の作業 Canvas。毎フレーム、video のうち「画面に映っている部分」の
-  // 中央 GUIDE_W × GUIDE_H をここにコピーし、その Canvas に対して
-  // BarcodeDetector を走らせる。Canvas に存在しないピクセル（＝枠外の映像）は
-  // 物理的に検出されないので、boundingBox での判定より確実に枠外を排除できる。
+  // 検出用の作業 Canvas。毎フレーム、画面上のガイド枠の領域だけをここにコピー
+  // して BarcodeDetector に渡す。Canvas に映っていないピクセル（＝枠外の映像）
+  // は物理的に検出器に届かないので確実に枠外バーコードを弾ける。
   const cropCanvas = document.createElement('canvas');
   const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
 
-  // video から「画面に見えている領域の中央 GUIDE_W × GUIDE_H」を切り出して
-  // Canvas に描く。video が object-fit:cover で表示されるため、元映像の一部
-  // しか画面に映っていない点を考慮し、元映像 (videoWidth × videoHeight) の
-  // どこを切るかを逆算する。
+  // CSS の .hh-cam-guide の位置とサイズを基準に、video の元映像（videoWidth ×
+  // videoHeight）のどこを切り抜くかを直接計算する。getBoundingClientRect
+  // で実際の画面上の位置（CSS pixel）を取り、video の表示エリアとの位置関係
+  // から逆算する方式に変更。座標系の解釈ズレを排除する。
   function drawGuideToCanvas(video) {
+    const guide = document.querySelector('.hh-cam-guide');
+    if (!guide) return null;
     const vw = video.videoWidth, vh = video.videoHeight;
-    const cw = video.clientWidth, ch = video.clientHeight;
-    if (!vw || !vh || !cw || !ch) return null;
-    const scale = Math.max(cw / vw, ch / vh);
-    const visibleW = cw / scale;
-    const visibleH = ch / scale;
-    const offsetX = (vw - visibleW) / 2;
-    const offsetY = (vh - visibleH) / 2;
-    const cropW = visibleW * GUIDE_W;
-    const cropH = visibleH * GUIDE_H;
-    const cropX = offsetX + (visibleW - cropW) / 2;
-    const cropY = offsetY + (visibleH - cropH) / 2;
+    if (!vw || !vh) return null;
+    const vRect = video.getBoundingClientRect();
+    const gRect = guide.getBoundingClientRect();
+    if (!vRect.width || !vRect.height) return null;
+    // object-fit:cover の実スケール（元映像が表示エリアを覆うように引き伸ばし）
+    const scale = Math.max(vRect.width / vw, vRect.height / vh);
+    // 拡大後の元映像サイズ（表示エリアに描かれる前の論理サイズ）
+    const dispW = vw * scale;
+    const dispH = vh * scale;
+    // 表示エリアからのはみ出し（クリップされる量）の半分
+    const overflowX = (dispW - vRect.width) / 2;
+    const overflowY = (dispH - vRect.height) / 2;
+    // ガイド枠を「拡大後の元映像」座標に変換 → スケールで割って元映像座標に
+    const cropX = ((gRect.left - vRect.left) + overflowX) / scale;
+    const cropY = ((gRect.top - vRect.top) + overflowY) / scale;
+    const cropW = gRect.width / scale;
+    const cropH = gRect.height / scale;
     cropCanvas.width = Math.max(1, Math.round(cropW));
     cropCanvas.height = Math.max(1, Math.round(cropH));
     cropCtx.drawImage(video, cropX, cropY, cropW, cropH,
                       0, 0, cropCanvas.width, cropCanvas.height);
     return cropCanvas;
+  }
+
+  // === デバッグ表示 === Canvas の中身を画面右下に小さく表示する。
+  // 実機で「検出器に何が渡っているか」を目で確認するための暫定機能。
+  // URL に ?camdebug を付けたときだけ有効化する。
+  const DEBUG = /[?&]camdebug\b/.test(location.search);
+  let debugCanvas = null;
+  function showDebug() {
+    if (!DEBUG) return;
+    if (!debugCanvas) {
+      debugCanvas = document.createElement('canvas');
+      debugCanvas.style.cssText = 'position:fixed;right:8px;bottom:8px;'
+        + 'width:140px;height:auto;border:2px solid #0ff;z-index:3000;background:#000';
+      document.body.appendChild(debugCanvas);
+    }
+    debugCanvas.width = cropCanvas.width;
+    debugCanvas.height = cropCanvas.height;
+    debugCanvas.getContext('2d').drawImage(cropCanvas, 0, 0);
   }
 
   function ensureModal() {
@@ -234,6 +259,7 @@
           // 枠外のバーコードは Canvas に入らないので物理的に検出されない。
           const crop = drawGuideToCanvas(video);
           if (crop) {
+            showDebug();
             const results = await detector.detect(crop);
             if (results && results.length > 0) {
               const value = (results[0].rawValue || '').trim();
