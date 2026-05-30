@@ -44,16 +44,15 @@
     // 先頭ゼロの正規化は Enter キー / 離脱（blur）時のみ実行する。
     // 入力中（input イベント）には触らないので、000 や 001 と打っている途中も
     // そのまま見えて、確定操作で「0」「1」に整う。
+    // 整数の先頭ゼロのみ対象。「0.5」「-1」など小数点・符号付きは触らない。
     function normalizeLeadingZero(el) {
       if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
       const v = el.value;
-      if (/^0\d/.test(v)) {
-        // 「0123」「001」など → 先頭ゼロを全部消す
-        el.value = v.replace(/^0+/, '');
-      } else if (/^0{2,}$/.test(v)) {
-        // 「000」など 0 の連続のみ → 「0」1つに
-        el.value = '0';
-      }
+      // 「0」「123」「100」「0.5」「-1」「空」などは何もしない。
+      // 「0+数字以上」のときだけ整える（「0」単体は除外）。
+      if (v === '' || v === '0' || !/^0+\d*$/.test(v)) return;
+      const stripped = v.replace(/^0+/, '');
+      el.value = stripped === '' ? '0' : stripped;
     }
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') normalizeLeadingZero(e.target);
