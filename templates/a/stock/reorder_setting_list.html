@@ -1,0 +1,105 @@
+{% extends 'a/base.html' %}
+{% load wms_sort %}
+
+{% block title %}発注設定{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="bi bi-bell-fill me-2 text-primary"></i>発注設定
+  </h2>
+  <a href="{% url 'stock:reorder_setting_create' %}" class="btn btn-primary">
+    <i class="bi bi-plus-lg"></i> 新規登録
+  </a>
+</div>
+
+<div class="card">
+  {# 検索バー #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">キーワード（SKU / JAN / 商品名）</label>
+        <input type="text" name="q" class="form-control form-control-sm" maxlength="100"
+               value="{{ filters.q }}" placeholder="例: SKU-001 / 商品名">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">倉庫</label>
+        <select name="warehouse" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for wh in warehouses %}
+            <option value="{{ wh.warehouse_code }}" {% if filters.warehouse == wh.warehouse_code %}selected{% endif %}>
+              {{ wh.warehouse_code }}：{{ wh.warehouse_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          <option value="active" {% if filters.status == 'active' %}selected{% endif %}>有効</option>
+          <option value="inactive" {% if filters.status == 'inactive' %}selected{% endif %}>無効</option>
+        </select>
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> 検索</button>
+        <a href="{% url 'stock:reorder_setting_list' %}" class="btn btn-outline-secondary btn-sm">クリア</a>
+      </div>
+    </form>
+  </div>
+  <div class="px-3 py-2 border-bottom bg-white small text-muted">
+    該当: <strong class="text-dark">{{ page_obj.paginator.count }}</strong> 件
+  </div>
+  <div class="table-scroll">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        {% sort_th 'SKU' 'sku' sort dir align='start' %}
+        {% sort_th '商品名' 'product' sort dir align='start' %}
+        {% sort_th '倉庫' 'warehouse' sort dir align='start' %}
+        {% sort_th '発注点' 'point' sort dir align='end' width='90px' %}
+        {% sort_th '推奨発注数' 'qty' sort dir align='end' width='110px' %}
+        {% sort_th '安全在庫' 'safety' sort dir align='end' width='100px' %}
+        {% sort_th 'ステータス' 'status' sort dir align='center' width='100px' %}
+        {% sort_th '更新日時' 'updated' sort dir align='end' width='130px' %}
+        <th class="text-center" style="width: 160px">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in settings_list %}
+      <tr>
+        <td class="text-start font-monospace">{{ s.sku.sku_code }}</td>
+        <td class="text-start">{{ s.sku.product.product_name }}</td>
+        <td class="text-start small">
+          <span class="font-monospace">{{ s.warehouse.warehouse_code }}</span>
+          <span class="text-muted">：{{ s.warehouse.warehouse_name }}</span>
+        </td>
+        <td class="text-end font-monospace">{{ s.reorder_point }}</td>
+        <td class="text-end font-monospace">{{ s.reorder_qty }}</td>
+        <td class="text-end font-monospace text-muted">{{ s.safety_stock }}</td>
+        <td class="text-center">
+          {% if s.is_active %}
+            <span class="badge bg-success">有効</span>
+          {% else %}
+            <span class="badge bg-secondary">無効</span>
+          {% endif %}
+        </td>
+        <td class="text-end text-muted small font-monospace">{{ s.updated_at|date:"Y/m/d H:i" }}</td>
+        <td class="text-center">
+          <a href="{% url 'stock:reorder_setting_update' s.pk %}" class="btn btn-sm btn-outline-primary">編集</a>
+          <a href="{% url 'stock:reorder_setting_delete' s.pk %}" class="btn btn-sm btn-outline-danger">削除</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="9" class="text-center text-muted py-4">
+          {% if filters.q or filters.warehouse or filters.status %}条件に一致する発注設定がありません{% else %}発注設定がまだ登録されていません{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% include 'a/_pagination.html' %}
+</div>
+{% endblock %}

@@ -372,3 +372,117 @@ class StocktakeAdjustment(models.Model):
 
     def __str__(self):
         return f'adjust {self.stocktake_item}'
+
+
+class SkuReorderSetting(models.Model):
+    """SKU × 倉庫ごとの発注点・推奨発注数。
+
+    現在庫がこの reorder_point を下回ったときに ReorderAlert を発火する。
+    倉庫ごとに違う発注点を持てる（例: 拠点ごとに販売量が違う）。
+    """
+
+    sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
+    reorder_point = models.PositiveIntegerField(
+        '発注点', help_text='現在庫がこの数を下回ったらアラートを出す'
+    )
+    reorder_qty = models.PositiveIntegerField(
+        '推奨発注数',
+        validators=[MinValueValidator(1)],
+        help_text='バイヤーへの推奨発注数（参考値）',
+    )
+    safety_stock = models.PositiveIntegerField(
+        '安全在庫', default=0, help_text='安全在庫数（reorder_point の算出基準）'
+    )
+    auto_order = models.BooleanField(
+        '自動発注',
+        default=False,
+        help_text='True で発注点到達時に入荷指示を自動生成（運用は手動承認のため UI 上は無効）',
+    )
+    is_active = models.BooleanField('有効', default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='created_sku_reorder_settings',
+        verbose_name='作成者',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'sku_reorder_settings'
+        verbose_name = '発注設定'
+        verbose_name_plural = '発注設定'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['sku', 'warehouse'], name='uk_sku_reorder_settings_sku_warehouse'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['warehouse'], name='idx_sku_reord_set_wh'),
+            models.Index(fields=['is_active'], name='idx_sku_reord_set_active'),
+        ]
+
+    def __str__(self):
+        return f'{self.sku.sku_code}@{self.warehouse.warehouse_code}'
+
+
+class ReorderAlert(models.Model):
+    """在庫が発注点を下回った時に発火する発注アラート。
+
+    発生時点のスナップショット（quantity_at_alert / reorder_point_at_alert /
+    recommended_qty）を持つ。発注点や推奨数を後で変えても、当時の判断材料が
+    そのまま残るようにするため。
+    inbound_order_id はアラート→入荷指示変換で紐付け、入荷完了で resolved に
+    なる（シグナル）。
+    """
+
+    class Status(models.TextChoices):
+        OPEN = 'open', '未対応'
+        ORDERED = 'ordered', '発注済み'
+        RESOLVED = 'resolved', '入庫済み'
+        IGNORED = 'ignored', '対応不要'
+
+    sku = models.ForeignKey(Sku, on_delete=models.PROTECT, verbose_name='SKU')
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, verbose_name='倉庫')
+    reorder_setting = models.ForeignKey(
+        SkuReorderSetting,
+        on_delete=models.PROTECT,
+        related_name='alerts',
+        verbose_name='発注設定',
+    )
+    quantity_at_alert = models.IntegerField('発生時在庫数')
+    reorder_point_at_alert = models.PositiveIntegerField('発生時発注点')
+    recommended_qty = models.PositiveIntegerField('発生時推奨発注数')
+    status = models.CharField(
+        'ステータス', max_length=20, choices=Status.choices, default=Status.OPEN
+    )
+    # 循環 import を避けるため文字列で参照
+    inbound_order = models.ForeignKey(
+        'inbound.InboundOrder',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reorder_alerts',
+        verbose_name='対応した入荷指示',
+    )
+    resolved_at = models.DateTimeField('解消日時', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'reorder_alerts'
+        verbose_name = '発注アラート'
+        verbose_name_plural = '発注アラート'
+        indexes = [
+            models.Index(fields=['sku'], name='idx_reorder_alerts_sku'),
+            models.Index(fields=['warehouse'], name='idx_reorder_alerts_wh'),
+            models.Index(fields=['status'], name='idx_reorder_alerts_status'),
+            models.Index(fields=['inbound_order'], name='idx_reorder_alerts_io'),
+            models.Index(
+                fields=['sku', 'warehouse', 'status'], name='idx_reorder_alerts_sku_wh_st'
+            ),
+        ]
+
+    def __str__(self):
+        return f'#{self.pk} {self.sku.sku_code}@{self.warehouse.warehouse_code}'

@@ -1,0 +1,125 @@
+{% extends 'a/base.html' %}
+{% load wms_sort %}
+
+{% block title %}発注アラート照会{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">
+    <i class="bi bi-exclamation-octagon-fill me-2 text-warning"></i>発注アラート照会
+  </h2>
+  <a href="{% url 'stock:reorder_setting_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-bell-fill me-1"></i>発注設定マスタへ
+  </a>
+</div>
+
+<div class="card">
+  {# 検索バー #}
+  <div class="card-body py-2 bg-light border-bottom">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">キーワード（SKU / JAN / 商品名）</label>
+        <input type="text" name="q" class="form-control form-control-sm" maxlength="100"
+               value="{{ filters.q }}" placeholder="例: SKU-001 / 商品名">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">ステータス</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">倉庫</label>
+        <select name="warehouse" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for wh in warehouses %}
+            <option value="{{ wh.warehouse_code }}" {% if filters.warehouse == wh.warehouse_code %}selected{% endif %}>
+              {{ wh.warehouse_code }}：{{ wh.warehouse_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">発生日 から</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">発生日 まで</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to }}">
+      </div>
+      <div class="col-md-1 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+        <a href="{% url 'stock:reorder_alert_list' %}" class="btn btn-outline-secondary btn-sm">×</a>
+      </div>
+    </form>
+  </div>
+
+  {% if stats %}
+    <div class="px-3 py-2 border-bottom bg-white small text-muted d-flex flex-wrap gap-3">
+      <span>該当: <strong class="text-dark">{{ stats.total }}</strong> 件</span>
+      <span><span class="badge bg-danger">未対応</span> {{ stats.open_count }}</span>
+      <span><span class="badge bg-info">発注済み</span> {{ stats.ordered }}</span>
+      <span><span class="badge bg-success">入庫済み</span> {{ stats.resolved }}</span>
+      <span><span class="badge bg-secondary">対応不要</span> {{ stats.ignored }}</span>
+    </div>
+    <div class="table-scroll">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            {% sort_th '発生日時' 'occurred' sort dir align='start' width='150px' %}
+            {% sort_th 'SKU' 'sku' sort dir align='start' %}
+            {% sort_th '商品名' 'product' sort dir align='start' %}
+            {% sort_th '倉庫' 'warehouse' sort dir align='start' %}
+            {% sort_th '発生時在庫' 'quantity' sort dir align='end' width='100px' %}
+            {% sort_th '発生時発注点' 'point' sort dir align='end' width='110px' %}
+            {% sort_th '推奨発注数' 'recommended' sort dir align='end' width='100px' %}
+            {% sort_th 'ステータス' 'status' sort dir align='center' width='110px' %}
+            <th class="text-start" style="width: 130px">入荷指示</th>
+            <th class="text-center" style="width: 80px">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in alerts %}
+          <tr>
+            <td class="text-start small font-monospace">{{ a.created_at|date:"Y/m/d H:i" }}</td>
+            <td class="text-start font-monospace">{{ a.sku.sku_code }}</td>
+            <td class="text-start">{{ a.sku.product.product_name }}</td>
+            <td class="text-start small">{{ a.warehouse.warehouse_code }}</td>
+            <td class="text-end font-monospace">{{ a.quantity_at_alert }}</td>
+            <td class="text-end font-monospace text-muted">{{ a.reorder_point_at_alert }}</td>
+            <td class="text-end font-monospace">{{ a.recommended_qty }}</td>
+            <td class="text-center">
+              {% if a.status == 'open' %}<span class="badge bg-danger">未対応</span>
+              {% elif a.status == 'ordered' %}<span class="badge bg-info">発注済み</span>
+              {% elif a.status == 'resolved' %}<span class="badge bg-success">入庫済み</span>
+              {% elif a.status == 'ignored' %}<span class="badge bg-secondary">対応不要</span>
+              {% endif %}
+            </td>
+            <td class="text-start small font-monospace">
+              {% if a.inbound_order %}{{ a.inbound_order.inbound_order_code }}{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-center">
+              <a href="{% url 'stock:reorder_alert_detail' a.pk %}" class="btn btn-sm btn-outline-primary">詳細</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="text-center text-muted py-4">条件に一致する発注アラートがありません</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'a/_pagination.html' %}
+  {% elif searched %}
+    <div class="card-body py-5 text-center text-muted">
+      <i class="bi bi-search me-1"></i>条件に一致する発注アラートがありません
+    </div>
+  {% else %}
+    <div class="card-body py-5 text-center text-muted">
+      <i class="bi bi-arrow-up me-1"></i>検索条件を指定して検索ボタンを押してください
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

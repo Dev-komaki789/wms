@@ -111,6 +111,8 @@
   {% if not is_handheld_worker %}
   {% include 'a/_menu_card.html' with url='stock:inquiry' icon='bi-list-stars' label='在庫照会' %}
   {% include 'a/_menu_card.html' with url='stock:movement_inquiry' icon='bi-clock-history' label='入出庫履歴照会' %}
+  {% include 'a/_menu_card.html' with url='stock:reorder_setting_list' icon='bi-bell-fill' label='発注設定' %}
+  {% include 'a/_menu_card.html' with url='stock:reorder_alert_list' icon='bi-exclamation-octagon-fill' label='発注アラート照会' %}
   {% endif %}
   {% include 'a/_menu_card.html' with url='stock:handheld_inquiry' icon='bi-search' label='在庫照会' handheld=True %}
   {% include 'a/_menu_card.html' with url='stock:handheld_in' icon='bi-box-arrow-in-down' label='計画外入庫' handheld=True %}

@@ -1,0 +1,94 @@
+{% extends 'a/base.html' %}
+{% block body_class %}narrow{% endblock %}
+
+{% block title %}{% if object %}発注設定 編集{% else %}発注設定 新規登録{% endif %}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'stock:reorder_setting_list' %}">発注設定</a></li>
+    <li class="breadcrumb-item active">{% if object %}編集{% else %}新規登録{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4">{% if object %}発注設定 編集{% else %}発注設定 新規登録{% endif %}</h2>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors|join:" " }}</div>
+      {% endif %}
+
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">対象</h6>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block" for="{{ form.sku_code.id_for_label }}">
+            {{ form.sku_code.label }} <span class="text-danger">*</span>
+            {% if object %}<span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">変更不可</span>{% endif %}
+          </label>
+          {{ form.sku_code }}
+          <div class="form-text">SKU コードまたは JAN コードで指定（実在チェックあり）</div>
+          {% if form.sku_code.errors %}<div class="invalid-feedback d-block">{{ form.sku_code.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label d-block" for="{{ form.warehouse.id_for_label }}">
+            {{ form.warehouse.label }} <span class="text-danger">*</span>
+            {% if object %}<span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">変更不可</span>{% endif %}
+          </label>
+          {{ form.warehouse }}
+          <div class="form-text">倉庫ごとに発注点を持てる</div>
+          {% if form.warehouse.errors %}<div class="invalid-feedback d-block">{{ form.warehouse.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <h6 class="text-muted text-uppercase small fw-bold mb-3">発注パラメータ</h6>
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.reorder_point.id_for_label }}">
+            {{ form.reorder_point.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.reorder_point }}
+          <div class="form-text">現在庫がこの数を下回るとアラート発火</div>
+          {% if form.reorder_point.errors %}<div class="invalid-feedback d-block">{{ form.reorder_point.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.reorder_qty.id_for_label }}">
+            {{ form.reorder_qty.label }} <span class="text-danger">*</span>
+          </label>
+          {{ form.reorder_qty }}
+          <div class="form-text">アラートからの入荷指示生成時にこの数で起票される</div>
+          {% if form.reorder_qty.errors %}<div class="invalid-feedback d-block">{{ form.reorder_qty.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label d-block" for="{{ form.safety_stock.id_for_label }}">
+            {{ form.safety_stock.label }}
+            <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">参考</span>
+          </label>
+          {{ form.safety_stock }}
+          <div class="form-text">参考値（発注点の算出基準）。発火条件には使わない</div>
+          {% if form.safety_stock.errors %}<div class="invalid-feedback d-block">{{ form.safety_stock.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <div class="form-check">
+          {{ form.is_active }}
+          <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+            {{ form.is_active.label }}
+          </label>
+          <div class="form-text">無効にすると、この SKU×倉庫ではアラートが発火しなくなる</div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 justify-content-end">
+        <a href="{% url 'stock:reorder_setting_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>{% if object %}更新{% else %}登録{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

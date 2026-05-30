@@ -7,17 +7,19 @@ from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.views.generic import DetailView, TemplateView, View
-from django.views.generic.edit import FormView
+from django.views.generic import DetailView, ListView, TemplateView, View
+from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 
 from core.utils import apply_ordering, paginate, parse_query_date
 from inbound.models import InboundOrder
-from masters.models import Area, Location, Sku
+from masters.models import Area, Location, Sku, Warehouse
 from masters.utils import get_current_warehouse
+from masters.views import FilterableListMixin, ProtectedErrorMixin
 from outbound.models import OutboundOrder, StockReservation
 
 from .forms import (
     HandheldStockInquiryForm,
+    SkuReorderSettingForm,
     StockTransferForm,
     StocktakeCountForm,
     StocktakeSessionForm,
@@ -25,6 +27,8 @@ from .forms import (
     UnplannedStockOutForm,
 )
 from .models import (
+    ReorderAlert,
+    SkuReorderSetting,
     StockBalance,
     StockMovement,
     StockTransfer,
@@ -1108,3 +1112,249 @@ class StocktakeCountWorkView(LoginRequiredMixin, FormView):
             f'実数 {counted}（{diff_label}）',
         )
         return super().form_valid(form)
+
+
+# === 発注設定 (SkuReorderSetting) のマスタ CRUD ===
+
+
+class SkuReorderSettingListView(FilterableListMixin, LoginRequiredMixin, ListView):
+    """発注設定の一覧。SKU・倉庫・有効/無効・キーワードで絞り込み、見出し
+    クリックで並び替え可。マスタ照会と同じ規約。"""
+
+    model = SkuReorderSetting
+    template_name = 'a/stock/reorder_setting_list.html'
+    context_object_name = 'settings_list'
+    ordering = ['sku__sku_code']
+    search_fields = ['sku__sku_code', 'sku__jan_code', 'sku__product__product_name']
+    sortable = {
+        'sku': ['sku__sku_code'],
+        'product': ['sku__product__product_name'],
+        'warehouse': ['warehouse__warehouse_code'],
+        'point': ['reorder_point'],
+        'qty': ['reorder_qty'],
+        'safety': ['safety_stock'],
+        'status': ['is_active'],
+        'updated': ['updated_at'],
+    }
+    default_sort = 'sku'
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('sku', 'sku__product', 'warehouse')
+        wh_code = self.request.GET.get('warehouse', '').strip()
+        if wh_code:
+            qs = qs.filter(warehouse__warehouse_code=wh_code)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['warehouses'] = Warehouse.objects.filter(is_active=True).order_by('warehouse_code')
+        ctx['filters'] = {
+            **ctx.get('filters', {}),
+            'warehouse': self.request.GET.get('warehouse', '').strip(),
+        }
+        return ctx
+
+
+class SkuReorderSettingCreateView(LoginRequiredMixin, CreateView):
+    model = SkuReorderSetting
+    form_class = SkuReorderSettingForm
+    template_name = 'a/stock/reorder_setting_form.html'
+    success_url = reverse_lazy('stock:reorder_setting_list')
+
+    def form_valid(self, form):
+        form.instance.created_by = self.request.user
+        messages.success(self.request, '発注設定を登録しました。')
+        return super().form_valid(form)
+
+
+class SkuReorderSettingUpdateView(LoginRequiredMixin, UpdateView):
+    model = SkuReorderSetting
+    form_class = SkuReorderSettingForm
+    template_name = 'a/stock/reorder_setting_form.html'
+    success_url = reverse_lazy('stock:reorder_setting_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, '発注設定を更新しました。')
+        return super().form_valid(form)
+
+
+class SkuReorderSettingDeleteView(LoginRequiredMixin, ProtectedErrorMixin, DeleteView):
+    model = SkuReorderSetting
+    template_name = 'a/stock/reorder_setting_confirm_delete.html'
+    success_url = reverse_lazy('stock:reorder_setting_list')
+
+
+# === 発注アラート (ReorderAlert) の一覧・詳細・ステータス変更 ===
+
+
+class ReorderAlertListView(LoginRequiredMixin, TemplateView):
+    """発注アラートの照会画面。検索-first パターン（マスタ照会と同じ規約）。
+
+    SKU・倉庫・ステータス・期間で絞り込み、見出しクリックで並び替えできる。
+    サマリーは検索結果の全件で集計する（ページ送りしても合計は全体ベース）。
+    """
+
+    template_name = 'a/stock/reorder_alert_list.html'
+
+    SEARCH_KEYS = ('q', 'status', 'warehouse', 'date_from', 'date_to')
+
+    SORTABLE = {
+        'occurred': ['created_at'],
+        'sku': ['sku__sku_code'],
+        'product': ['sku__product__product_name'],
+        'warehouse': ['warehouse__warehouse_code'],
+        'quantity': ['quantity_at_alert'],
+        'point': ['reorder_point_at_alert'],
+        'recommended': ['recommended_qty'],
+        'status': ['status'],
+    }
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        g = self.request.GET
+        searched = any(k in g for k in self.SEARCH_KEYS)
+        ctx['searched'] = searched
+
+        f = {
+            'q': g.get('q', '').strip(),
+            'status': g.get('status', ''),
+            'warehouse': g.get('warehouse', '').strip(),
+            'date_from': g.get('date_from', ''),
+            'date_to': g.get('date_to', ''),
+        }
+
+        if searched:
+            qs = ReorderAlert.objects.select_related(
+                'sku', 'sku__product', 'warehouse', 'inbound_order'
+            )
+            if f['q']:
+                qs = qs.filter(
+                    Q(sku__sku_code__icontains=f['q'])
+                    | Q(sku__jan_code__icontains=f['q'])
+                    | Q(sku__product__product_name__icontains=f['q'])
+                )
+            if f['status']:
+                qs = qs.filter(status=f['status'])
+            if f['warehouse']:
+                qs = qs.filter(warehouse__warehouse_code=f['warehouse'])
+            date_from = parse_query_date(f['date_from'])
+            date_to = parse_query_date(f['date_to'])
+            if date_from:
+                qs = qs.filter(created_at__date__gte=date_from)
+            if date_to:
+                qs = qs.filter(created_at__date__lte=date_to)
+            qs, ctx['sort'], ctx['dir'] = apply_ordering(
+                self.request, qs, self.SORTABLE, 'occurred', 'desc'
+            )
+            agg = qs.aggregate(
+                total=Count('id'),
+                open_count=Count('id', filter=Q(status=ReorderAlert.Status.OPEN)),
+                ordered=Count('id', filter=Q(status=ReorderAlert.Status.ORDERED)),
+                resolved=Count('id', filter=Q(status=ReorderAlert.Status.RESOLVED)),
+                ignored=Count('id', filter=Q(status=ReorderAlert.Status.IGNORED)),
+            )
+            page = paginate(self.request, qs)
+            ctx['alerts'] = page
+            ctx['page_obj'] = page
+            ctx['stats'] = agg
+        else:
+            ctx['alerts'] = ReorderAlert.objects.none()
+            ctx['stats'] = None
+
+        ctx['warehouses'] = Warehouse.objects.filter(is_active=True).order_by('warehouse_code')
+        ctx['status_choices'] = ReorderAlert.Status.choices
+        ctx['filters'] = f
+        return ctx
+
+
+class ReorderAlertDetailView(LoginRequiredMixin, DetailView):
+    """発注アラートの詳細画面。発生時点のスナップショット + 現在の状態 +
+    操作（対応不要 / 入荷指示を作る）。
+    """
+
+    model = ReorderAlert
+    template_name = 'a/stock/reorder_alert_detail.html'
+    context_object_name = 'alert'
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .select_related('sku', 'sku__product', 'warehouse', 'inbound_order', 'reorder_setting')
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        alert = self.object
+        # 現在の在庫数（倉庫内合計）。発生時との差分を見せる。
+        current_qty = (
+            StockBalance.objects.filter(
+                sku=alert.sku, location__warehouse=alert.warehouse
+            ).aggregate(total=Sum('quantity'))['total']
+            or 0
+        )
+        ctx['current_quantity'] = current_qty
+        return ctx
+
+
+class ReorderAlertIgnoreView(LoginRequiredMixin, View):
+    """アラートを「対応不要」(open → ignored) にする。"""
+
+    def post(self, request, pk):
+        alert = get_object_or_404(ReorderAlert, pk=pk)
+        if alert.status != ReorderAlert.Status.OPEN:
+            messages.error(request, '未対応 (open) のアラートのみ「対応不要」にできます。')
+        else:
+            alert.status = ReorderAlert.Status.IGNORED
+            alert.resolved_at = timezone.now()
+            alert.save(update_fields=['status', 'resolved_at', 'updated_at'])
+            messages.success(request, f'アラート #{alert.pk} を「対応不要」にしました。')
+        return HttpResponseRedirect(reverse('stock:reorder_alert_detail', args=[pk]))
+
+
+class ReorderAlertConvertView(LoginRequiredMixin, View):
+    """発注アラート → 入荷指示への変換。
+
+    アラート1件から入荷指示1件＋明細1行（SKU = アラートの SKU、数量 =
+    recommended_qty）を生成する。番号は RA-YYYYMMDD-NNN（reorder_alert 用に
+    独自採番）。生成後はアラート側を status=ordered に更新し、inbound_order
+    を紐付ける。仕入先は不明な場合があるので未指定 (None) のまま起票し、
+    入荷指示画面で後から設定してもらう。
+    """
+
+    def post(self, request, pk):
+        alert = get_object_or_404(ReorderAlert.objects.select_related('sku', 'warehouse'), pk=pk)
+        if alert.status != ReorderAlert.Status.OPEN:
+            messages.error(request, '未対応 (open) のアラートのみ入荷指示に変換できます。')
+            return HttpResponseRedirect(reverse('stock:reorder_alert_detail', args=[pk]))
+
+        from inbound.models import InboundOrder, InboundOrderItem
+
+        with transaction.atomic():
+            today = timezone.localdate()
+            code = InboundOrder.next_code(today, InboundOrder.SourceType.REORDER_ALERT.value)
+            order = InboundOrder.objects.create(
+                inbound_order_code=code,
+                warehouse=alert.warehouse,
+                supplier=None,  # 不明なため入荷指示画面で別途指定
+                status=InboundOrder.Status.RECEIVING_WAIT,
+                source_type=InboundOrder.SourceType.REORDER_ALERT,
+                expected_date=today,
+                note=f'発注アラート #{alert.pk} から自動生成',
+                created_by=request.user,
+            )
+            InboundOrderItem.objects.create(
+                inbound_order=order,
+                sku=alert.sku,
+                quantity_expected=alert.recommended_qty,
+            )
+            alert.status = ReorderAlert.Status.ORDERED
+            alert.inbound_order = order
+            alert.save(update_fields=['status', 'inbound_order', 'updated_at'])
+
+        messages.success(
+            request,
+            f'入荷指示 {code} を作成しました（SKU {alert.sku.sku_code} × '
+            f'{alert.recommended_qty} 個）。',
+        )
+        return HttpResponseRedirect(reverse('stock:reorder_alert_detail', args=[pk]))

@@ -7,6 +7,48 @@ app_name = 'stock'
 urlpatterns = [
     path('', views.StockInquiryView.as_view(), name='inquiry'),
     path('movements/', views.StockMovementInquiryView.as_view(), name='movement_inquiry'),
+    # 発注設定マスタ
+    path(
+        'reorder-settings/',
+        views.SkuReorderSettingListView.as_view(),
+        name='reorder_setting_list',
+    ),
+    path(
+        'reorder-settings/new/',
+        views.SkuReorderSettingCreateView.as_view(),
+        name='reorder_setting_create',
+    ),
+    path(
+        'reorder-settings/<int:pk>/',
+        views.SkuReorderSettingUpdateView.as_view(),
+        name='reorder_setting_update',
+    ),
+    path(
+        'reorder-settings/<int:pk>/delete/',
+        views.SkuReorderSettingDeleteView.as_view(),
+        name='reorder_setting_delete',
+    ),
+    # 発注アラート
+    path(
+        'reorder-alerts/',
+        views.ReorderAlertListView.as_view(),
+        name='reorder_alert_list',
+    ),
+    path(
+        'reorder-alerts/<int:pk>/',
+        views.ReorderAlertDetailView.as_view(),
+        name='reorder_alert_detail',
+    ),
+    path(
+        'reorder-alerts/<int:pk>/ignore/',
+        views.ReorderAlertIgnoreView.as_view(),
+        name='reorder_alert_ignore',
+    ),
+    path(
+        'reorder-alerts/<int:pk>/convert/',
+        views.ReorderAlertConvertView.as_view(),
+        name='reorder_alert_convert',
+    ),
     # 実行系 (handheld) 画面群
     path(
         'handheld/inquiry/',

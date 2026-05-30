@@ -94,6 +94,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'masters.context_processors.current_warehouse',
                 'accounts.context_processors.user_role',
+                'stock.context_processors.open_reorder_alerts',
             ],
         },
     },

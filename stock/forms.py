@@ -4,10 +4,10 @@ from django import forms
 from django.db.models import Q
 from django.utils import timezone
 
-from masters.models import Area, Location, Sku
+from masters.models import Area, Location, Sku, Warehouse
 from masters.utils import get_current_warehouse
 
-from .models import StockBalance, StocktakeItem, StocktakeSession
+from .models import SkuReorderSetting, StockBalance, StocktakeItem, StocktakeSession
 
 
 class _StockOperationForm(forms.Form):
@@ -562,3 +562,95 @@ class StocktakeCountForm(forms.Form):
                     f'SKU「{self._sku.sku_code}」はこの棚卸セッションの対象外です。',
                 )
         return cleaned
+
+
+class SkuReorderSettingForm(forms.ModelForm):
+    """発注設定 (SkuReorderSetting) の登録/編集フォーム。
+
+    SKU はテキスト入力で sku_code または jan_code を受け取り、clean で
+    Sku インスタンスに解決する（他フォームと同じ規約）。倉庫は select。
+    編集時は SKU と倉庫を変更不可（既存アラートとの整合のため）。
+    auto_order は手動承認運用の方針なので UI には出さず、モデルのデフォルト
+    False のままにする。
+    """
+
+    sku_code = forms.CharField(
+        label='SKU',
+        max_length=13,
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control font-monospace',
+                'placeholder': 'SKU コード または JAN',
+                'autocomplete': 'off',
+            }
+        ),
+    )
+
+    class Meta:
+        model = SkuReorderSetting
+        fields = ['warehouse', 'reorder_point', 'reorder_qty', 'safety_stock', 'is_active']
+        labels = {'is_active': '有効'}
+        widgets = {
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'reorder_point': forms.NumberInput(
+                attrs={'class': 'form-control text-end', 'min': '0', 'placeholder': '例: 20'}
+            ),
+            'reorder_qty': forms.NumberInput(
+                attrs={'class': 'form-control text-end', 'min': '1', 'placeholder': '例: 50'}
+            ),
+            'safety_stock': forms.NumberInput(
+                attrs={'class': 'form-control text-end', 'min': '0', 'placeholder': '例: 10'}
+            ),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._sku = None
+        self.fields['warehouse'].queryset = Warehouse.objects.filter(is_active=True).order_by(
+            'warehouse_code'
+        )
+        # 編集時: 既存 SKU のコードを pre-fill。SKU・倉庫はキー項目なので変更不可。
+        if self.instance.pk and self.instance.sku_id:
+            self.fields['sku_code'].initial = self.instance.sku.sku_code
+            self.fields['sku_code'].disabled = True
+            self.fields['warehouse'].disabled = True
+
+    def clean_sku_code(self):
+        code = (self.cleaned_data.get('sku_code') or '').strip()
+        if not code:
+            raise forms.ValidationError('入力してください。')
+        # 編集時は既存値（disabled）が来るので、self.instance.sku を使う
+        if self.instance.pk and self.instance.sku_id:
+            self._sku = self.instance.sku
+            return code
+        self._sku = (
+            Sku.objects.select_related('product')
+            .filter(Q(sku_code=code) | Q(jan_code=code), is_active=True)
+            .first()
+        )
+        if self._sku is None:
+            raise forms.ValidationError(f'SKU「{code}」は存在しないか、無効化されています。')
+        return code
+
+    def clean(self):
+        cleaned = super().clean()
+        # 新規登録時の (sku × warehouse) 重複チェック。モデルの UniqueConstraint
+        # でも弾けるが、ユーザーには分かりやすい文言で先に返す。
+        if not self.instance.pk and self._sku and cleaned.get('warehouse'):
+            if SkuReorderSetting.objects.filter(
+                sku=self._sku, warehouse=cleaned['warehouse']
+            ).exists():
+                raise forms.ValidationError(
+                    f'SKU「{self._sku.sku_code}」× 倉庫「{cleaned["warehouse"].warehouse_code}」'
+                    f'の発注設定は既に登録されています。'
+                )
+        return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self._sku is not None:
+            instance.sku = self._sku
+        if commit:
+            instance.save()
+        return instance

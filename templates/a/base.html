@@ -102,6 +102,21 @@
       {% endif %}
       <ul class="navbar-nav ms-auto align-items-center flex-row gap-2">
         {% if user.is_authenticated %}
+          {# 未対応の発注アラート件数。件数 > 0 のときだけ赤バッジで表示し、
+             クリックでアラート一覧（status=open フィルタ）に遷移する。 #}
+          {% if open_reorder_alerts_count %}
+          <li class="nav-item">
+            <a class="btn btn-warning btn-sm position-relative d-inline-flex align-items-center"
+               href="{% url 'stock:reorder_alert_list' %}?status=open"
+               title="未対応の発注アラート">
+              <i class="bi bi-exclamation-octagon-fill"></i>
+              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                {{ open_reorder_alerts_count }}
+                <span class="visually-hidden">件の未対応アラート</span>
+              </span>
+            </a>
+          </li>
+          {% endif %}
           {# 業務動線の終点。サイドバー(全機能)とは別役割なので、CTA として強調する。 #}
           <li class="nav-item d-none d-md-inline">
             <a class="btn btn-light btn-sm fw-semibold d-inline-flex align-items-center"
@@ -218,6 +233,15 @@
         </a>
         <a href="{% url 'stock:movement_inquiry' %}" class="list-group-item list-group-item-action">
           <i class="bi bi-clock-history me-2"></i>入出庫履歴照会
+        </a>
+        <a href="{% url 'stock:reorder_setting_list' %}" class="list-group-item list-group-item-action">
+          <i class="bi bi-bell-fill me-2"></i>発注設定
+        </a>
+        <a href="{% url 'stock:reorder_alert_list' %}?status=open" class="list-group-item list-group-item-action d-flex align-items-center">
+          <i class="bi bi-exclamation-octagon-fill me-2"></i>発注アラート照会
+          {% if open_reorder_alerts_count %}
+            <span class="badge bg-danger rounded-pill ms-auto">{{ open_reorder_alerts_count }}</span>
+          {% endif %}
         </a>
         {% endif %}
         <a href="{% url 'stock:handheld_inquiry' %}" class="list-group-item list-group-item-action">
