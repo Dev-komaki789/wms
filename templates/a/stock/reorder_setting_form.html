@@ -28,8 +28,24 @@
             {{ form.sku_code.label }} <span class="text-danger">*</span>
             {% if object %}<span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">変更不可</span>{% endif %}
           </label>
-          {{ form.sku_code }}
-          <div class="form-text">SKU コードまたは JAN コードで指定（実在チェックあり）</div>
+          <div class="input-group">
+            {{ form.sku_code }}
+            {% if not object %}
+            <button type="button" class="btn btn-outline-secondary sku-pick-btn"
+                    data-bs-toggle="modal" data-bs-target="#skuPickModal"
+                    data-target-input="{{ form.sku_code.id_for_label }}"
+                    title="SKU マスタから検索">
+              <i class="bi bi-search"></i>
+            </button>
+            {% endif %}
+          </div>
+          <div class="form-text">
+            <span class="sku-name-display fw-semibold text-dark"
+                  data-for="{{ form.sku_code.id_for_label }}">{% if object %}{{ object.sku.product.product_name }}{% endif %}</span>
+            <span class="sku-color-display text-muted ms-2"
+                  data-for="{{ form.sku_code.id_for_label }}">{% if object and object.sku.color_info %} / {{ object.sku.color_info }}{% endif %}</span>
+          </div>
+          <div class="form-text">SKU コードまたは JAN コードで指定（🔍 で一覧検索も可）</div>
           {% if form.sku_code.errors %}<div class="invalid-feedback d-block">{{ form.sku_code.errors|join:" " }}</div>{% endif %}
         </div>
         <div class="col-md-6 mb-3">
@@ -91,48 +107,96 @@
 </div>
 
 {% if not object %}
+{# ========== SKU 検索モーダル（🔍 ボタンから開く） ========== #}
+<div class="modal fade" id="skuPickModal" tabindex="-1" aria-labelledby="skuPickModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="skuPickModalTitle">
+          <i class="bi bi-upc-scan me-1"></i>SKU マスタから選択
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="skuSearchInput" class="form-control mb-3" maxlength="50"
+               placeholder="SKUコード / JAN / 商品名 / 商品コードで検索（部分一致）" autocomplete="off">
+        <div class="small text-muted mb-2">検索ボックスに入力すると候補が出ます（最大 30 件）</div>
+        <table class="table table-hover table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th class="text-start">SKUコード</th>
+              <th class="text-start">商品</th>
+              <th class="text-start">JAN</th>
+              <th class="text-start">サイズ / カラー</th>
+            </tr>
+          </thead>
+          <tbody id="skuPickResults">
+            <tr><td colspan="4" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% comment %}
-新規登録時のみ: SKU 欄で Enter / blur 時に実在チェック。
-サーバー側でもバリデーションするが、入力直後にフィードバックを出すことで
-「Enter を押したけど何の反応もなく submit された」体験を防ぐ。
-SKU が ✗ のままでは form submit を止めて入力欄にフォーカスを戻す。
+SKU 欄のフロント拡張:
+- 🔍 ボタンで一覧モーダル → 行選択で input にコードをセット
+- 手入力 (Enter / blur) または モーダル選択 (change) で SkuLookupAPIView を叩き、
+  商品名・カラーを下に表示する（他フォームと同じ data-for 規約）。
+- 検証 NG のまま submit しないよう、form の submit イベントで止めて focus を戻す。
 {% endcomment %}
 <script>
 (function () {
   const input = document.getElementById('{{ form.sku_code.id_for_label }}');
   if (!input || input.disabled) return;
-  const url = '{% url "masters:api_sku_lookup" %}';
+  const lookupUrl = '{% url "masters:api_sku_lookup" %}';
+  const searchUrl = '{% url "masters:api_sku_search" %}';
   const form = input.form;
+  const nameEl = document.querySelector('.sku-name-display[data-for="' + input.id + '"]');
+  const colorEl = document.querySelector('.sku-color-display[data-for="' + input.id + '"]');
   const msg = document.createElement('div');
   msg.className = 'small mt-1';
-  input.insertAdjacentElement('afterend', msg);
+  input.parentNode.insertAdjacentElement('afterend', msg);
   let lastCode = '';
-  let validated = false;  // 直近のチェック結果。NG なら submit を止める
+  let validated = false;
 
   function setValid(d) {
+    const code = input.value.trim();
     if (d.found) {
-      msg.textContent = '✓ ' + d.sku_code + '（' + (d.product_name || '') + '）';
+      msg.textContent = '✓ 実在 SKU';
       msg.className = 'small mt-1 text-success';
       input.classList.remove('is-invalid');
       input.classList.add('is-valid');
+      if (nameEl) nameEl.textContent = d.product_name || '';
+      if (colorEl) colorEl.textContent = d.color_info ? ' / ' + d.color_info : '';
       validated = true;
     } else {
-      msg.textContent = '✗ SKU「' + input.value.trim() + '」は存在しません';
+      msg.textContent = '✗ SKU「' + code + '」は存在しません';
       msg.className = 'small mt-1 text-danger';
       input.classList.add('is-invalid');
       input.classList.remove('is-valid');
+      if (nameEl) nameEl.textContent = '';
+      if (colorEl) colorEl.textContent = '';
       validated = false;
     }
   }
 
   function lookup() {
     const code = input.value.trim();
-    if (!code) { lastCode = ''; validated = false; return Promise.resolve(); }
+    if (!code) {
+      lastCode = ''; validated = false;
+      if (nameEl) nameEl.textContent = '';
+      if (colorEl) colorEl.textContent = '';
+      msg.textContent = '';
+      input.classList.remove('is-valid', 'is-invalid');
+      return Promise.resolve();
+    }
     if (code === lastCode) return Promise.resolve();
     lastCode = code;
     msg.textContent = '確認中…';
     msg.className = 'small mt-1 text-muted';
-    return fetch(url + '?code=' + encodeURIComponent(code),
+    return fetch(lookupUrl + '?code=' + encodeURIComponent(code),
                  {headers: {'X-Requested-With': 'XMLHttpRequest'}})
       .then(r => r.json())
       .then(setValid)
@@ -143,22 +207,15 @@ SKU が ✗ のままでは form submit を止めて入力欄にフォーカス�
       });
   }
 
-  // Enter は送信ではなく実在チェックに割り当て、他のリスナーにも伝播させない
-  // （wms.js の Enter キー移動などが反応しないように stopPropagation）。
-  // チェックの結果が NG ならその場に留まる。
   input.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
     e.stopPropagation();
     lookup();
   });
-  // blur 時にチェック → NG なら focus を即座に戻す
-  // （ただし「キャンセル」ボタン等への意図的な移動は止めない＝form 内のフィールド
-  // やボタン以外への移動は許す）。
   input.addEventListener('blur', function (e) {
     lookup().then(() => {
       if (!validated && input.value.trim()) {
-        // 次のフォーカス先が同じ form 内の入力欄/ボタンなら戻す
         const next = e.relatedTarget;
         if (next && form && form.contains(next)) {
           setTimeout(() => input.focus(), 0);
@@ -173,23 +230,99 @@ SKU が ✗ のままでは form submit を止めて入力欄にフォーカス�
       validated = false;
     }
   });
-  // form submit 時の最終チェック: 未検証 or NG なら止めて入力欄に戻す
+  // モーダル選択時に発火する change イベントでも実在チェックを行う
+  input.addEventListener('change', function () { lookup(); });
   if (form) {
     form.addEventListener('submit', function (e) {
       if (!validated) {
         e.preventDefault();
-        // まだチェックしていない場合は今チェック
         lookup().then(() => {
-          if (validated) {
-            // 検証通ったので改めて submit
-            form.submit();
-          } else {
-            input.focus();
-            input.select();
-          }
+          if (validated) { form.submit(); } else { input.focus(); input.select(); }
         });
       }
     });
+  }
+
+  // ===== SKU 検索モーダル =====
+  const skuModal = document.getElementById('skuPickModal');
+  const skuSearchInput = document.getElementById('skuSearchInput');
+  const skuResultsBody = document.getElementById('skuPickResults');
+  let skuTargetInputId = null;
+  let skuSearchTimer = null;
+
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.sku-pick-btn');
+    if (!btn) return;
+    skuTargetInputId = btn.dataset.targetInput;
+  });
+
+  if (skuModal) {
+    skuModal.addEventListener('shown.bs.modal', function () {
+      skuSearchInput.value = '';
+      skuResultsBody.innerHTML =
+        '<tr><td colspan="4" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      skuSearchInput.focus();
+    });
+  }
+  if (skuSearchInput) {
+    skuSearchInput.addEventListener('input', function () {
+      clearTimeout(skuSearchTimer);
+      const q = this.value.trim();
+      skuSearchTimer = setTimeout(function () { skuFetchAndRender(q); }, 200);
+    });
+  }
+  function skuFetchAndRender(q) {
+    if (!q) {
+      skuResultsBody.innerHTML =
+        '<tr><td colspan="4" class="text-center text-muted py-4">検索ボックスに入力してください</td></tr>';
+      return;
+    }
+    fetch(searchUrl + '?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(function (data) {
+        const results = data.results || [];
+        if (results.length === 0) {
+          skuResultsBody.innerHTML =
+            '<tr><td colspan="4" class="text-center text-muted py-4">該当する SKU はありません</td></tr>';
+          return;
+        }
+        skuResultsBody.innerHTML = results.map(function (s) {
+          const size = s.size_info || '';
+          const color = s.color_info || '';
+          const sizeColor = (size || color)
+            ? (size + (size && color ? ' / ' : '') + color) : '—';
+          return '<tr style="cursor: pointer" class="sku-pick-row" data-code="' + esc(s.sku_code) + '">'
+            + '<td class="text-start"><span class="font-monospace">' + esc(s.sku_code) + '</span></td>'
+            + '<td class="text-start">' + esc(s.product_name)
+              + ' <span class="text-muted small">(' + esc(s.product_code) + ')</span></td>'
+            + '<td class="text-start small">'
+              + (s.jan_code ? '<span class="font-monospace">' + esc(s.jan_code) + '</span>'
+                            : '<span class="text-muted">—</span>') + '</td>'
+            + '<td class="text-start small">' + esc(sizeColor) + '</td>'
+            + '</tr>';
+        }).join('');
+      });
+  }
+  if (skuResultsBody) {
+    skuResultsBody.addEventListener('click', function (e) {
+      const row = e.target.closest('.sku-pick-row');
+      if (!row) return;
+      const code = row.dataset.code;
+      if (skuTargetInputId) {
+        const target = document.getElementById(skuTargetInputId);
+        if (target) {
+          target.value = code;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+      bootstrap.Modal.getInstance(skuModal).hide();
+    });
+  }
+  function esc(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 })();
 </script>
