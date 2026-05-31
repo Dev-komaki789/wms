@@ -91,9 +91,10 @@
         // 302 等で /admin/login/ に転送された場合、最終的に HTML が返って
         // .json() でパース失敗→catch で「通信エラー」になっていた。
         // Content-Type を見て JSON 以外ならセッション切れと判定する。
-        const ct = res.headers.get('content-type') || '';
+        const ct = res.headers.get('content-type') || '(none)';
         if (!ct.includes('application/json')) {
-          throw new Error('SESSION_EXPIRED');
+          // デバッグ情報を error 名に含める（HTTP ステータスと CT）
+          throw new Error('SESSION_EXPIRED|status=' + res.status + '|ct=' + ct + '|url=' + res.url);
         }
         return res.json();
       })
@@ -111,9 +112,13 @@
       .catch(function (err) {
         input.disabled = false;
         state[input.id] = undefined;
-        const msg = (err && err.message === 'SESSION_EXPIRED')
-          ? 'ログインが切れています。一度メニュー画面に戻ってログインし直してください。'
-          : '通信エラーが発生しました。もう一度お試しください。';
+        let msg = '通信エラーが発生しました。もう一度お試しください。';
+        if (err && err.message && err.message.startsWith('SESSION_EXPIRED')) {
+          // デバッグ用の付加情報をそのまま表示
+          msg = 'ログインが切れています。詳細: ' + err.message;
+        } else if (err && err.message) {
+          msg = '通信エラー: ' + err.message;
+        }
         setMsg(input, msg, false);
         input.focus();
         input.select();
