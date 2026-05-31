@@ -11,7 +11,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView, T
 from django.views.generic.edit import FormView
 
 from core.models import ErrorLog
-from core.utils import PAGE_SIZE, GetPageMixin, apply_ordering, paginate
+from core.utils import PAGE_SIZE, GetPageMixin, JsonAuthRequiredMixin, apply_ordering, paginate
 
 from .csv_io import DELIMITERS, MASTER_SPECS, build_csv, column_guide, import_csv
 from .forms import (
@@ -1079,7 +1079,7 @@ class SkuSearchAPIView(LoginRequiredMixin, View):
         )
 
 
-class SkuLookupAPIView(LoginRequiredMixin, View):
+class SkuLookupAPIView(JsonAuthRequiredMixin, LoginRequiredMixin, View):
     """SKU コードの実在チェック API（AJAX 用）。
 
     handheld 画面でスキャンした SKU をその場で検証するためのエンドポイント。
@@ -1110,7 +1110,7 @@ class SkuLookupAPIView(LoginRequiredMixin, View):
         )
 
 
-class LocationLookupAPIView(LoginRequiredMixin, View):
+class LocationLookupAPIView(JsonAuthRequiredMixin, LoginRequiredMixin, View):
     """棚番の実在チェック API（AJAX 用）。
 
     棚入れ作業など handheld 画面で、スキャンした棚番をその場で検証するための

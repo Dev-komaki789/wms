@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.views.generic import DetailView, ListView, TemplateView, View
 from django.views.generic.edit import CreateView, DeleteView, FormView, UpdateView
 
-from core.utils import apply_ordering, paginate, parse_query_date
+from core.utils import JsonAuthRequiredMixin, apply_ordering, paginate, parse_query_date
 from inbound.models import InboundOrder
 from masters.models import Area, Location, Sku, Warehouse
 from masters.utils import get_current_warehouse
@@ -657,7 +657,7 @@ class StockTransferView(StocktakeLockGuardMixin, LoginRequiredMixin, FormView):
         return super().form_valid(form)
 
 
-class StockCheckAPIView(LoginRequiredMixin, View):
+class StockCheckAPIView(JsonAuthRequiredMixin, LoginRequiredMixin, View):
     """ロケーション × SKU の在庫紐づきチェック API（AJAX 用）。
 
     棚間移動などで、スキャンした SKU が移動元の棚に在庫として実在するかを

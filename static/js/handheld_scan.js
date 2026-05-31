@@ -88,12 +88,13 @@
       credentials: 'same-origin',
     })
       .then(function (res) {
-        // 302 等で /admin/login/ に転送された場合、最終的に HTML が返って
-        // .json() でパース失敗→catch で「通信エラー」になっていた。
-        // Content-Type を見て JSON 以外ならセッション切れと判定する。
+        // API 側は JsonAuthRequiredMixin により未認証時に 401 + JSON を返す。
+        // 念のため Content-Type も見て、HTML が返ってきたケースも捕捉する。
+        if (res.status === 401) {
+          throw new Error('SESSION_EXPIRED|status=401|cause=auth');
+        }
         const ct = res.headers.get('content-type') || '(none)';
         if (!ct.includes('application/json')) {
-          // デバッグ情報を error 名に含める（HTTP ステータスと CT）
           throw new Error('SESSION_EXPIRED|status=' + res.status + '|ct=' + ct + '|url=' + res.url);
         }
         return res.json();

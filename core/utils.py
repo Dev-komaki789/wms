@@ -1,7 +1,27 @@
 """core アプリの共通ユーティリティ。"""
 
 from django.core.paginator import Paginator
+from django.http import JsonResponse
 from django.utils.dateparse import parse_date
+
+
+class JsonAuthRequiredMixin:
+    """AJAX 用の認証必須ミックスイン。
+
+    LoginRequiredMixin は未認証時に LOGIN_URL（/admin/login/）へ 302 リダイレクト
+    する。これは AJAX クライアントには「ログインページの HTML」が JSON のつもり
+    で返ってきてパース失敗 → 「通信エラー」となり、原因の切り分けがしづらい。
+    このミックスインは未認証時に 401 + JSON を即返し、AJAX 側で
+    `res.status === 401` を見て「ログイン切れ」を確実に判別できるようにする。
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse(
+                {'error': 'unauthenticated', 'detail': 'ログインが切れています。'},
+                status=401,
+            )
+        return super().dispatch(request, *args, **kwargs)
 
 # 一覧・照会画面の1ページあたりの表示件数
 PAGE_SIZE = 50
