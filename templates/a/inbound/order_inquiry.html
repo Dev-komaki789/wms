@@ -168,6 +168,8 @@
           <td class="text-end text-nowrap font-monospace small">{{ o.total_expected|default:0 }}</td>
           <td class="text-end text-nowrap text-muted small font-monospace">{{ o.created_at|date:"Y/m/d H:i" }}</td>
           <td class="text-center text-nowrap">
+            <a href="{% url 'inbound:order_print' o.pk %}" class="btn btn-sm btn-outline-secondary"
+               title="入荷予定リストを印刷"><i class="bi bi-printer"></i></a>
             {% if o.status == 'receiving_wait' and not o.in_progress_by %}
               {# 受入れ作業待ち & 未着手の指示のみ編集・削除可。作業開始後は不可 #}
               <a href="{% url 'inbound:order_update' o.pk %}" class="btn btn-sm btn-outline-primary">編集</a>

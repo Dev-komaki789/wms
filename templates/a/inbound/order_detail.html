@@ -146,6 +146,9 @@
   <a href="{% url 'inbound:order_inquiry' %}" class="btn btn-outline-secondary">
     <i class="bi bi-arrow-left"></i> 入荷指示照会へ戻る
   </a>
+  <a href="{% url 'inbound:order_print' order.pk %}" class="btn btn-outline-secondary" target="_blank">
+    <i class="bi bi-printer"></i> 入荷予定リスト印刷
+  </a>
   {% if order.status == 'receiving_wait' and not order.in_progress_by %}
     {# 受入れ作業待ち & 未着手のときのみ編集可（一覧と同じ条件） #}
     <a href="{% url 'inbound:order_update' order.pk %}" class="btn btn-outline-primary">

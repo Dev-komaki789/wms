@@ -20,9 +20,10 @@ from django.views.generic import (
 from core.order_csv import OrderCsvExportView, OrderCsvImportView
 from core.utils import apply_ordering, paginate, parse_query_date
 from masters.models import Location
-from stock.views import StocktakeLockGuardMixin
 from masters.utils import get_current_warehouse
+from outbound.utils import code128_svg
 from stock.models import StockBalance, StockMovement
+from stock.views import StocktakeLockGuardMixin
 
 from .csv_io import INBOUND_ORDER_SPEC
 from .forms import InboundOrderForm, InboundOrderItemFormSet
@@ -1124,3 +1125,32 @@ class InboundOrderCsvImportView(OrderCsvImportView):
     """入荷指示を CSV でインポートする（新規作成のみ）。"""
 
     spec = INBOUND_ORDER_SPEC
+
+
+class InboundOrderPrintView(LoginRequiredMixin, DetailView):
+    """入荷予定リスト印刷ビュー（帳票表示）。
+
+    1 入荷指示の入荷予定リストを A4 帳票で表示する。入荷指示番号は Code128
+    バーコードでも表示し、ハンディでスキャンして受け入れ作業に入れる。
+    ブラウザの印刷機能（window.print）で実プリンタ印刷・PDF 保存ができる。
+    出荷側の PickingListPrintView と同じスタイルを踏襲。
+    """
+
+    model = InboundOrder
+    template_name = 'a/inbound/order_print.html'
+    context_object_name = 'inbound_order'
+
+    def get_queryset(self):
+        items_qs = InboundOrderItem.objects.select_related('sku__product').order_by('id')
+        return (
+            super()
+            .get_queryset()
+            .select_related('warehouse', 'supplier', 'created_by')
+            .prefetch_related(Prefetch('items', queryset=items_qs))
+        )
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['barcode_svg'] = code128_svg(self.object.inbound_order_code)
+        ctx['line_items'] = list(self.object.items.all())
+        return ctx

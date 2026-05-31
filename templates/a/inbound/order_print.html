@@ -1,0 +1,148 @@
+{% extends 'a/base.html' %}
+
+{% block title %}入荷予定リスト {{ inbound_order.inbound_order_code }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* 画面表示でもバーコードがしっかり読めるサイズ。Code128 はこの幅で十分。 */
+  .pl-barcode svg { width: 300px; max-width: 100%; height: auto; display: block; }
+  @media print {
+    .navbar, #sidebar { display: none !important; }
+    body { background: #fff !important; }
+    main.container { max-width: 100%; padding: 0; }
+    .pl-doc { border: none !important; box-shadow: none !important; }
+    /* 紙はベクターで鮮明なので印刷時は小さくして A4 幅で折り返さないように */
+    .pl-barcode svg { width: 190px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# 画面操作ボタン（印刷物には出さない） #}
+<div class="d-print-none mb-3 d-flex gap-2">
+  <button type="button" class="btn btn-primary" onclick="window.print()">
+    <i class="bi bi-printer"></i> 印刷
+  </button>
+  <a href="{% url 'inbound:order_inquiry' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> 一覧へ戻る
+  </a>
+  <a href="{% url 'inbound:order_detail' inbound_order.pk %}" class="btn btn-outline-secondary">
+    <i class="bi bi-info-circle"></i> 詳細を見る
+  </a>
+</div>
+
+<div class="pl-doc card shadow-sm">
+  <div class="card-body">
+    {# ヘッダー: タイトル + 指示番号 + バーコード #}
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+      <div>
+        <div class="text-muted small">入荷予定リスト</div>
+        <div class="fs-3 fw-bold font-monospace">{{ inbound_order.inbound_order_code }}</div>
+      </div>
+      <div class="d-flex flex-wrap gap-4 text-center">
+        <div>
+          <div class="text-muted small">入荷指示番号</div>
+          <div class="pl-barcode">{{ barcode_svg|safe }}</div>
+          <div class="font-monospace small">{{ inbound_order.inbound_order_code }}</div>
+        </div>
+      </div>
+    </div>
+
+    {# メタ情報 #}
+    <div class="row g-3 mb-3 small">
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">倉庫</span>
+        {{ inbound_order.warehouse.warehouse_name }}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">仕入先</span>
+        {% if inbound_order.supplier %}
+          {{ inbound_order.supplier.supplier_name }}
+        {% else %}—{% endif %}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">入荷予定日</span>
+        {% if inbound_order.expected_date %}
+          <span class="font-monospace">{{ inbound_order.expected_date|date:"Y/m/d" }}</span>
+        {% else %}—{% endif %}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">入荷種別</span>
+        {{ inbound_order.get_source_type_display }}
+      </div>
+      {% if inbound_order.purchase_order_code %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">発注番号</span>
+        <span class="font-monospace">{{ inbound_order.purchase_order_code }}</span>
+      </div>
+      {% endif %}
+      {% if inbound_order.supplier_delivery_note_code %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">仕入先納品書番号</span>
+        <span class="font-monospace">{{ inbound_order.supplier_delivery_note_code }}</span>
+      </div>
+      {% endif %}
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">ステータス</span>
+        {{ inbound_order.get_status_display }}
+      </div>
+      <div class="col-6 col-md-3">
+        <span class="text-muted d-block">作成日時</span>
+        <span class="font-monospace">{{ inbound_order.created_at|date:"Y/m/d H:i" }}</span>
+      </div>
+      {% if inbound_order.note %}
+      <div class="col-12">
+        <span class="text-muted d-block">備考</span>
+        {{ inbound_order.note }}
+      </div>
+      {% endif %}
+    </div>
+
+    {# 明細 #}
+    <table class="table table-sm table-bordered align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="text-center" style="width: 48px">#</th>
+          <th class="text-start" style="width: 130px">SKU</th>
+          <th class="text-start" style="width: 140px">JAN</th>
+          <th class="text-start">商品名</th>
+          <th class="text-end" style="width: 80px">予定数</th>
+          <th class="text-center text-nowrap" style="width: 90px">入荷数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in line_items %}
+        <tr>
+          <td class="text-center">{{ forloop.counter }}</td>
+          <td class="text-start font-monospace">{{ it.sku.sku_code }}</td>
+          <td class="text-start font-monospace small">{{ it.sku.jan_code|default:"—" }}</td>
+          <td class="text-start">
+            {{ it.sku.product.product_name }}
+            {% if it.sku.color_info %}<span class="text-muted small"> / {{ it.sku.color_info }}</span>{% endif %}
+            {% if it.sku.size_info %}<span class="text-muted small"> / {{ it.sku.size_info }}</span>{% endif %}
+          </td>
+          <td class="text-end font-monospace">{{ it.quantity_expected }}</td>
+          <td></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-3">明細がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {# 担当者署名欄（紙運用の補助） #}
+    <div class="row mt-4 small">
+      <div class="col-6">
+        <div class="border-top pt-1">
+          検品担当者署名
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="border-top pt-1">
+          完了日時
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

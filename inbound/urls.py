@@ -12,6 +12,7 @@ urlpatterns = [
     path('orders/<int:pk>/', views.InboundOrderDetailView.as_view(), name='order_detail'),
     path('orders/<int:pk>/edit/', views.InboundOrderUpdateView.as_view(), name='order_update'),
     path('orders/<int:pk>/delete/', views.InboundOrderDeleteView.as_view(), name='order_delete'),
+    path('orders/<int:pk>/print/', views.InboundOrderPrintView.as_view(), name='order_print'),
     # 実行系 (handheld) 画面群
     path('handheld/arrival/', views.InboundArrivalView.as_view(), name='handheld_arrival'),
     path(
