@@ -188,11 +188,11 @@ LOGIN_REDIRECT_URL = '/'
 
 # === セッション（ログイン状態）の有効期限 ===
 # 業務システムなので「朝ログイン→業務中は連続使用→放置で自動切断」を狙う。
-# 期限は 8 時間（業務時間相当）。ブラウザを閉じても期限内なら継続。
-# SESSION_SAVE_EVERY_REQUEST はスマホで AJAX に Cookie が乗らない問題の調査の
-# ため一旦無効化（アクティブ延長は失うが、放置の自動切断は維持）。
+# 期限は 8 時間（業務時間相当）。アクティブ延長で操作するたびに 8 時間後ろに
+# ずれるので、連続作業中は切れず、放置した時だけタイムアウトする。
+# ブラウザを閉じても期限内ならログイン状態は維持する（近代Webサービスの主流）。
 SESSION_COOKIE_AGE = 8 * 60 * 60  # 8時間（秒）
-SESSION_SAVE_EVERY_REQUEST = False  # 切り分け中: 元は True (スライディング)
+SESSION_SAVE_EVERY_REQUEST = True  # リクエスト毎に期限をリセット（スライディング）
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # ブラウザ閉じても継続（明示）
 
 # Django messages タグを Bootstrap alert のクラス名に合わせる

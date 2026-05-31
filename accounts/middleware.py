@@ -10,6 +10,9 @@
 許可される URL:
   - `/`                         メニュー画面（ハブ）
   - `/<app>/handheld/*`         各業務ハンディ画面
+  - `/masters/api/*`            ハンディ画面が AJAX で叩くマスタ参照 API
+                                （SKU 実在チェック・棚番実在チェック・SKU 検索等）
+  - `/stock/api/*`              ハンディ画面が AJAX で叩く在庫参照 API
   - `/admin/login/`             ログイン
   - `/admin/logout/`            ログアウト
   - `/static/*`                 静的ファイル
@@ -21,10 +24,16 @@ from .permissions import is_handheld_worker
 
 
 class HandheldOnlyMiddleware:
+    # ハンディ画面が裏で呼ぶ AJAX エンドポイント（/masters/api/、/stock/api/）も
+    # 許可しないと、画面は開けるのに棚番/SKU の実在チェックだけ通らない、という
+    # 症状になる（リダイレクトされて HTML が返り、フロントは「セッション切れ」
+    # として扱ってしまう）。
     ALLOWED_PREFIXES = (
         '/inbound/handheld/',
         '/outbound/handheld/',
         '/stock/handheld/',
+        '/masters/api/',
+        '/stock/api/',
         '/admin/login/',
         '/admin/logout/',
         '/static/',
