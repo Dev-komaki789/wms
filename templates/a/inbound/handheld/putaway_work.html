@@ -269,9 +269,19 @@
     locResult.innerHTML =
       '<div class="text-muted small py-1"><i class="bi bi-hourglass-split me-1"></i>確認中…</div>';
     fetch(LOC_API + '?code=' + encodeURIComponent(code), {
-      headers: {'X-Requested-With': 'XMLHttpRequest'},
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+      credentials: 'same-origin',
     })
-      .then(res => res.json())
+      .then(res => {
+        // セッション切れ等で /admin/login/ にリダイレクトされたら HTML が返ってくる。
+        // それを「通信エラー」ではなく明確にユーザーへ伝える。
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) throw new Error('SESSION_EXPIRED');
+        return res.json();
+      })
       .then(data => {
         if (!data.found) {
           currentLoc = null;
@@ -294,9 +304,13 @@
         pError.classList.add('d-none');
         execBtn.focus();
       })
-      .catch(() => {
+      .catch((err) => {
         currentLoc = null;
-        locError('通信エラーが発生しました。もう一度お試しください。');
+        if (err && err.message === 'SESSION_EXPIRED') {
+          locError('ログインが切れています。一度メニュー画面に戻ってログインし直してください。');
+        } else {
+          locError('通信エラーが発生しました。もう一度お試しください。');
+        }
       })
       .finally(() => {
         looking = false;

@@ -78,8 +78,25 @@
   function request(input, idx, url, evaluate) {
     input.disabled = true;
     setMsg(input, '確認中…', true);
-    fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
-      .then(function (res) { return res.json(); })
+    // credentials: same-origin を明示（一部の環境で AJAX に session cookie が
+    // 乗らないケースの保険）。type=json を要求する Accept ヘッダも付ける。
+    fetch(url, {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        // 302 等で /admin/login/ に転送された場合、最終的に HTML が返って
+        // .json() でパース失敗→catch で「通信エラー」になっていた。
+        // Content-Type を見て JSON 以外ならセッション切れと判定する。
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+          throw new Error('SESSION_EXPIRED');
+        }
+        return res.json();
+      })
       .then(function (data) {
         input.disabled = false;
         const r = evaluate(data);
@@ -91,10 +108,13 @@
           fail(input, r.msg);
         }
       })
-      .catch(function () {
+      .catch(function (err) {
         input.disabled = false;
         state[input.id] = undefined;
-        setMsg(input, '通信エラーが発生しました。もう一度お試しください。', false);
+        const msg = (err && err.message === 'SESSION_EXPIRED')
+          ? 'ログインが切れています。一度メニュー画面に戻ってログインし直してください。'
+          : '通信エラーが発生しました。もう一度お試しください。';
+        setMsg(input, msg, false);
         input.focus();
         input.select();
       });
