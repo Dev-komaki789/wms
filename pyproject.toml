@@ -5,6 +5,9 @@ description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
     "django>=5.0,<6.0",
+    "django-cors-headers>=4.9.0",
+    "djangorestframework>=3.17.1",
+    "drf-spectacular>=0.29.0",
     "gunicorn>=26.0.0",
     "psycopg[binary]>=3.3.4",
     "python-dotenv>=1.2.2",
