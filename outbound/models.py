@@ -103,6 +103,7 @@ class OutboundOrder(models.Model):
     CODE_PREFIX_BY_SOURCE_TYPE = {
         'manual': 'OO',
         'return': 'RO',
+        'oms': 'OMS',
     }
 
     @classmethod
@@ -111,13 +112,14 @@ class OutboundOrder(models.Model):
 
         - 通常出荷 (manual): OO-YYYYMMDD-NNN
         - 返品出荷 (return): RO-YYYYMMDD-NNN
+        - OMS 取込 (oms):    OMS-YYYYMMDD-NNN
         連番は種別ごとに独立してカウントする。
         """
         try:
             code_prefix = cls.CODE_PREFIX_BY_SOURCE_TYPE[source_type]
         except KeyError as e:
             raise ValueError(
-                f'next_code は manual / return のみサポートします (got: {source_type})'
+                f'next_code は manual / return / oms のみサポートします (got: {source_type})'
             ) from e
         prefix = f'{code_prefix}-{date.strftime("%Y%m%d")}-'
         max_n = 0

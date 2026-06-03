@@ -96,3 +96,31 @@ class CategorySerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+# ===== 出荷指示作成 (POST /api/orders/) のリクエスト用 =====
+
+
+class OutboundOrderItemCreateSerializer(serializers.Serializer):
+    """注文確定時の明細リクエスト。SKU コードと数量だけ受ける。"""
+
+    sku_code = serializers.CharField(max_length=50)
+    quantity = serializers.IntegerField(min_value=1)
+
+
+class OutboundOrderCreateSerializer(serializers.Serializer):
+    """EC から WMS への注文確定リクエスト。
+
+    詳細仕様は integration/api_spec.md を参照。
+
+    - external_order_id: EC 側で採番した注文 ID（WMS は保存するだけ）
+    - delivery_*: 配送先情報（個人情報は EC 側に留め、配送に必要な分のみ伝票として保持）
+    - items: SKU コード × 数量のリスト
+    """
+
+    external_order_id = serializers.CharField(max_length=50)
+    delivery_postal_code = serializers.CharField(max_length=10, allow_blank=True, default='')
+    delivery_address = serializers.CharField(max_length=255, allow_blank=True, default='')
+    delivery_name = serializers.CharField(max_length=100, allow_blank=True, default='')
+    items = OutboundOrderItemCreateSerializer(many=True, allow_empty=False)
+    note = serializers.CharField(allow_blank=True, default='', required=False)
