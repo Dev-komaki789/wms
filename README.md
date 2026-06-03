@@ -287,11 +287,13 @@ uv run python manage.py runserver
 | `DJANGO_DEBUG` | デバッグモード（`True` / `False`） |
 | `DJANGO_ALLOWED_HOSTS` | 許可ホスト（カンマ区切り） |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | CSRF 許可オリジン（本番のみ必須） |
+| `DJANGO_CORS_ALLOWED_ORIGINS` | EC frontend のオリジン（CORS 許可、カンマ区切り） |
 | `POSTGRES_HOST` | DB ホスト |
 | `POSTGRES_PORT` | DB ポート（デフォルト `5432`） |
 | `POSTGRES_DB` | DB 名 |
 | `POSTGRES_USER` | DB ユーザー |
 | `POSTGRES_PASSWORD` | DB パスワード |
+| `WMS_API_KEY` | EC backend からの API 呼び出し認証用キー（Bearer トークン） |
 
 ---
 
