@@ -243,6 +243,10 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # ページング: ReadOnlyModelViewSet (SKU/Product/Category) のリスト系に自動適用される。
+    # 単一オブジェクト返却の APIView (StockBySkuView) や POST (OrderCreateView) は対象外。
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100,
 }
 
 # EC backend からの API 呼び出しを認証する共有秘密鍵。
