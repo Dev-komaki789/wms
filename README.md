@@ -21,6 +21,7 @@
 - [アーキテクチャ](#アーキテクチャ)
 - [ローカル起動手順](#ローカル起動手順)
 - [プロジェクト構成](#プロジェクト構成)
+- [EC サイト連携](#ec-サイト連携実装中)
 - [CI / デプロイ](#ci--デプロイ)
 - [ロードマップ](#ロードマップ)
 
@@ -310,6 +311,7 @@ wms/
 ├── deploy/             # gunicorn.service / nginx.conf（本番デプロイ用）
 ├── sample_csv/         # マスタ CSV のサンプル
 ├── screenshots/        # README で参照しているスクリーンショット
+├── integration/        # EC サイト連携のための API 仕様・設計引き継ぎ（公開ドキュメント）
 ├── docker-compose.yml  # 開発用 PostgreSQL
 ├── pyproject.toml      # 依存定義（uv）
 ├── uv.lock
@@ -342,6 +344,51 @@ CD は組まず、コード反映は SSH での `git pull` → `migrate` → `co
 
 ---
 
+## EC サイト連携（実装中）
+
+WMS と連携する **EC サイト** を別リポジトリで開発中（2026-06-03 設計確定）。
+業務系（PC + ハンディ）の WMS に対して、顧客向け SPA を **マイクロサービス的に分離** して構築し、複数システム連携のポートフォリオとする狙い。
+
+### 構成（案 Y: マイクロサービス的）
+
+```
+┌────────────────┐       ┌────────────────────┐       ┌──────────────────┐
+│ EC Frontend    │       │ EC Backend         │       │ WMS              │
+│ React +        │       │ Django + DRF       │       │ Django + DRF     │
+│ TypeScript     │ ◀──▶ │ - 商品プロキシ      │ ◀──▶ │ - 商品マスタ      │
+│ + Vite         │       │ - 価格マスタ        │       │ - 在庫           │
+│                │       │ - カート / 注文     │       │ - 入出庫         │
+└────────────────┘       └────────────────────┘       └──────────────────┘
+                              ↓                              ↓
+                          EC DB                          WMS DB
+                          (PostgreSQL "ec")              (PostgreSQL "wms")
+```
+
+### 主要な設計判断
+
+| 項目 | 採用方針 |
+| --- | --- |
+| EC リポジトリ構成 | monorepo（`backend/` + `frontend/`） |
+| DB 分離 | 同 RDS 内に `ec` データベース新規作成、論理分離 |
+| マスタ管理 | B パターン（EC 側に商品マスタのコピー、バッチ同期） |
+| 在庫表示 | 段階 1（都度 API、Redis 未採用、`get_stock()` 関数抽象化で将来差替え可能） |
+| 価格カラム | EC 側 DB に持つ（WMS には追加しない、既存設計の責務分離を維持） |
+| 認証 | サービス間は API キー、顧客は JWT or Session の 2 層構造 |
+| Customer マスタ | EC 顧客は WMS Customer に同期しない（個人情報リスク回避） |
+| 商品画像 | EC 側に保持、本番は AWS S3 |
+
+### 参照ドキュメント
+
+- **設計引き継ぎ**: [`integration/HANDOVER_EC.md`](integration/HANDOVER_EC.md)
+- **API 仕様（ドラフト）**: [`integration/api_spec.md`](integration/api_spec.md)
+- **API 仕様（動く版）**: `https://komaki-wms.com/api/schema/swagger-ui/`（実装後に公開予定、drf-spectacular で自動生成）
+
+### 自動化される連携の例
+
+顧客が EC で注文確定すると、WMS の `POST /api/wms/orders/` が呼ばれ、`OutboundOrder` が自動作成 → `_try_launch_order()` で在庫引き当て・ピッキングリスト生成までが連動する。倉庫作業者のハンディ画面に新規ピッキング待ちが即座に現れる。
+
+---
+
 ## ロードマップ
 
 ### 直近で予定しているもの
@@ -349,9 +396,10 @@ CD は組まず、コード反映は SSH での `git pull` → `migrate` → `co
 - **REST API 化**：DRF を導入して内部処理を API として公開
 
 ### 構想中
-- **EC サイト連携**：別リポジトリで Next.js + DRF のSPA を作り、WMS と API で連携（業務系 MPA × 顧客向け SPA の使い分けデモ）
 - **pytest テスト整備**：CI に組み込み済み・テストコード追加
 - **AGV / 種まきピッキング**：データモデルは予約済み（`PickingType.TOTAL`）、UI 未実装
+
+（EC サイト連携は [専用セクション](#ec-サイト連携実装中) を参照。実装段階に移行済み。）
 
 ---
 
