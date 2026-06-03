@@ -234,9 +234,20 @@ if not DEBUG:
 
 # === REST Framework / OpenAPI (drf-spectacular) ===
 # EC サイト連携用の API を提供するため DRF を導入。Swagger UI で API 仕様を公開する。
+# サービス間認証は API キー (Authorization: Bearer <key>)。詳細は api/authentication.py。
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'api.authentication.APIKeyAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+# EC backend からの API 呼び出しを認証する共有秘密鍵。
+# 本番は環境変数で必ず設定する。開発時は .env で適当な値を入れる。
+WMS_API_KEY = os.environ.get('WMS_API_KEY', '')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': '倉庫管理システム API',

@@ -140,15 +140,11 @@ class OrderCreateView(APIView):
                 status=drf_status.HTTP_404_NOT_FOUND,
             )
 
-        # 3. created_by: 暫定で最初の superuser を使う
-        # TODO: API キー認証実装時に「API キーに紐づくユーザー」へ修正する
-        User = get_user_model()
-        api_user = User.objects.filter(is_superuser=True).order_by('id').first()
-        if api_user is None:
-            return Response(
-                {'error': 'internal_error', 'message': 'API ユーザーが見つかりません'},
-                status=drf_status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        # 3. created_by: 認証クラス (APIKeyAuthentication) で紐づけた API ユーザーを使う
+        # 認証は DRF の DEFAULT_AUTHENTICATION_CLASSES + IsAuthenticated で 401 が
+        # ここに到達する前に弾かれているため、request.user は確実に存在する。
+        # TODO: 認証クラスを修正し、専用システムユーザー (ec_system) を紐づける
+        api_user = request.user
 
         # 4. 倉庫: 暫定で最初の有効倉庫
         # TODO: 配送先住所から最寄り倉庫を選定するロジックを検討
