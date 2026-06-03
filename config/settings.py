@@ -71,6 +71,10 @@ AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # CorsMiddleware は「レスポンスを生成する他のミドルウェア」より上に置く必要がある。
+    # WhiteNoise / CommonMiddleware の前に置くことで、これらが生成するレスポンスにも
+    # CORS ヘッダを付与できる（django-cors-headers 公式ドキュメントの推奨配置）。
+    'corsheaders.middleware.CorsMiddleware',
     # WhiteNoise は SecurityMiddleware の直後に置く（本番で静的ファイルを配信する）
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -241,3 +245,26 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
+
+
+# === CORS（EC frontend からの API 呼び出しを許可） ===
+# 本番は環境変数 DJANGO_CORS_ALLOWED_ORIGINS で許可オリジンを指定する。
+# 例: DJANGO_CORS_ALLOWED_ORIGINS=https://ec.komaki-wms.com,https://shop.example.com
+CORS_ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()
+]
+
+# 開発時（DEBUG=True）は localhost で動く Vite / CRA のデフォルトポートを許可する。
+# Vite=5173, Create React App=3000 が典型的なデフォルト。
+if DEBUG:
+    CORS_ALLOWED_ORIGINS += [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:3000',
+    ]
+
+# Cookie / 認証情報を伴うリクエストを許可するかどうか。
+# MVP では API キー認証のみで Cookie を使わないため False のまま（デフォルト）。
+# JWT を Cookie に保存する設計に変更したら True にする。
+# CORS_ALLOW_CREDENTIALS = False
