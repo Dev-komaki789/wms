@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'stock',
     'inbound',
     'outbound',
+    'api',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
