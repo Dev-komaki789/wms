@@ -12,10 +12,12 @@ register('skus', SkuViewSet) と書くと以下 2 つが自動で作られる:
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import SkuViewSet
+from .views import CategoryViewSet, ProductViewSet, SkuViewSet
 
 router = DefaultRouter()
 router.register(r'skus', SkuViewSet, basename='sku')
+router.register(r'products', ProductViewSet, basename='product')
+router.register(r'categories', CategoryViewSet, basename='category')
 
 urlpatterns = [
     path('', include(router.urls)),
