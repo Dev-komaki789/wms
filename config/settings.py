@@ -53,6 +53,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.forms',  # FORM_RENDERER='TemplatesSetting' で標準ウィジェットを APP_DIRS から解決させる
+    # Third-party
+    'rest_framework',
+    'drf_spectacular',
+    'corsheaders',
     # WMS apps
     'accounts',
     'core',
@@ -221,3 +225,18 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 86400
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+
+# === REST Framework / OpenAPI (drf-spectacular) ===
+# EC サイト連携用の API を提供するため DRF を導入。Swagger UI で API 仕様を公開する。
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': '倉庫管理システム API',
+    'DESCRIPTION': 'EC サイト連携用の API（商品マスタ同期・在庫照会・出荷指示作成）。'
+                   '詳細は integration/api_spec.md を参照。',
+    'VERSION': '0.1.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
