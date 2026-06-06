@@ -53,6 +53,8 @@ from outbound.models import (
     StockReservation,
 )
 from stock.models import (
+    ReorderAlert,
+    SkuReorderSetting,
     StockBalance,
     StockMovement,
     StockTransfer,
@@ -208,6 +210,9 @@ class Command(BaseCommand):
         StockMovement.objects.all().delete()
         StockBalance.objects.all().delete()
         ErrorLog.objects.all().delete()
+        # Sku を PROTECT で参照する発注点設定・在庫アラートも先に消す
+        ReorderAlert.objects.all().delete()
+        SkuReorderSetting.objects.all().delete()
         Sku.objects.all().delete()
         Product.objects.all().delete()
         Manufacturer.objects.all().delete()
