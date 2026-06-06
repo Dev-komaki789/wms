@@ -100,6 +100,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             self._delete_all()
             self._ensure_handheld_worker()
+            self._ensure_demo_user()
             self._create_masters()
             self._create_initial_stock()
             self._create_completed_inbound()
@@ -142,6 +143,40 @@ class Command(BaseCommand):
                 user.is_staff = True
                 user.save(update_fields=['is_staff'])
         user.groups.add(group)
+
+    def _ensure_demo_user(self):
+        """demo ユーザーを用意する（冪等）。
+
+        demo は PC 業務画面を一通り見られるが /admin/ には入れないテスト用アカウント。
+        is_staff=True は /admin/login/ を通すため、is_superuser=False と
+        handheld_workers Group 未所属の組み合わせで、ミドルウェアが /admin/ を
+        遮断しつつ業務画面は全て開ける状態になる。
+        """
+        self.stdout.write('  demo ユーザーを用意...')
+        from accounts.permissions import HANDHELD_GROUP_NAME
+
+        User = get_user_model()
+        user, created = User.objects.get_or_create(
+            username='demo',
+            defaults={
+                'display_name': 'デモユーザー（PC全画面・admin除く）',
+                'is_staff': True,
+                'is_superuser': False,
+            },
+        )
+        if created:
+            user.set_password('***REDACTED***')
+            user.save()
+        else:
+            if not user.is_staff:
+                user.is_staff = True
+                user.save(update_fields=['is_staff'])
+        # 既存ユーザーがハンディグループに入っていたら外す（demo は PC 画面想定）
+        from django.contrib.auth.models import Group
+
+        handheld = Group.objects.filter(name=HANDHELD_GROUP_NAME).first()
+        if handheld is not None:
+            user.groups.remove(handheld)
 
     def _get_seed_user(self):
         user = get_user_model().objects.filter(is_superuser=True).order_by('pk').first()
