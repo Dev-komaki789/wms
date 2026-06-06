@@ -39,12 +39,10 @@ class APIKeyAuthentication(BaseAuthentication):
             # 認証ヘッダ自体がない → DRF の DEFAULT_PERMISSION_CLASSES で弾かせる
             return None
 
-        token = auth_header[len(self.keyword) + 1:].strip()
+        token = auth_header[len(self.keyword) + 1 :].strip()
         expected = getattr(settings, 'WMS_API_KEY', '') or ''
         if not expected:
-            raise AuthenticationFailed(
-                'サーバー側で WMS_API_KEY が設定されていません'
-            )
+            raise AuthenticationFailed('サーバー側で WMS_API_KEY が設定されていません')
         if token != expected:
             raise AuthenticationFailed('API キーが正しくありません')
 

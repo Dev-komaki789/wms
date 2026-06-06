@@ -21,7 +21,11 @@ urlpatterns = [
     path('api/', include('api.urls')),
     # 上記 API の OpenAPI スキーマと Swagger UI
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path(
+        'api/schema/swagger-ui/',
+        SpectacularSwaggerView.as_view(url_name='schema'),
+        name='swagger-ui',
+    ),
     # メニュー画面（KPI サマリー + 機能カテゴリ別カードグリッド）。全画面のハブ
     path('', HomeView.as_view(), name='home'),
 ]

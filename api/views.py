@@ -7,7 +7,6 @@ ReadOnlyModelViewSet を使うと、自動で以下の 2 つのエンドポイ�
 EC backend のマスタ同期で使う想定。書き込みは WMS の業務画面から行うので読み取り専用。
 """
 
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
@@ -85,11 +84,13 @@ class StockBySkuView(APIView):
     def get(self, request, sku_code):
         sku = get_object_or_404(Sku, sku_code=sku_code, is_active=True)
         total = StockBalance.objects.filter(sku=sku).aggregate(total=Sum('quantity'))['total'] or 0
-        return Response({
-            'sku_code': sku.sku_code,
-            'stock': total,
-            'as_of': timezone.now().isoformat(),
-        })
+        return Response(
+            {
+                'sku_code': sku.sku_code,
+                'stock': total,
+                'as_of': timezone.now().isoformat(),
+            }
+        )
 
 
 class OrderCreateView(APIView):
@@ -114,7 +115,7 @@ class OrderCreateView(APIView):
         request=OutboundOrderCreateSerializer,
         summary='EC からの注文を出荷指示として登録',
         description='EC backend からの POST。OutboundOrder を作成し、'
-                    '在庫引き当てとピッキングリスト生成まで自動実行する。',
+        '在庫引き当てとピッキングリスト生成まで自動実行する。',
     )
     @transaction.atomic
     def post(self, request):
@@ -125,10 +126,7 @@ class OrderCreateView(APIView):
 
         # 2. SKU 存在チェック
         sku_codes = [item['sku_code'] for item in data['items']]
-        skus = {
-            s.sku_code: s
-            for s in Sku.objects.filter(sku_code__in=sku_codes, is_active=True)
-        }
+        skus = {s.sku_code: s for s in Sku.objects.filter(sku_code__in=sku_codes, is_active=True)}
         missing = [c for c in sku_codes if c not in skus]
         if missing:
             return Response(

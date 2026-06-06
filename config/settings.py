@@ -256,7 +256,7 @@ WMS_API_KEY = os.environ.get('WMS_API_KEY', '')
 SPECTACULAR_SETTINGS = {
     'TITLE': '倉庫管理システム API',
     'DESCRIPTION': 'EC サイト連携用の API（商品マスタ同期・在庫照会・出荷指示作成）。'
-                   '詳細は integration/api_spec.md を参照。',
+    '詳細は integration/api_spec.md を参照。',
     'VERSION': '0.1.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }

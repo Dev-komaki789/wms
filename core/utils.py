@@ -23,6 +23,7 @@ class JsonAuthRequiredMixin:
             )
         return super().dispatch(request, *args, **kwargs)
 
+
 # 一覧・照会画面の1ページあたりの表示件数
 PAGE_SIZE = 50
 
