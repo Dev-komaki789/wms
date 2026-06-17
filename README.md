@@ -19,7 +19,6 @@
 - [技術スタック](#技術スタック)
 - [設計のこだわり](#設計のこだわり)
 - [アーキテクチャ](#アーキテクチャ)
-- [ローカル起動手順](#ローカル起動手順)
 - [プロジェクト構成](#プロジェクト構成)
 - [EC サイト連携](#ec-サイト連携実装中)
 - [CI / デプロイ](#ci--デプロイ)
@@ -174,7 +173,7 @@ AJAX API もこの ALLOWED_PREFIXES に登録する必要があり、追加時�
 - Enter / ↑ / ↓ で次のフィールドへ移動（業務端末ライクなキーボード操作）
 - 送信ボタンに `data-confirm` 属性を付けて確認モーダルを自動表示
 - マスタ一覧は `align-middle` + `font-monospace` でコード列を等幅
-- 「PC 画面は最大 1200px の narrow レイアウト」など、設計を `docs/画面仕様規約.md` に明文化
+- 「PC 画面は最大 1200px の narrow レイアウト」など、画面共通の組版規約を社内ドキュメントに明文化
 
 ### 5. CSV 入出力は自前実装
 Django ライブラリに頼らず、区切り文字（`,` / `^`）と文字コードを画面から選べるようにしています。
@@ -223,77 +222,6 @@ Django ライブラリに頼らず、区切り文字（`,` / `^`）と文字コ�
 | 出荷 | `OutboundOrder → OutboundOrderItem → StockReservation → PickingList → Shipment → StockMovement → StockBalance` |
 | 棚卸 | `StocktakeSession → StocktakeItem → StocktakeAdjustment → StockMovement → StockBalance` |
 | 発注アラート | `StockBalance.post_save → SkuReorderSetting と照合 → ReorderAlert 生成` |
-
----
-
-## ローカル起動手順
-
-### 前提
-- Python 3.12
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Docker / Docker Compose（開発用 PostgreSQL を起動するため）
-
-### 手順
-
-```bash
-# 1. 依存インストール
-uv sync
-
-# 2. 環境変数ファイル作成
-cp .env.example .env
-# DJANGO_SECRET_KEY を生成して .env に書く:
-uv run python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-
-# 3. PostgreSQL 起動（Docker Compose）
-docker compose up -d
-
-# 4. マイグレーション
-uv run python manage.py migrate
-
-# 5. 管理者ユーザー作成
-uv run python manage.py createsuperuser
-
-# 6. （任意）テストデータ投入
-uv run python manage.py reset_and_seed --yes
-
-# 7. 開発サーバー起動
-uv run python manage.py runserver
-```
-
-ブラウザで <http://localhost:8000/> にアクセス。
-
-`reset_and_seed` を実行すると、ハンディ専用ユーザー `worker1` も作成されます（ハンディ画面の動作確認用）。本番環境のパスワードは公開していません。ハンディ画面のデモを希望される方は個別にご連絡ください。
-
-### よく使うコマンド
-
-| 目的 | コマンド |
-| --- | --- |
-| 開発サーバー起動 | `uv run python manage.py runserver` |
-| マイグレーション作成 | `uv run python manage.py makemigrations` |
-| マイグレーション適用 | `uv run python manage.py migrate` |
-| Django shell | `uv run python manage.py shell` |
-| lint | `uv run ruff check .` |
-| format | `uv run ruff format .` |
-| DB 起動 | `docker compose up -d` |
-| DB 停止 | `docker compose down` |
-| DB データごと削除 | `docker compose down -v` |
-| テストデータ再投入 | `uv run python manage.py reset_and_seed --yes` |
-
-### 環境変数
-
-| 変数名 | 用途 |
-| --- | --- |
-| `DJANGO_SECRET_KEY` | Django のシークレットキー |
-| `DJANGO_DEBUG` | デバッグモード（`True` / `False`） |
-| `DJANGO_ALLOWED_HOSTS` | 許可ホスト（カンマ区切り） |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | CSRF 許可オリジン（本番のみ必須） |
-| `DJANGO_CORS_ALLOWED_ORIGINS` | EC frontend のオリジン（CORS 許可、カンマ区切り） |
-| `POSTGRES_HOST` | DB ホスト |
-| `POSTGRES_PORT` | DB ポート（デフォルト `5432`） |
-| `POSTGRES_DB` | DB 名 |
-| `POSTGRES_USER` | DB ユーザー |
-| `POSTGRES_PASSWORD` | DB パスワード |
-| `WMS_API_KEY` | EC backend からの API 呼び出し認証用キー（Bearer トークン） |
 
 ---
 
