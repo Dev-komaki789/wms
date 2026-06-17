@@ -25,11 +25,22 @@
                placeholder="例: インパクト / PRD-00001" value="{{ filters.product }}">
       </div>
       <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">倉庫</label>
+        <select name="warehouse" class="form-select form-select-sm">
+          <option value="">すべて</option>
+          {% for wh in warehouses %}
+            <option value="{{ wh.warehouse_code }}" {% if filters.warehouse == wh.warehouse_code %}selected{% endif %}>
+              {{ wh.warehouse_code }}：{{ wh.warehouse_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
         <label class="form-label small text-muted mb-1">棚番コード</label>
         <input type="text" name="location" class="form-control form-control-sm"
                placeholder="例: A-01" value="{{ filters.location }}">
       </div>
-      <div class="col-md-2">
+      <div class="col-md-1">
         <label class="form-label small text-muted mb-1">区分</label>
         <select name="area_type" class="form-select form-select-sm">
           <option value="">すべて</option>
@@ -38,7 +49,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-1">
         <label class="form-label small text-muted mb-1">在庫状態</label>
         <select name="state" class="form-select form-select-sm">
           <option value="">すべて</option>
@@ -99,6 +110,7 @@
     <table class="table table-hover align-middle mb-0">
       <thead class="table-light">
         <tr>
+          {% sort_th '倉庫' 'warehouse' sort dir align='start' %}
           {% sort_th '棚番コード' 'location' sort dir align='start' %}
           {% sort_th '区分' 'area_type' sort dir align='center' %}
           {% sort_th 'SKUコード' 'sku' sort dir align='start' %}
@@ -114,6 +126,10 @@
       <tbody>
         {% for b in balances %}
         <tr>
+          <td class="text-start small"
+              title="{{ b.location.warehouse.warehouse_code }}：{{ b.location.warehouse.warehouse_name }}">
+            <span class="font-monospace">{{ b.location.warehouse.warehouse_code }}</span>
+          </td>
           <td class="text-start">
             <span class="font-monospace fw-bold text-primary">{{ b.location.location_code }}</span>
             {% if b.location.location_name %}
@@ -175,7 +191,7 @@
           <td class="text-end text-muted small font-monospace">{{ b.updated_at|date:"Y/m/d H:i" }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="10" class="text-center text-muted py-4">条件に一致する在庫が見つかりませんでした</td></tr>
+        <tr><td colspan="11" class="text-center text-muted py-4">条件に一致する在庫が見つかりませんでした</td></tr>
         {% endfor %}
       </tbody>
     </table>

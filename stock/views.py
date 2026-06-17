@@ -48,9 +48,10 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
 
     template_name = 'a/stock/inquiry.html'
 
-    SEARCH_KEYS = ('q', 'product', 'location', 'area_type', 'state')
+    SEARCH_KEYS = ('q', 'product', 'location', 'warehouse', 'area_type', 'state')
 
     SORTABLE = {
+        'warehouse': ['location__warehouse__warehouse_code'],
         'location': ['location__location_code'],
         'area_type': ['location__area__location_type'],
         'sku': ['sku__sku_code'],
@@ -74,6 +75,7 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
             'q': g.get('q', '').strip(),
             'product': g.get('product', '').strip(),
             'location': g.get('location', '').strip(),
+            'warehouse': g.get('warehouse', '').strip(),
             'area_type': g.get('area_type', ''),
             'state': g.get('state', ''),
         }
@@ -98,6 +100,8 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
                 )
             if f['location']:
                 qs = qs.filter(location__location_code__icontains=f['location'])
+            if f['warehouse']:
+                qs = qs.filter(location__warehouse__warehouse_code=f['warehouse'])
             if f['area_type']:
                 qs = qs.filter(location__area__location_type=f['area_type'])
             if f['state'] == 'in_stock':
@@ -152,6 +156,7 @@ class StockInquiryView(LoginRequiredMixin, TemplateView):
             ctx['stats'] = None
 
         ctx['area_types'] = Area.LocationType.choices
+        ctx['warehouses'] = Warehouse.objects.order_by('warehouse_code')
         ctx['filters'] = f
         return ctx
 
