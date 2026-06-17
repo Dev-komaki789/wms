@@ -20,7 +20,7 @@
 - [設計のこだわり](#設計のこだわり)
 - [アーキテクチャ](#アーキテクチャ)
 - [プロジェクト構成](#プロジェクト構成)
-- [EC サイト連携](#ec-サイト連携実装中)
+- [EC サイト連携](#ec-サイト連携)
 - [CI / デプロイ](#ci--デプロイ)
 - [ロードマップ](#ロードマップ)
 
@@ -271,48 +271,61 @@ CD は組まず、コード反映は SSH での `git pull` → `migrate` → `co
 
 ---
 
-## EC サイト連携（実装中）
+## EC サイト連携
 
-WMS と連携する **EC サイト** を別リポジトリで開発中（2026-06-03 設計確定）。
-業務系（PC + ハンディ）の WMS に対して、顧客向け SPA を **マイクロサービス的に分離** して構築し、複数システム連携のポートフォリオとする狙い。
+WMS と連携する **EC サイト** を別リポジトリで実装・本番稼働中。業務系（PC + ハンディ）の WMS に対して、顧客向け SPA を **マイクロサービス的に分離** して構築し、複数システム連携の事例とした。
+
+🌐 **本番サイト**: <https://ec.komaki-wms.com>（WMS と同じ EC2 に相乗りデプロイ、追加コストほぼ 0）
 
 ### 構成（案 Y: マイクロサービス的）
 
 ```
 ┌────────────────┐       ┌────────────────────┐       ┌──────────────────┐
 │ EC Frontend    │       │ EC Backend         │       │ WMS              │
-│ React +        │       │ Django + DRF       │       │ Django + DRF     │
+│ React 19 +     │       │ Django + DRF       │       │ Django + DRF     │
 │ TypeScript     │ ◀──▶ │ - 商品プロキシ      │ ◀──▶ │ - 商品マスタ      │
 │ + Vite         │       │ - 価格マスタ        │       │ - 在庫           │
-│                │       │ - カート / 注文     │       │ - 入出庫         │
+│ + Tailwind 4   │       │ - カート / 注文     │       │ - 入出庫         │
 └────────────────┘       └────────────────────┘       └──────────────────┘
                               ↓                              ↓
                           EC DB                          WMS DB
                           (PostgreSQL "ec")              (PostgreSQL "wms")
 ```
 
-### 主要な設計判断
+### EC 側の実装規模
+
+| 項目 | 値 |
+| --- | --- |
+| Backend アプリ | 3（`catalog` / `customers` / `orders`） |
+| EC モデル | 9 クラス（EcCategory / EcProduct / EcSku / EcPrice / CustomerProfile / Cart / CartItem / Order / OrderItem） |
+| Frontend ページ | 8（商品一覧 / 詳細 / カート / チェックアウト / ログイン / 注文履歴 / 注文詳細 / プロフィール） |
+| Frontend コンポーネント | 13（Header / BottomNav / CategoryChips / ProductCard / ProductGrid / Pagination / Toast 他） |
+| デザイン | Tailwind CSS 4、PC + スマホ両対応（ボトムナビ・カテゴリチップ） |
+
+### 主要な設計判断と実装結果
 
 | 項目 | 採用方針 |
 | --- | --- |
 | EC リポジトリ構成 | monorepo（`backend/` + `frontend/`） |
-| DB 分離 | 同 RDS 内に `ec` データベース新規作成、論理分離 |
-| マスタ管理 | B パターン（EC 側に商品マスタのコピー、バッチ同期） |
+| DB 分離 | 同 RDS 内に `ec` データベースを新規作成、論理分離 |
+| マスタ管理 | B パターン（EC 側に商品マスタのコピー、Django Management Command で同期） |
 | 在庫表示 | 段階 1（都度 API、Redis 未採用、`get_stock()` 関数抽象化で将来差替え可能） |
-| 価格カラム | EC 側 DB に持つ（WMS には追加しない、既存設計の責務分離を維持） |
-| 認証 | サービス間は API キー、顧客は JWT or Session の 2 層構造 |
-| Customer マスタ | EC 顧客は WMS Customer に同期しない（個人情報リスク回避） |
-| 商品画像 | EC 側に保持、本番は AWS S3 |
+| 価格カラム | EC 側 DB に保持（WMS には追加しない、既存設計の責務分離を維持） |
+| 認証 | サービス間は API キー（Bearer）、顧客は Session ベース |
+| Customer マスタ | EC 顧客は `CustomerProfile` で EC 側のみ管理（WMS には同期せず、個人情報リスク回避） |
+| 商品画像 | EC 側 `media/` に保持、本番は同 EC2 上で nginx 配信 |
+| インフラ | WMS と同じ EC2 に相乗り（gunicorn:8001 / nginx で `ec.komaki-wms.com` 配信） |
 
 ### API 仕様
 
-本番 API の OpenAPI スキーマは drf-spectacular で自動生成し、Swagger UI で公開している:
+本番 WMS API の OpenAPI スキーマは drf-spectacular で自動生成し、Swagger UI で公開している:
 
-- **API 仕様（動く版）**: <https://komaki-wms.com/api/schema/swagger-ui/>
+- **WMS API 仕様（動く版）**: <https://komaki-wms.com/api/schema/swagger-ui/>
+- **EC API 仕様（動く版）**: <https://ec.komaki-wms.com/api/schema/swagger-ui/>
 
 ### 自動化される連携の例
 
-顧客が EC で注文確定すると、WMS の `POST /api/wms/orders/` が呼ばれ、`OutboundOrder` が自動作成 → `_try_launch_order()` で在庫引き当て・ピッキングリスト生成までが連動する。倉庫作業者のハンディ画面に新規ピッキング待ちが即座に現れる。
+顧客が EC でチェックアウトすると EC backend が WMS の `POST /api/orders/` を呼び、WMS 側で `OutboundOrder` が自動作成される。`_try_launch_order()` が在庫引き当て・ピッキングリスト生成までを連動実行し、倉庫作業者のハンディ画面に新規ピッキング待ちが即座に現れる。EC からの 1 アクションで業務フロー全体が起動する設計。
 
 ---
 
@@ -320,13 +333,12 @@ WMS と連携する **EC サイト** を別リポジトリで開発中（2026-06
 
 ### 直近で予定しているもの
 - **ダッシュボード**：Chart.js などで KPI（在庫推移 / ピッキング件数 / エラー率）を時系列で可視化
-- **REST API 化**：DRF を導入して内部処理を API として公開
 
 ### 構想中
 - **pytest テスト整備**：CI に組み込み済み・テストコード追加
 - **AGV / 種まきピッキング**：データモデルは予約済み（`PickingType.TOTAL`）、UI 未実装
 
-（EC サイト連携は [専用セクション](#ec-サイト連携実装中) を参照。実装段階に移行済み。）
+（EC サイト連携は [専用セクション](#ec-サイト連携) を参照。本番稼働済み。）
 
 ---
 
