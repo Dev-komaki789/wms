@@ -20,6 +20,7 @@ User 以外の全データを削除し、マスタ・在庫・指示・履歴を
 
 from __future__ import annotations
 
+import os
 import random
 from datetime import timedelta
 
@@ -62,6 +63,21 @@ from stock.models import (
     StocktakeItem,
     StocktakeSession,
 )
+
+
+def _required_env(name):
+    """環境変数を取得。未設定なら CommandError で停止する。
+
+    パスワードを誤ってソースコードにハードコードしないための強制装置。
+    値は .env (Git 管理外) で管理する。.env.example で変数名を共有する。
+    """
+    value = os.environ.get(name)
+    if not value:
+        raise CommandError(
+            f'環境変数 {name} が設定されていません。.env に追記してください'
+            f' (.env.example に変数名のサンプルあり)。'
+        )
+    return value
 
 
 class Command(BaseCommand):
@@ -137,7 +153,7 @@ class Command(BaseCommand):
             },
         )
         if created:
-            user.set_password('***REDACTED***')
+            user.set_password(_required_env('SEED_WORKER1_PASSWORD'))
             user.save()
         else:
             # 既存ユーザーでも is_staff だけは保証する
@@ -167,7 +183,7 @@ class Command(BaseCommand):
             },
         )
         if created:
-            user.set_password('***REDACTED***')
+            user.set_password(_required_env('SEED_DEMO_PASSWORD'))
             user.save()
         else:
             if not user.is_staff:
