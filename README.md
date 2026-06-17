@@ -124,11 +124,9 @@ KPI サマリーと機能カテゴリ別のカードグリッド。ナビバー�
 ![ピッキングリスト印刷](screenshots/06-print-picking-list.png)
 
 ### ER 図
-31 テーブル構成。FK PROTECT を基本とし、参照先のあるマスタは削除させない設計。
+41 テーブル構成。FK PROTECT を基本とし、参照先のあるマスタは削除させない設計。
 
 ![ER 図](screenshots/07-er-diagram.png)
-
-ドメイン別の詳細 ER 図（5 領域に分割、Mermaid）は [SCHEMA.md](SCHEMA.md) を参照。
 
 ---
 
@@ -320,7 +318,6 @@ wms/
 ├── pyproject.toml      # 依存定義（uv）
 ├── uv.lock
 ├── DEPLOY.md           # 本番デプロイ手順（AWS EC2 + RDS）
-├── SCHEMA.md           # ドメイン別 ER 図（Mermaid、GitHub で自動レンダリング）
 └── README.md
 ```
 
