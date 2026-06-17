@@ -113,20 +113,20 @@ KPI サマリーと機能カテゴリ別のカードグリッド。ナビバー�
 
 ![ハンディ：出荷ピッキング](screenshots/04-handheld-picking.png)
 
-### 発注アラート照会
-在庫が発注点を割ったら自動生成。ワンクリックで入荷指示に変換し、入荷完了で resolved 自動更新。
+### 発注アラート照会（一覧）
+在庫が発注点を割ったら自動生成。ステータス（未対応 / 発注済み / 入庫済み / 対応不要）と倉庫で絞り込み可。
 
 ![発注アラート照会](screenshots/05-reorder-alert.png)
+
+### 発注アラート（詳細）
+発生時のスナップショット（在庫数・発注点・推奨発注数）を保持し、その後に発注設定を変更しても発生当時の値が残る。「入荷指示を作る」ボタンで 1 クリック変換、入荷完了で自動 resolved。
+
+![発注アラート詳細](screenshots/06-reorder-alert-detail.png)
 
 ### 印刷帳票（ピッキングリスト）
 ブラウザ印刷でそのまま A4 出力。Code128 バーコードはサーバ側 SVG 生成。
 
-![ピッキングリスト印刷](screenshots/06-print-picking-list.png)
-
-### ER 図
-41 テーブル構成。FK PROTECT を基本とし、参照先のあるマスタは削除させない設計。
-
-![ER 図](screenshots/07-er-diagram.png)
+![ピッキングリスト印刷](screenshots/07-print-picking-list.png)
 
 ---
 
