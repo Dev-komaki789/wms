@@ -15,16 +15,6 @@
   <div class="card-body py-2 bg-light border-bottom">
     <form method="get" id="inquiry-search-form" class="row g-2 align-items-end">
       <div class="col-md-2">
-        <label class="form-label small text-muted mb-1">SKUコード / JAN</label>
-        <input type="text" name="q" class="form-control form-control-sm" maxlength="100"
-               placeholder="例: SKU-000001 / 4901..." value="{{ filters.q }}">
-      </div>
-      <div class="col-md-2">
-        <label class="form-label small text-muted mb-1">商品</label>
-        <input type="text" name="product" class="form-control form-control-sm" maxlength="100"
-               placeholder="例: インパクト / PRD-00001" value="{{ filters.product }}">
-      </div>
-      <div class="col-md-2">
         <label class="form-label small text-muted mb-1">倉庫</label>
         <select name="warehouse" class="form-select form-select-sm">
           <option value="">すべて</option>
@@ -39,6 +29,16 @@
         <label class="form-label small text-muted mb-1">棚番コード</label>
         <input type="text" name="location" class="form-control form-control-sm"
                placeholder="例: A-01" value="{{ filters.location }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">SKUコード / JAN</label>
+        <input type="text" name="q" class="form-control form-control-sm" maxlength="100"
+               placeholder="例: SKU-000001 / 4901..." value="{{ filters.q }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">商品</label>
+        <input type="text" name="product" class="form-control form-control-sm" maxlength="100"
+               placeholder="例: インパクト / PRD-00001" value="{{ filters.product }}">
       </div>
       <div class="col-md-1">
         <label class="form-label small text-muted mb-1">区分</label>
