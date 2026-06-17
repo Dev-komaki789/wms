@@ -8,9 +8,14 @@
   <h2 class="mb-0">
     <i class="bi bi-bell me-2 text-primary"></i>発注設定
   </h2>
-  <a href="{% url 'stock:reorder_setting_create' %}" class="btn btn-primary">
-    <i class="bi bi-plus-lg"></i> 新規登録
-  </a>
+  <div class="d-flex gap-2">
+    <a href="{% url 'stock:reorder_alert_list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-exclamation-octagon me-1"></i>発注アラート照会へ
+    </a>
+    <a href="{% url 'stock:reorder_setting_create' %}" class="btn btn-primary">
+      <i class="bi bi-plus-lg"></i> 新規登録
+    </a>
+  </div>
 </div>
 
 <div class="card">
