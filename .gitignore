@@ -21,3 +21,9 @@ staticfiles/
 
 # 設計ドキュメント (個人参照用)
 docs/
+
+# 公開しないドキュメント類 (README 以外は非公開ポリシー)
+CLAUDE.md
+DEPLOY.md
+integration/
+screenshots/README.md

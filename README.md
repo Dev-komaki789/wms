@@ -313,11 +313,9 @@ wms/
 ├── deploy/             # gunicorn.service / nginx.conf（本番デプロイ用）
 ├── sample_csv/         # マスタ CSV のサンプル
 ├── screenshots/        # README で参照しているスクリーンショット
-├── integration/        # EC サイト連携のための API 仕様・設計引き継ぎ（公開ドキュメント）
 ├── docker-compose.yml  # 開発用 PostgreSQL
 ├── pyproject.toml      # 依存定義（uv）
 ├── uv.lock
-├── DEPLOY.md           # 本番デプロイ手順（AWS EC2 + RDS）
 └── README.md
 ```
 
@@ -334,7 +332,6 @@ wms/
 4. `python manage.py makemigrations --check`（マイグレーション漏れ検出）
 
 ### 本番デプロイ
-詳細は [DEPLOY.md](DEPLOY.md) を参照。
 要点：
 
 - **EC2**（Ubuntu 24.04 / t3.small）+ **RDS**（PostgreSQL t3.micro / 単一AZ）
@@ -379,11 +376,11 @@ WMS と連携する **EC サイト** を別リポジトリで開発中（2026-06
 | Customer マスタ | EC 顧客は WMS Customer に同期しない（個人情報リスク回避） |
 | 商品画像 | EC 側に保持、本番は AWS S3 |
 
-### 参照ドキュメント
+### API 仕様
 
-- **設計引き継ぎ**: [`integration/HANDOVER_EC.md`](integration/HANDOVER_EC.md)
-- **API 仕様（ドラフト）**: [`integration/api_spec.md`](integration/api_spec.md)
-- **API 仕様（動く版）**: `https://komaki-wms.com/api/schema/swagger-ui/`（実装後に公開予定、drf-spectacular で自動生成）
+本番 API の OpenAPI スキーマは drf-spectacular で自動生成し、Swagger UI で公開している:
+
+- **API 仕様（動く版）**: <https://komaki-wms.com/api/schema/swagger-ui/>
 
 ### 自動化される連携の例
 
