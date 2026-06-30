@@ -5,7 +5,7 @@
 
 🌐 **本番サイト**: <https://komaki-wms.com>（AWS EC2 + RDS でホスティング）
 📁 **リポジトリ**: 本リポジトリ
-👤 **作者**: 個人開発 / 転職用ポートフォリオ
+👤 **作者**: 個人開発 / Shintaro Komaki
 
 ![ホーム画面](screenshots/01-home.png)
 
@@ -21,7 +21,7 @@
 
 今回はコーディング部分に Claude Code を使用していますが、設計部分は自分主導で行い、ER 図の作成からテーブル設計、画面設計、フロント / バックエンド連携、
 AWS への本番デプロイまでを AI に壁打ちしながら進めました。
-また、注文が入り在庫の引き当てが起こる工程をどうしても試したかったので、顧客向けの EC サイトも別リポジトリで作り、
+また、注文が入り在庫の引き当てが起こる工程を試したかったので、顧客向けの EC サイトも別リポジトリで作り、
 「EC からの注文 → WMS で在庫引当 → 出荷指示の自動生成」が 1 アクションで連動する API 連携まで実装しました。
 
 ---
@@ -85,13 +85,12 @@ ECや製造業の物流現場で使われる **WMS（倉庫管理システム）
 ### 発注設定 + 発注アラート
 - SKU ごとに発注点 / 発注量を設定
 - 在庫の更新（`StockBalance.post_save`）をフックして **自動でアラート生成**
-- アラート → 入荷指示への 1 クリック変換、入荷完了で自動 resolved
+- アラート → 入荷指示への 1 クリック変換、入荷完了で自動解決
 
 ### ハンディ作業者ロール
 - 専用グループのユーザーは **ハンディ画面しか開けない**（`HandheldOnlyMiddleware`）
 - 入荷検品 / 入荷格納 / 棚卸カウント / 出荷ピッキング をスマホで完結
 - **カメラスキャン**（BarcodeDetector API + Canvas 切り出しによる枠内検出）
-- **振動フィードバック**（Android のみ・処理結果を体感で通知）
 
 ### 印刷帳票
 - すべて **A4 印刷を前提に CSS で組版**（外部 PDF ライブラリ不使用）
@@ -164,7 +163,7 @@ KPI サマリーと機能カテゴリ別のカードグリッド。
 - **ruff**（lint + format）
 - **Docker Compose**（開発用 PostgreSQL のみ）
 - **GitHub Actions**（CI：ruff + Django check + makemigrations --check）
-- **AWS EC2** (Ubuntu 24.04) **+ RDS** (PostgreSQL) + **nginx** + **Let's Encrypt**（本番）
+- **AWS EC2** (Ubuntu 24.04) **+ RDS** (PostgreSQL) + **nginx**
 
 ---
 
@@ -176,7 +175,7 @@ KPI サマリーと機能カテゴリ別のカードグリッド。
 
 ### 2. ハンディ専用ロールの徹底
 `HandheldOnlyMiddleware` で、ハンディ作業者グループのユーザーは指定されたプレフィックスの URL しか開けないようにしています。
-AJAX API もこの ALLOWED_PREFIXES に登録する必要があり、追加時の取りこぼし防止のため **demo ユーザー（worker1）での実機確認** をワークフロー化しています。
+管理系画面を管理者以外の操作を防ぐためです。
 
 ### 3. 在庫の二重表現（StockBalance / StockMovement）
 - `StockBalance`：現在在庫を `(location, sku)` ユニーク制約で 1 行ずつ保持
@@ -282,15 +281,13 @@ wms/
 - **Let's Encrypt**（certbot）で HTTPS 化
 - **PWA**（manifest + apple-touch-icon）でスマホのホーム画面追加に対応
 
-CD は組まず、コード反映は SSH での `git pull` → `migrate` → `collectstatic` → `systemctl restart gunicorn` を手動で行う運用です（個人ポートフォリオなのでオーバースペックを避けた判断）。
-
 ---
 
 ## EC サイト連携
 
-WMS と連携する **EC サイト** を別リポジトリで実装・本番稼働中。業務系（PC + ハンディ）の WMS に対して、顧客向け SPA を **マイクロサービス的に分離** して構築し、複数システム連携の事例とした。
+WMS と連携する **EC サイト** を別リポジトリで実装・本番稼働中。
 
-🌐 **本番サイト**: <https://ec.komaki-wms.com>（WMS と同じ EC2 に相乗りデプロイ、追加コストほぼ 0）
+🌐 **本番サイト**: <https://ec.komaki-wms.com>（WMS と同じ EC2 に相乗り）
 
 ### 構成（案 Y: マイクロサービス的）
 
