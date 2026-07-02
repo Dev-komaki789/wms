@@ -115,7 +115,8 @@
         {% if user.is_authenticated %}
           {# 未対応アラート件数（>0 のときだけ表示。クリックで一覧へ）。 #}
           {% if open_reorder_alerts_count %}
-          <li class="nav-item">
+          {# スマホ（ハンディ作業者）には発注アラートは不要で、ヘッダーも崩れるため md 未満は非表示 #}
+          <li class="nav-item d-none d-md-inline">
             <a class="btn btn-warning btn-sm position-relative d-inline-flex align-items-center"
                href="{% url 'stock:reorder_alert_list' %}?status=open"
                title="未対応の発注アラート">
