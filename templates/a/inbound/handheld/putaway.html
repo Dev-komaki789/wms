@@ -13,10 +13,13 @@
   <div class="input-group">
     <input type="text" name="code" id="putaway-code" maxlength="15"
            class="form-control hh-key"
-           value="{{ code }}" placeholder="入荷指示番号をスキャン"
+           value="{{ code }}" placeholder="入荷指示番号をスキャン／入力"
            autocomplete="off" autofocus required>
   </div>
 </form>
+
+{# デモ用「番号タップ入力」（HANDHELD_DEMO_CODES 有効時のみ） #}
+{% include 'a/_hh_demo_codes.html' %}
 
 {% if lookup_error %}
   <div class="alert alert-warning">

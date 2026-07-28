@@ -74,6 +74,8 @@ class InboundOrder(models.Model):
         indexes = [
             models.Index(fields=['status'], name='idx_inbound_orders_status'),
             models.Index(fields=['expected_date'], name='idx_inbound_orders_expected'),
+            # デモ用「番号タップ入力」の候補取得（status で絞り -created_at 降順 LIMIT 3）用の複合。
+            models.Index(fields=['status', '-created_at'], name='idx_io_status_created'),
         ]
 
     def __str__(self):

@@ -247,6 +247,8 @@
 </div>
 {# ハンディ画面共通: バーコード入力欄にカメラスキャンボタンを自動付与する #}
 <script src="{% static 'js/camera_scan.js' %}"></script>
+{# デモ用「番号タップ入力」: 入口のボタン(data-hh-fill)を入力欄に流し込む #}
+<script src="{% static 'js/hh_demo_fill.js' %}"></script>
 {% comment %}
 Django messages（処理結果）が出ているときに振動でフィードバック。
 Web Vibration API は Android のみ動作（iOS Safari は非対応・無視される）。

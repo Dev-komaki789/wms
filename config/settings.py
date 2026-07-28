@@ -32,6 +32,11 @@ SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
+# ハンディ入口のデモ用「番号タップ入力」（有効な番号を最大3件ボタン表示）を出すフラグ。
+# 既定 False。デモ環境(EC2)の gunicorn.service の Environment= で '1' にして有効化する。
+# 本番で不要になったら環境変数を外すだけでコード変更なしに消せる。
+HANDHELD_DEMO_CODES = os.environ.get('HANDHELD_DEMO_CODES', '0') == '1'
+
 ALLOWED_HOSTS = [
     h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()
 ]
@@ -104,6 +109,7 @@ TEMPLATES = [
                 'masters.context_processors.current_warehouse',
                 'accounts.context_processors.user_role',
                 'stock.context_processors.open_reorder_alerts',
+                'core.context_processors.handheld_demo_codes',
             ],
         },
     },

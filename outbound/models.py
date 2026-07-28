@@ -93,6 +93,8 @@ class OutboundOrder(models.Model):
         indexes = [
             models.Index(fields=['status'], name='idx_outbound_orders_status'),
             models.Index(fields=['deadline_at'], name='idx_outbound_orders_deadline'),
+            # デモ用「番号タップ入力」の候補取得（status で絞り -created_at 降順 LIMIT 3）用の複合。
+            models.Index(fields=['status', '-created_at'], name='idx_oo_status_created'),
         ]
 
     def __str__(self):
@@ -297,6 +299,8 @@ class PickingList(models.Model):
         verbose_name_plural = 'ピッキングリスト'
         indexes = [
             models.Index(fields=['status'], name='idx_picking_lists_status'),
+            # デモ用「番号タップ入力」の候補取得（status で絞り -created_at 降順 LIMIT 3）用の複合。
+            models.Index(fields=['status', '-created_at'], name='idx_pl_status_created'),
         ]
 
     def __str__(self):

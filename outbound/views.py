@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
@@ -848,6 +849,15 @@ class OutboundPickingView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         code = request.GET.get('code', '').strip()
         ctx = {'code': code}
+        # デモ用「番号タップ入力」: 有効なピッキングリストを最大3件、候補として渡す。
+        # スライス[:3]は SQL の LIMIT 3。_scoped_lists は area を select_related 済み(N+1回避)。
+        if settings.HANDHELD_DEMO_CODES:
+            ctx['demo_codes'] = [
+                {'code': pl.picking_list_code, 'subtitle': pl.area.area_name or pl.area.area_code}
+                for pl in self._scoped_lists()
+                .filter(status__in=(PickingList.Status.PENDING, PickingList.Status.IN_PROGRESS))
+                .order_by('-created_at')[:3]
+            ]
         if code:
             picking_list = self._scoped_lists().filter(picking_list_code=code).first()
             if picking_list is None:
@@ -1210,6 +1220,17 @@ class OutboundInspectionView(LoginRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         code = request.GET.get('code', '').strip()
         ctx = {'code': code}
+        # デモ用「番号タップ入力」: 出荷検品作業待ちの出荷指示を最大3件、候補として渡す。
+        if settings.HANDHELD_DEMO_CODES:
+            ctx['demo_codes'] = [
+                {
+                    'code': o.outbound_order_code,
+                    'subtitle': o.customer.customer_name if o.customer_id else '',
+                }
+                for o in self._scoped_orders()
+                .filter(status=OutboundOrder.Status.INSPECTION_WAIT)
+                .order_by('-created_at')[:3]
+            ]
         if code:
             order = self._scoped_orders().filter(outbound_order_code=code).first()
             if order is None:

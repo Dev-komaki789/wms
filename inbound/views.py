@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
@@ -339,6 +340,17 @@ class InboundArrivalView(LoginRequiredMixin, View):
                 ctx['lookup_error'] = f'入荷指示番号「{code}」は見つかりません。'
             else:
                 ctx['order'] = order
+        # デモ用「番号タップ入力」: 受入れ作業待ちの入荷指示を最大3件、候補として渡す。
+        if settings.HANDHELD_DEMO_CODES:
+            ctx['demo_codes'] = [
+                {
+                    'code': o.inbound_order_code,
+                    'subtitle': o.supplier.supplier_name if o.supplier_id else '',
+                }
+                for o in self._scoped_orders()
+                .filter(status=InboundOrder.Status.RECEIVING_WAIT)
+                .order_by('-created_at')[:3]
+            ]
         return render(request, self.template_name, ctx)
 
     def post(self, request, *args, **kwargs):
@@ -525,6 +537,17 @@ class InboundInspectionView(LoginRequiredMixin, View):
                 ctx['lookup_error'] = f'入荷指示番号「{code}」は見つかりません。'
             else:
                 ctx['order'] = order
+        # デモ用「番号タップ入力」: 検品作業待ちの入荷指示を最大3件、候補として渡す。
+        if settings.HANDHELD_DEMO_CODES:
+            ctx['demo_codes'] = [
+                {
+                    'code': o.inbound_order_code,
+                    'subtitle': o.supplier.supplier_name if o.supplier_id else '',
+                }
+                for o in self._scoped_orders()
+                .filter(status=InboundOrder.Status.INSPECTION_WAIT)
+                .order_by('-created_at')[:3]
+            ]
         return render(request, self.template_name, ctx)
 
     def post(self, request, *args, **kwargs):
@@ -760,6 +783,17 @@ class InboundPutawayView(LoginRequiredMixin, View):
             else:
                 ctx['order'] = order
                 ctx['item_rows'] = _putaway_item_rows(order)
+        # デモ用「番号タップ入力」: 棚入れ作業待ちの入荷指示を最大3件、候補として渡す。
+        if settings.HANDHELD_DEMO_CODES:
+            ctx['demo_codes'] = [
+                {
+                    'code': o.inbound_order_code,
+                    'subtitle': o.supplier.supplier_name if o.supplier_id else '',
+                }
+                for o in self._scoped_orders()
+                .filter(status=InboundOrder.Status.PUTAWAY_WAIT)
+                .order_by('-created_at')[:3]
+            ]
         return render(request, self.template_name, ctx)
 
     def post(self, request, *args, **kwargs):
