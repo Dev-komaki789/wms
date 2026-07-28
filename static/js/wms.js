@@ -216,3 +216,58 @@ window.wmsConfirm = function (message, opts, onYes) {
   };
   modal.show();
 };
+
+// === フォーム二重送信ガード ===
+// 送信が始まったら送信ボタンを無効化＋スピナー表示し、二度押しによる
+// 二重送信（同じ CSV を2回取り込む等）を防ぐ。ネイティブ送信（ページ遷移）専用。
+// data-confirm 経由（requestSubmit）でも submit イベントが発火するので同じく効く。
+// AJAX（fetch）系はそもそも form submit しないため影響しない。
+// 例外にしたいフォームは <form data-no-submit-guard> を付ける。
+(function () {
+  'use strict';
+
+  function releaseButton(btn) {
+    btn.disabled = false;
+    if (btn.dataset.guardOriginalHtml != null) {
+      btn.innerHTML = btn.dataset.guardOriginalHtml;
+      delete btn.dataset.guardOriginalHtml;
+    }
+  }
+
+  document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (form.hasAttribute('data-no-submit-guard')) return;
+
+    // すでに送信中なら2回目以降を止める
+    if (form.dataset.submitting === '1') {
+      e.preventDefault();
+      return;
+    }
+    form.dataset.submitting = '1';
+
+    // 送信ボタン（button/input）を無効化。button はスピナー付き「処理中…」に差し替え。
+    // 無効化は送信データ確定後に行われるため、送信自体はそのまま実行される。
+    form.querySelectorAll(
+      'button[type="submit"]:not([disabled]), input[type="submit"]:not([disabled])'
+    ).forEach(function (btn) {
+      if (btn.tagName === 'BUTTON') {
+        btn.dataset.guardOriginalHtml = btn.innerHTML;
+        btn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>処理中…';
+      }
+      btn.disabled = true;
+    });
+  });
+
+  // 「戻る」ボタンで bfcache から復元されたページはボタンが無効のまま残るので解除する。
+  window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    document.querySelectorAll('form[data-submitting="1"]').forEach(function (form) {
+      form.dataset.submitting = '0';
+      form
+        .querySelectorAll('button[type="submit"], input[type="submit"]')
+        .forEach(releaseButton);
+    });
+  });
+})();
