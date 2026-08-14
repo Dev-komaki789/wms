@@ -1,4 +1,5 @@
 {% extends 'a/handheld_base.html' %}
+{% load static %}
 
 {% block title %}棚卸 {{ session.session_code }}{% endblock %}
 {% block page_title %}{{ session.session_code }}{% endblock %}
@@ -12,7 +13,10 @@
   {% endif %}
 </div>
 
-<form method="post" autocomplete="off">
+<form method="post" autocomplete="off"
+      data-hh-scan
+      data-loc-api="{% url 'masters:api_location_lookup' %}"
+      data-sku-api="{% url 'masters:api_sku_lookup' %}">
   {% csrf_token %}
   {% if form.non_field_errors %}
     <div class="alert alert-danger small">{{ form.non_field_errors }}</div>
@@ -22,12 +26,14 @@
     <label class="form-label">{{ form.location_code.label }}</label>
     {{ form.location_code }}
     {% if form.location_code.errors %}<div class="text-danger small mt-1">{{ form.location_code.errors }}</div>{% endif %}
+    <div class="hh-scan-msg small" data-for="{{ form.location_code.id_for_label }}"></div>
   </div>
 
   <div class="mb-3">
     <label class="form-label">{{ form.sku_code.label }}</label>
     {{ form.sku_code }}
     {% if form.sku_code.errors %}<div class="text-danger small mt-1">{{ form.sku_code.errors }}</div>{% endif %}
+    <div class="hh-scan-msg small" data-for="{{ form.sku_code.id_for_label }}"></div>
   </div>
 
   <div class="mb-3">
@@ -41,4 +47,13 @@
     <i class="bi bi-check2"></i> カウント記録
   </button>
 </form>
+
+<div class="text-muted small text-center mt-3">
+  <i class="bi bi-info-circle me-1"></i>
+  棚番・SKU はスキャン（Enter）時に実在をチェックします。
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/handheld_scan.js' %}"></script>
 {% endblock %}
