@@ -960,7 +960,12 @@ class StocktakeConfirmView(LoginRequiredMixin, View):
             for item in session.items.select_related('location', 'sku').filter(
                 status=StocktakeItem.Status.COUNTED
             ):
-                if item.counted_quantity is None or item.counted_quantity == item.system_quantity:
+                # カウント未実施の明細のみスキップする。「差異なし（変化なし）」の判定は、
+                # スナップショット(system_quantity)ではなく確定時の現在在庫を基準に、下の
+                # delta==0 で行う。棚卸中に在庫が動くと、古いスナップショットと一致していても
+                # 現在在庫とはズレうるため、ここで system_quantity と比較してスキップすると
+                # 必要な調整を取りこぼす（全数はロックで無関係だが循環棚卸で起こりうる）。
+                if item.counted_quantity is None:
                     item.status = StocktakeItem.Status.ADJUSTED
                     item.save(update_fields=['status', 'updated_at'])
                     continue
